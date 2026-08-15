@@ -1,0 +1,61 @@
+{
+  "name": "imposter-game",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Room-based social deduction game backend and web client",
+  "engines": {
+    "node": ">=24.0.0 <25"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server/index.ts",
+    "build": "npm run contracts:check && next build && tsc -p tsconfig.server.json",
+    "start": "node dist/server/index.js",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --exclude tests/integration/**",
+    "test:watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "contracts:generate": "tsx scripts/generate-openapi.ts",
+    "contracts:check": "tsx scripts/check-openapi.ts",
+    "migrate:up": "node-pg-migrate up --migrations-dir migrations --database-url-var DATABASE_URL",
+    "migrate:down": "node-pg-migrate down --migrations-dir migrations --database-url-var DATABASE_URL",
+    "migrate:verify": "npm run migrate:up && npm run migrate:down && npm run migrate:up",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run contracts:check"
+  },
+  "dependencies": {
+    "kysely": "^0.29.6",
+    "next": "^16.3.5",
+    "openapi3-ts": "^4.5.0",
+    "pg": "^8.23.0",
+    "pino": "^10.3.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@apidevtools/swagger-parser": "^12.1.0",
+    "@eslint/js": "^9.39.1",
+    "@types/node": "^24.10.1",
+    "@types/pg": "^8.15.6",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@types/supertest": "^6.0.3",
+    "@vitest/coverage-v8": "^5.0.1",
+    "eslint": "^10.11.0",
+    "node-pg-migrate": "^9.0.0",
+    "prettier": "^3.6.2",
+    "supertest": "^7.1.4",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.70.0",
+    "vitest": "^5.0.1"
+  },
+  "optionalDependencies": {
+    "@rolldown/binding-win32-x64-msvc": "^1.2.9"
+  }
+}

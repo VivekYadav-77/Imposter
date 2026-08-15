@@ -1,0 +1,53 @@
+import { z } from "zod";
+
+const booleanString = z
+  .enum(["true", "false"])
+  .default("false")
+  .transform((value) => value === "true");
+
+const configSchema = z
+  .object({
+    APP_ENV: z.enum(["development", "test", "production"]).default("development"),
+    HOST: z.string().min(1).default("127.0.0.1"),
+    PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+    DATABASE_URL: z.string().url().startsWith("postgresql://"),
+    DATABASE_SSL: booleanString,
+    DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(50).default(10),
+    DATABASE_READY_TIMEOUT_MS: z.coerce.number().int().min(100).max(10000).default(1500),
+    LOG_LEVEL: z
+      .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
+      .default("info"),
+    CORS_ALLOWED_ORIGINS: z.string().default(""),
+    MAX_JSON_BODY_BYTES: z.coerce.number().int().min(1024).max(1048576).default(65536),
+    EXPOSE_API_DOCS: booleanString,
+    SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().min(1000).max(30000).default(10000),
+  })
+  .transform((values) => ({
+    appEnv: values.APP_ENV,
+    host: values.HOST,
+    port: values.PORT,
+    databaseUrl: values.DATABASE_URL,
+    databaseSsl: values.DATABASE_SSL,
+    databasePoolMax: values.DATABASE_POOL_MAX,
+    databaseReadyTimeoutMs: values.DATABASE_READY_TIMEOUT_MS,
+    logLevel: values.LOG_LEVEL,
+    corsAllowedOrigins: values.CORS_ALLOWED_ORIGINS.split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean),
+    maxJsonBodyBytes: values.MAX_JSON_BODY_BYTES,
+    exposeApiDocs: values.EXPOSE_API_DOCS,
+    shutdownTimeoutMs: values.SHUTDOWN_TIMEOUT_MS,
+  }));
+
+export type AppConfig = z.output<typeof configSchema>;
+
+export function loadConfig(
+  environment: Record<string, string | undefined> = process.env,
+): AppConfig {
+  const parsed = configSchema.safeParse(environment);
+  if (!parsed.success) {
+    const fields = parsed.error.issues.map((issue) => issue.path.join(".")).join(", ");
+    throw new Error(`Invalid application configuration: ${fields}`);
+  }
+  return parsed.data;
+}
