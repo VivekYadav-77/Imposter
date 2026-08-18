@@ -5,8 +5,23 @@ import type { Database } from "../infrastructure/database/database.js";
 import { checkDatabaseReadiness } from "../infrastructure/database/database.js";
 import type { AppConfig } from "../infrastructure/configuration/config.js";
 import type { Metrics } from "../infrastructure/observability/metrics.js";
+import type { AdminAuthService } from "../modules/admin-auth/service.js";
+import {
+  createPackSchema,
+  loginSchema,
+  revisionSchema,
+  updatePackSchema,
+} from "../modules/task-packs/schemas.js";
+import type { TaskPackRepository } from "../modules/task-packs/repository.js";
 import { successEnvelope } from "../shared/contracts/envelope.js";
 import { ApplicationError } from "../shared/errors/application-error.js";
+import {
+  ADMIN_COOKIE_NAME,
+  adminSessionCookie,
+  clearAdminSessionCookie,
+  readCookie,
+} from "../shared/security/cookies.js";
+import { readJsonBody } from "./body.js";
 import { sendError, sendJson } from "./http.js";
 import { openApiDocument } from "./openapi.js";
 import { resolveRequestId } from "./request-id.js";
@@ -18,6 +33,9 @@ export interface ApiDependencies {
   logger: Logger;
   metrics: Metrics;
   readinessCheck?: () => Promise<void>;
+  adminAuth?: AdminAuthService;
+  taskPacks?: TaskPackRepository;
+  authorizePublishedPackRead?: (request: IncomingMessage) => Promise<void>;
 }
 
 export type ApiHandler = (request: IncomingMessage, response: ServerResponse) => Promise<boolean>;
@@ -88,10 +106,20 @@ export function createApiHandler(dependencies: ApiDependencies): ApiHandler {
         dependencies.config.exposeApiDocs
       ) {
         sendJson(response, 200, openApiDocument, requestId);
+      } else if (dependencies.adminAuth && dependencies.taskPacks && path.startsWith("/api/v1/")) {
+        await handlePhaseTwoRoute(request, response, path, requestId, {
+          ...dependencies,
+          adminAuth: dependencies.adminAuth,
+          taskPacks: dependencies.taskPacks,
+        });
       } else {
         throw new ApplicationError(404, "NOT_FOUND", "The requested resource was not found.");
       }
     } catch (error) {
+      if (error instanceof ApplicationError && error.status === 429) {
+        const retryAfter = error.details?.retryAfterSeconds;
+        if (typeof retryAfter === "number") response.setHeader("Retry-After", String(retryAfter));
+      }
       if (!(error instanceof ApplicationError)) {
         dependencies.logger.error({ err: error, requestId }, "Unhandled API error");
       }
@@ -110,4 +138,248 @@ export function createApiHandler(dependencies: ApiDependencies): ApiHandler {
     }
     return true;
   };
+}
+
+function requireIdempotencyKey(request: IncomingMessage): string {
+  const key = request.headers["idempotency-key"];
+  if (typeof key !== "string" || !/^[A-Za-z0-9._:-]{8,128}$/.test(key)) {
+    throw new ApplicationError(
+      400,
+      "IDEMPOTENCY_KEY_REQUIRED",
+      "A valid Idempotency-Key header is required.",
+    );
+  }
+  return key;
+}
+
+function parseLimit(url: URL): number {
+  const value = url.searchParams.get("limit");
+  if (!value) return 20;
+  const limit = Number(value);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 50)
+    throw new ApplicationError(422, "VALIDATION_FAILED", "limit must be between 1 and 50.");
+  return limit;
+}
+
+function parseCursor(url: URL, fingerprint: string): number {
+  const cursor = url.searchParams.get("cursor");
+  if (!cursor) return 0;
+  try {
+    const value = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as {
+      offset?: unknown;
+      fingerprint?: unknown;
+    };
+    if (
+      !Number.isInteger(value.offset) ||
+      (value.offset as number) < 0 ||
+      value.fingerprint !== fingerprint
+    )
+      throw new Error("invalid");
+    return value.offset as number;
+  } catch {
+    throw new ApplicationError(422, "VALIDATION_FAILED", "cursor is invalid for this listing.");
+  }
+}
+
+function nextCursor(
+  offset: number,
+  count: number,
+  limit: number,
+  fingerprint: string,
+): string | null {
+  if (count <= limit) return null;
+  return Buffer.from(JSON.stringify({ offset: offset + limit, fingerprint })).toString("base64url");
+}
+
+function validateOriginForCookieMutation(request: IncomingMessage, config: AppConfig): void {
+  if (!request.headers.cookie) return;
+  const origin = request.headers.origin;
+  if (!origin || !config.corsAllowedOrigins.includes(origin))
+    throw new ApplicationError(403, "FORBIDDEN", "A trusted Origin header is required.");
+}
+
+async function validatedBody<T>(
+  request: IncomingMessage,
+  maximumBytes: number,
+  schema: {
+    safeParse(
+      value: unknown,
+    ): { success: true; data: T } | { success: false; error: { flatten(): unknown } };
+  },
+): Promise<T> {
+  const body = await readJsonBody<unknown>(request, maximumBytes);
+  const result = schema.safeParse(body);
+  if (!result.success)
+    throw new ApplicationError(422, "VALIDATION_FAILED", "The request body is invalid.", {
+      validation: result.error.flatten(),
+    });
+  return result.data;
+}
+
+async function handlePhaseTwoRoute(
+  request: IncomingMessage,
+  response: ServerResponse,
+  path: string,
+  requestId: string,
+  dependencies: ApiDependencies & { adminAuth: AdminAuthService; taskPacks: TaskPackRepository },
+): Promise<void> {
+  const method = request.method ?? "GET";
+  const url = new URL(request.url ?? "/", "http://localhost");
+  if (method === "POST" && path === "/api/v1/admin/sessions") {
+    const body = await validatedBody(request, dependencies.config.maxJsonBodyBytes, loginSchema);
+    const session = await dependencies.adminAuth.login({
+      email: body.email,
+      password: body.password,
+      ip: request.socket.remoteAddress ?? "unknown",
+      requestId,
+    });
+    response.statusCode = 204;
+    response.setHeader("Set-Cookie", adminSessionCookie(session.token, session.maxAgeSeconds));
+    response.setHeader("X-Request-ID", requestId);
+    response.end();
+    return;
+  }
+
+  if (method === "GET" && path === "/api/v1/task-packs") {
+    if (!dependencies.authorizePublishedPackRead)
+      throw new ApplicationError(
+        401,
+        "SESSION_INVALID",
+        "An active participant session is required.",
+      );
+    await dependencies.authorizePublishedPackRead(request);
+    const search = url.searchParams.get("search")?.trim().slice(0, 80);
+    const limit = parseLimit(url);
+    const fingerprint = `public:${search ?? ""}`;
+    const offset = parseCursor(url, fingerprint);
+    const rows = await dependencies.taskPacks.listPublic(search, limit + 1, offset);
+    sendJson(
+      response,
+      200,
+      successEnvelope(
+        rows.slice(0, limit),
+        requestId,
+        nextCursor(offset, rows.length, limit, fingerprint),
+      ),
+      requestId,
+    );
+    return;
+  }
+  const publicMatch = path.match(/^\/api\/v1\/task-packs\/([0-9a-f-]{36})$/i);
+  if (method === "GET" && publicMatch) {
+    if (!dependencies.authorizePublishedPackRead)
+      throw new ApplicationError(
+        401,
+        "SESSION_INVALID",
+        "An active participant session is required.",
+      );
+    await dependencies.authorizePublishedPackRead(request);
+    const pack = await dependencies.taskPacks.getPublic(publicMatch[1]);
+    if (!pack) throw new ApplicationError(404, "NOT_FOUND", "The task pack was not found.");
+    sendJson(response, 200, successEnvelope(pack, requestId), requestId);
+    return;
+  }
+
+  const principal = await dependencies.adminAuth.authenticate(
+    readCookie(request, ADMIN_COOKIE_NAME),
+  );
+  if (["POST", "PATCH", "PUT", "DELETE"].includes(method))
+    validateOriginForCookieMutation(request, dependencies.config);
+  if (method === "DELETE" && path === "/api/v1/admin/sessions/current") {
+    await dependencies.adminAuth.logout(principal, requestId);
+    response.statusCode = 204;
+    response.setHeader("Set-Cookie", clearAdminSessionCookie());
+    response.setHeader("X-Request-ID", requestId);
+    response.end();
+    return;
+  }
+  if (method === "GET" && path === "/api/v1/admin/task-packs") {
+    const statusValue = url.searchParams.get("status");
+    if (statusValue && !["draft", "published", "archived"].includes(statusValue))
+      throw new ApplicationError(422, "VALIDATION_FAILED", "status is invalid.");
+    const search = url.searchParams.get("search")?.trim().slice(0, 80);
+    const sortValue = url.searchParams.get("sort") ?? "updated_desc";
+    if (sortValue !== "updated_desc" && sortValue !== "name_asc")
+      throw new ApplicationError(422, "VALIDATION_FAILED", "sort is invalid.");
+    const sort = sortValue;
+    const limit = parseLimit(url);
+    const fingerprint = `admin:${statusValue ?? ""}:${search ?? ""}:${sort}`;
+    const offset = parseCursor(url, fingerprint);
+    const rows = await dependencies.taskPacks.listAdmin(
+      statusValue as "draft" | "published" | "archived" | undefined,
+      search,
+      limit + 1,
+      offset,
+      sort,
+    );
+    sendJson(
+      response,
+      200,
+      successEnvelope(
+        rows.slice(0, limit),
+        requestId,
+        nextCursor(offset, rows.length, limit, fingerprint),
+      ),
+      requestId,
+    );
+    return;
+  }
+  if (method === "POST" && path === "/api/v1/admin/task-packs") {
+    const idempotencyKey = requireIdempotencyKey(request);
+    const body = await validatedBody(
+      request,
+      dependencies.config.maxJsonBodyBytes,
+      createPackSchema,
+    );
+    const pack = await dependencies.taskPacks.create(
+      body,
+      principal.adminUserId,
+      requestId,
+      idempotencyKey,
+    );
+    sendJson(response, 201, successEnvelope(pack, requestId), requestId);
+    return;
+  }
+  const packMatch = path.match(/^\/api\/v1\/admin\/task-packs\/([0-9a-f-]{36})$/i);
+  if (method === "GET" && packMatch) {
+    const pack = await dependencies.taskPacks.getAdmin(packMatch[1]);
+    if (!pack) throw new ApplicationError(404, "NOT_FOUND", "The task pack was not found.");
+    sendJson(response, 200, successEnvelope(pack, requestId), requestId);
+    return;
+  }
+  if (method === "PATCH" && packMatch) {
+    const idempotencyKey = requireIdempotencyKey(request);
+    const body = await validatedBody(
+      request,
+      dependencies.config.maxJsonBodyBytes,
+      updatePackSchema,
+    );
+    const pack = await dependencies.taskPacks.update(
+      packMatch[1],
+      body,
+      principal.adminUserId,
+      requestId,
+      idempotencyKey,
+    );
+    sendJson(response, 200, successEnvelope(pack, requestId), requestId);
+    return;
+  }
+  const actionMatch = path.match(
+    /^\/api\/v1\/admin\/task-packs\/([0-9a-f-]{36})\/(publish|archive)$/i,
+  );
+  if (method === "POST" && actionMatch) {
+    const idempotencyKey = requireIdempotencyKey(request);
+    const body = await validatedBody(request, dependencies.config.maxJsonBodyBytes, revisionSchema);
+    const pack = await dependencies.taskPacks.transition(
+      actionMatch[1],
+      body.expectedRevision,
+      actionMatch[2] === "publish" ? "published" : "archived",
+      principal.adminUserId,
+      requestId,
+      idempotencyKey,
+    );
+    sendJson(response, 200, successEnvelope(pack, requestId), requestId);
+    return;
+  }
+  throw new ApplicationError(404, "NOT_FOUND", "The requested resource was not found.");
 }

@@ -392,7 +392,7 @@ Clients do not call a public “resolve vote” endpoint. The server resolves wh
 - Idempotency required; optimistic revision required in body or `If-Match`.
 - Body: any mutable metadata and/or complete ordered item set.
 - Response `200`: updated pack and incremented revision.
-- Errors: `409 PACK_REVISION_CONFLICT`; `422`; archived packs require explicit restore policy.
+- Errors: `409 PACK_REVISION_CONFLICT`; `422`; archived packs cannot be edited in this phase.
 
 ### `POST /api/v1/admin/task-packs/{packId}/publish`
 
@@ -407,6 +407,7 @@ Clients do not call a public “resolve vote” endpoint. The server resolves wh
 
 - Authentication/authorization: active admin.
 - Idempotency and expected revision: required.
+- Validation: only a published pack may be archived.
 - Response `200`: archived pack. Existing game snapshots remain unchanged.
 
 ## 9. Realtime contract
@@ -462,6 +463,8 @@ Client-to-server realtime messages are limited to subscription acknowledgement a
 ## 11. Rate limiting and pagination
 
 Exact rate numbers are deployment configuration, not permanent API contract. Every `429` returns `Retry-After`; clients use exponential backoff with jitter.
+
+The initial single-process administrator-login policy permits five failures per normalized email/IP hash in 15 minutes. These values remain deployment configuration through `ADMIN_LOGIN_MAX_ATTEMPTS` and `ADMIN_LOGIN_WINDOW_SECONDS`.
 
 Cursor pagination is used for task packs, submissions, and admin lists. Cursors are opaque and tied to the filter/sort. Offset pagination is avoided for changing lists.
 

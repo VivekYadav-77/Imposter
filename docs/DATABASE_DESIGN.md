@@ -264,7 +264,7 @@ Index active-session lookup by `token_hash`; cleanup by `expires_at`.
 | `created_by_admin_id` | `uuid`        |   No | FK to `admin_users`, restrict delete    |
 | `slug`                | `text`        |   No | Unique, stable identifier               |
 | `name`                | `text`        |   No | 1–80 display characters after trim      |
-| `description`         | `text`        |  Yes | Bounded length                          |
+| `description`         | `text`        |  Yes | At most 1,000 characters                |
 | `status`              | `text`        |   No | Check: `draft`, `published`, `archived` |
 | `revision`            | `integer`     |   No | Positive; increment on mutation         |
 | `published_at`        | `timestamptz` |  Yes | Required when published by service rule |
@@ -286,6 +286,35 @@ Index published packs by `(status, name)`. Packs are archived, not deleted, once
 | `updated_at`   | `timestamptz` |   No | Application maintained                                    |
 
 Publishing requires the approved task-count range, initially 10–15 active items.
+
+### `admin_audit_events`
+
+| Column          | Type          | Null | Constraints/notes                                     |
+| --------------- | ------------- | ---: | ----------------------------------------------------- |
+| `id`            | `uuid`        |   No | PK                                                    |
+| `admin_user_id` | `uuid`        |  Yes | FK to `admin_users`; null is allowed after deletion   |
+| `action`        | `text`        |   No | Stable security/lifecycle action name                 |
+| `target_type`   | `text`        |  Yes | Bounded resource category                             |
+| `target_id`     | `uuid`        |  Yes | Resource identifier                                   |
+| `request_id`    | `text`        |  Yes | Correlation only                                      |
+| `ip_hash`       | `text`        |  Yes | Privacy-preserving security signal                    |
+| `outcome`       | `text`        |   No | Check: `success`, `failure`                           |
+| `metadata`      | `jsonb`       |   No | Structural facts only; never credentials or edit body |
+| `created_at`    | `timestamptz` |   No | Default current time                                  |
+
+### `admin_idempotency_records`
+
+| Column          | Type          | Null | Constraints/notes                                 |
+| --------------- | ------------- | ---: | ------------------------------------------------- |
+| `admin_user_id` | `uuid`        |   No | Composite PK; FK to `admin_users`, cascade delete |
+| `key`           | `text`        |   No | Composite PK; client-generated key                |
+| `operation`     | `text`        |   No | Route/resource-scoped operation                   |
+| `request_hash`  | `text`        |   No | Rejects reuse with a different request            |
+| `response_body` | `jsonb`       |   No | Original admin DTO for replay                     |
+| `created_at`    | `timestamptz` |   No | Default current time                              |
+| `expires_at`    | `timestamptz` |   No | Initial retention: 24 hours                       |
+
+Concurrent use of the same administrator/key pair is serialized with a transaction advisory lock before the record is read or created.
 
 ### `rooms`
 

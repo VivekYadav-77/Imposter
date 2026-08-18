@@ -18,6 +18,17 @@ export interface ErrorEnvelope {
   };
 }
 
-export function successEnvelope<T>(data: T, requestId: string): SuccessEnvelope<T> {
-  return { data, meta: { requestId, serverTime: new Date().toISOString() } };
+export function successEnvelope<T>(
+  data: T,
+  requestId: string,
+  nextCursor?: string | null,
+): SuccessEnvelope<T> {
+  return {
+    data,
+    meta: {
+      requestId,
+      serverTime: new Date().toISOString(),
+      ...(nextCursor !== undefined ? { nextCursor } : {}),
+    },
+  };
 }

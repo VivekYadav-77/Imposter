@@ -2,7 +2,7 @@
 
 Foundation repository for a real-life, room-based social deduction game. Players complete physical tasks, submit photo evidence, and use the app for game state, meetings, evidence review, and voting.
 
-Phase 1 establishes the persistent Node/Next server, `/api/v1` conventions, health checks, PostgreSQL access, migrations, authenticated realtime boundary, structured logs, OpenAPI drift checks, tests, and CI. No gameplay feature is implemented yet.
+Phase 2 adds secured administrator sessions and the draft/publish/archive task-pack lifecycle on top of the persistent Node/Next foundation. Player rooms and gameplay are not implemented yet.
 
 ## Requirements
 
@@ -16,8 +16,9 @@ Phase 1 establishes the persistent Node/Next server, `/api/v1` conventions, heal
 2. Optionally start PostgreSQL with `POSTGRES_PASSWORD` set in your shell: `docker compose up -d postgres`.
 3. Run `npm ci`.
 4. Run `npm run migrate:up`.
-5. Run `npm run dev`.
-6. Check `GET http://127.0.0.1:3000/health/live` and `/health/ready`.
+5. Provision the initial owner using [the administrator runbook](docs/ADMIN_OPERATIONS.md).
+6. Run `npm run dev`.
+7. Check `GET http://127.0.0.1:3000/health/live` and `/health/ready`.
 
 The application deliberately fails startup when required configuration is absent. Production API documentation is disabled unless `EXPOSE_API_DOCS=true` is explicitly set.
 
@@ -39,10 +40,10 @@ npm run build
 - [API contract](docs/API_CONTRACT.md)
 - [Security design](docs/SECURITY.md)
 - [Implementation phases](docs/phases/README.md)
-- [Current handoff context](docs/context/PHASE_01_CONTEXT.md)
+- [Current handoff context](docs/context/PHASE_02_CONTEXT.md)
 
 The original concept is preserved in [imposter-game-agent-prompt.md](imposter-game-agent-prompt.md).
 
 ## Current boundary
 
-Feature tables, participant sessions, rooms, games, evidence, meetings, and administrative behavior begin in later phases. The Phase 1 realtime authenticator therefore rejects every connection with `SESSION_INVALID` until the participant-session adapter is implemented.
+Participant sessions, rooms, games, evidence, and meetings begin in later phases. The realtime authenticator and participant-protected published-pack HTTP reads therefore reject sessions until the Phase 3 participant-session adapter is implemented. Administrator authentication is a separate cookie-based realm.

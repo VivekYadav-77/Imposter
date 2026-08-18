@@ -1,6 +1,6 @@
 # Architecture
 
-**Status:** Phase 1 foundation implemented; feature modules remain planned.
+**Status:** Phase 2 administrator authentication and task-pack modules implemented; gameplay modules remain planned.
 
 ## 1. Architecture style
 

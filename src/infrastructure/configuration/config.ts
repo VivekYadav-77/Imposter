@@ -21,6 +21,10 @@ const configSchema = z
     MAX_JSON_BODY_BYTES: z.coerce.number().int().min(1024).max(1048576).default(65536),
     EXPOSE_API_DOCS: booleanString,
     SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().min(1000).max(30000).default(10000),
+    ADMIN_SESSION_TOKEN_PEPPER: z.string().min(32).default("development-only-admin-token-pepper"),
+    ADMIN_SESSION_TTL_SECONDS: z.coerce.number().int().min(300).max(86400).default(28800),
+    ADMIN_LOGIN_WINDOW_SECONDS: z.coerce.number().int().min(60).max(3600).default(900),
+    ADMIN_LOGIN_MAX_ATTEMPTS: z.coerce.number().int().min(2).max(20).default(5),
   })
   .transform((values) => ({
     appEnv: values.APP_ENV,
@@ -37,6 +41,10 @@ const configSchema = z
     maxJsonBodyBytes: values.MAX_JSON_BODY_BYTES,
     exposeApiDocs: values.EXPOSE_API_DOCS,
     shutdownTimeoutMs: values.SHUTDOWN_TIMEOUT_MS,
+    adminSessionTokenPepper: values.ADMIN_SESSION_TOKEN_PEPPER,
+    adminSessionTtlSeconds: values.ADMIN_SESSION_TTL_SECONDS,
+    adminLoginWindowSeconds: values.ADMIN_LOGIN_WINDOW_SECONDS,
+    adminLoginMaxAttempts: values.ADMIN_LOGIN_MAX_ATTEMPTS,
   }));
 
 export type AppConfig = z.output<typeof configSchema>;

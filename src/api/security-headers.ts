@@ -25,7 +25,7 @@ export function applyCors(
   response.setHeader("Access-Control-Allow-Credentials", "true");
   response.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, Idempotency-Key, If-Match-State-Version, X-Request-ID",
+    "Content-Type, Idempotency-Key, If-Match, If-Match-State-Version, X-Request-ID",
   );
   response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
   response.setHeader("Vary", "Origin");

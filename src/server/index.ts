@@ -6,6 +6,10 @@ import { loadConfig } from "../infrastructure/configuration/config.js";
 import { closeDatabase, createDatabase } from "../infrastructure/database/database.js";
 import { createLogger } from "../infrastructure/observability/logger.js";
 import { InMemoryMetrics } from "../infrastructure/observability/metrics.js";
+import { PostgresAdminAuthRepository } from "../modules/admin-auth/repository.js";
+import { AdminAuthService } from "../modules/admin-auth/service.js";
+import { MemoryLoginThrottle } from "../modules/admin-auth/throttle.js";
+import { TaskPackRepository } from "../modules/task-packs/repository.js";
 import { RejectingParticipantSessionAuthenticator } from "../realtime/authentication.js";
 import { attachRealtimeServer } from "../realtime/server.js";
 import { ShutdownManager } from "./shutdown.js";
@@ -30,7 +34,22 @@ async function main(): Promise<void> {
   }
 
   const nextHandler = nextApp.getRequestHandler();
-  const apiHandler = createApiHandler({ config, database: database.db, logger, metrics });
+  const adminRepository = new PostgresAdminAuthRepository(database.db);
+  const adminAuth = new AdminAuthService(
+    adminRepository,
+    new MemoryLoginThrottle(config.adminLoginMaxAttempts, config.adminLoginWindowSeconds),
+    config.adminSessionTokenPepper,
+    config.adminSessionTtlSeconds,
+  );
+  const taskPacks = new TaskPackRepository(database.db);
+  const apiHandler = createApiHandler({
+    config,
+    database: database.db,
+    logger,
+    metrics,
+    adminAuth,
+    taskPacks,
+  });
   const httpServer = createServer((request, response) => {
     void apiHandler(request, response)
       .then((handled) => {
