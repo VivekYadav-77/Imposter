@@ -25,6 +25,15 @@ const configSchema = z
     ADMIN_SESSION_TTL_SECONDS: z.coerce.number().int().min(300).max(86400).default(28800),
     ADMIN_LOGIN_WINDOW_SECONDS: z.coerce.number().int().min(60).max(3600).default(900),
     ADMIN_LOGIN_MAX_ATTEMPTS: z.coerce.number().int().min(2).max(20).default(5),
+    PARTICIPANT_SESSION_TOKEN_PEPPER: z
+      .string()
+      .min(32)
+      .default("development-only-participant-token-pepper"),
+    PARTICIPANT_SESSION_TTL_SECONDS: z.coerce.number().int().min(300).max(86400).default(7200),
+    ROOM_LOBBY_TTL_SECONDS: z.coerce.number().int().min(300).max(86400).default(7200),
+    ROOM_CODE_COOLDOWN_SECONDS: z.coerce.number().int().min(0).max(604800).default(86400),
+    HOST_DISCONNECT_GRACE_SECONDS: z.coerce.number().int().min(5).max(600).default(30),
+    ROOM_MAINTENANCE_INTERVAL_MS: z.coerce.number().int().min(1000).max(60000).default(10000),
   })
   .transform((values) => ({
     appEnv: values.APP_ENV,
@@ -45,6 +54,12 @@ const configSchema = z
     adminSessionTtlSeconds: values.ADMIN_SESSION_TTL_SECONDS,
     adminLoginWindowSeconds: values.ADMIN_LOGIN_WINDOW_SECONDS,
     adminLoginMaxAttempts: values.ADMIN_LOGIN_MAX_ATTEMPTS,
+    participantSessionTokenPepper: values.PARTICIPANT_SESSION_TOKEN_PEPPER,
+    participantSessionTtlSeconds: values.PARTICIPANT_SESSION_TTL_SECONDS,
+    roomLobbyTtlSeconds: values.ROOM_LOBBY_TTL_SECONDS,
+    roomCodeCooldownSeconds: values.ROOM_CODE_COOLDOWN_SECONDS,
+    hostDisconnectGraceSeconds: values.HOST_DISCONNECT_GRACE_SECONDS,
+    roomMaintenanceIntervalMs: values.ROOM_MAINTENANCE_INTERVAL_MS,
   }));
 
 export type AppConfig = z.output<typeof configSchema>;

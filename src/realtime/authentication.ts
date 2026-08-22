@@ -1,4 +1,5 @@
 import type { Socket } from "socket.io";
+import { PARTICIPANT_COOKIE_NAME } from "../shared/security/cookies.js";
 
 export interface ParticipantPrincipal {
   participantId: string;
@@ -26,5 +27,13 @@ export function credentialFromSocket(socket: Socket): string | null {
   const handshakeAuth = socket.handshake.auth as Record<string, unknown> | undefined;
   const authToken = handshakeAuth?.token;
   if (typeof authToken === "string" && authToken.length > 0) return authToken;
-  return bearerToken(socket.handshake.headers.authorization);
+  const bearer = bearerToken(socket.handshake.headers.authorization);
+  if (bearer) return bearer;
+  const cookie = socket.handshake.headers.cookie;
+  if (!cookie) return null;
+  for (const part of cookie.split(";")) {
+    const [name, ...value] = part.trim().split("=");
+    if (name === PARTICIPANT_COOKIE_NAME) return decodeURIComponent(value.join("="));
+  }
+  return null;
 }

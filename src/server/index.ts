@@ -10,8 +10,10 @@ import { PostgresAdminAuthRepository } from "../modules/admin-auth/repository.js
 import { AdminAuthService } from "../modules/admin-auth/service.js";
 import { MemoryLoginThrottle } from "../modules/admin-auth/throttle.js";
 import { TaskPackRepository } from "../modules/task-packs/repository.js";
-import { RejectingParticipantSessionAuthenticator } from "../realtime/authentication.js";
+import { RoomService } from "../modules/rooms/service.js";
 import { attachRealtimeServer } from "../realtime/server.js";
+import { PARTICIPANT_COOKIE_NAME, readCookie } from "../shared/security/cookies.js";
+import { ApplicationError } from "../shared/errors/application-error.js";
 import { ShutdownManager } from "./shutdown.js";
 
 async function main(): Promise<void> {
@@ -42,6 +44,7 @@ async function main(): Promise<void> {
     config.adminSessionTtlSeconds,
   );
   const taskPacks = new TaskPackRepository(database.db);
+  const rooms = new RoomService(database.db, config);
   const apiHandler = createApiHandler({
     config,
     database: database.db,
@@ -49,6 +52,18 @@ async function main(): Promise<void> {
     metrics,
     adminAuth,
     taskPacks,
+    rooms,
+    authorizePublishedPackRead: async (request) => {
+      const header = request.headers.authorization;
+      const bearer = header?.startsWith("Bearer ") ? header.slice(7).trim() : null;
+      const token = bearer || readCookie(request, PARTICIPANT_COOKIE_NAME);
+      if (!token || !(await rooms.authenticate(token)))
+        throw new ApplicationError(
+          401,
+          "SESSION_INVALID",
+          "An active participant session is required.",
+        );
+    },
   });
   const httpServer = createServer((request, response) => {
     void apiHandler(request, response)
@@ -63,13 +78,21 @@ async function main(): Promise<void> {
         }
       });
   });
-  const realtime = attachRealtimeServer(
-    httpServer,
-    config,
-    logger,
-    new RejectingParticipantSessionAuthenticator(),
-  );
+  const realtime = attachRealtimeServer(httpServer, config, logger, rooms);
+  const maintenance = setInterval(() => {
+    void rooms
+      .runMaintenance()
+      .catch((error: unknown) => logger.error({ err: error }, "Room maintenance failed"));
+  }, config.roomMaintenanceIntervalMs);
+  maintenance.unref();
+  void rooms
+    .runMaintenance()
+    .catch((error: unknown) => logger.warn({ err: error }, "Initial room maintenance failed"));
   const shutdown = new ShutdownManager(logger, config.shutdownTimeoutMs, [
+    () => {
+      clearInterval(maintenance);
+      return Promise.resolve();
+    },
     () => new Promise<void>((resolve) => realtime.close(() => resolve())),
     () =>
       new Promise<void>((resolve, reject) =>

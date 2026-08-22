@@ -2,7 +2,7 @@
 
 Foundation repository for a real-life, room-based social deduction game. Players complete physical tasks, submit photo evidence, and use the app for game state, meetings, evidence review, and voting.
 
-Phase 2 adds secured administrator sessions and the draft/publish/archive task-pack lifecycle on top of the persistent Node/Next foundation. Player rooms and gameplay are not implemented yet.
+Phase 3 adds temporary participant sessions, room creation/join, host-controlled lobby settings, presence, reconnect snapshots, deterministic host transfer, and persisted lobby expiry. Game start and role/task assignment begin in Phase 4.
 
 ## Requirements
 
@@ -40,10 +40,11 @@ npm run build
 - [API contract](docs/API_CONTRACT.md)
 - [Security design](docs/SECURITY.md)
 - [Implementation phases](docs/phases/README.md)
-- [Current handoff context](docs/context/PHASE_02_CONTEXT.md)
+- [Realtime contract](docs/REALTIME_CONTRACT.md)
+- [Current handoff context](docs/context/PHASE_03_CONTEXT.md)
 
 The original concept is preserved in [imposter-game-agent-prompt.md](imposter-game-agent-prompt.md).
 
 ## Current boundary
 
-Participant sessions, rooms, games, evidence, and meetings begin in later phases. The realtime authenticator and participant-protected published-pack HTTP reads therefore reject sessions until the Phase 3 participant-session adapter is implemented. Administrator authentication is a separate cookie-based realm.
+Rooms remain in the lobby in Phase 3: there is intentionally no start-game route yet. Participant and administrator credentials are separate cookie/bearer realms. Games, roles, tasks, evidence, and meetings are introduced by later phases.

@@ -50,4 +50,70 @@ describe("realtime authentication boundary", () => {
 
     await new Promise<void>((resolve) => realtime.close(() => resolve()));
   });
+
+  it("accepts the web cookie and sends a participant-specific initial snapshot", async () => {
+    const httpServer = createServer();
+    const config = loadConfig({
+      APP_ENV: "test",
+      DATABASE_URL: "postgresql://test:test@localhost:5432/test",
+      CORS_ALLOWED_ORIGINS: "http://localhost",
+    });
+    const roomId = "00000000-0000-4000-8000-000000000001";
+    const participantId = "00000000-0000-4000-8000-000000000002";
+    const realtime = attachRealtimeServer(httpServer, config, pino({ enabled: false }), {
+      authenticate: (token) =>
+        Promise.resolve(
+          token === "valid-cookie"
+            ? { roomId, participantId, sessionId: "00000000-0000-4000-8000-000000000003" }
+            : null,
+        ),
+      snapshot: (principal) =>
+        Promise.resolve({
+          id: roomId,
+          code: "ABC234",
+          status: "lobby",
+          maxPlayers: 12,
+          settings: {
+            selectedTaskPack: null,
+            taskPhaseSeconds: 900,
+            discussionSeconds: 90,
+            reviewSeconds: 60,
+            votingSeconds: 60,
+          },
+          participants: [],
+          self: {
+            participantId: principal.participantId,
+            nickname: "Asha",
+            isHost: true,
+            capabilities: ["change_settings"],
+          },
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+          gameId: null,
+        }),
+    });
+    await new Promise<void>((resolve) => httpServer.listen(0, "127.0.0.1", resolve));
+    const { port } = httpServer.address() as AddressInfo;
+    const client = createClient(`http://127.0.0.1:${port}`, {
+      path: "/realtime",
+      transports: ["websocket"],
+      extraHeaders: { Cookie: "__Host-participant_session=valid-cookie" },
+      reconnection: false,
+    });
+    clients.push(client);
+    const message = await new Promise<{
+      type: string;
+      roomId: string;
+      data: { self: { participantId: string } };
+    }>((resolve, reject) => {
+      client.once("connect_error", reject);
+      client.once("room.snapshot", resolve);
+    });
+    expect(message).toMatchObject({
+      type: "room.snapshot",
+      roomId,
+      data: { self: { participantId } },
+    });
+    client.close();
+    await new Promise<void>((resolve) => realtime.close(() => resolve()));
+  });
 });

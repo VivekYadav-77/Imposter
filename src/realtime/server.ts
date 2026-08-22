@@ -1,15 +1,31 @@
 import type { Server as HttpServer } from "node:http";
 import type { Logger } from "pino";
-import { Server } from "socket.io";
+import { Server, type Socket } from "socket.io";
 
 import type { AppConfig } from "../infrastructure/configuration/config.js";
 import { credentialFromSocket, type ParticipantSessionAuthenticator } from "./authentication.js";
+import type {
+  ParticipantPrincipal,
+  PresenceUpdate,
+  RoomSnapshotDto,
+} from "../modules/rooms/types.js";
+
+interface RealtimeRoomProvider extends ParticipantSessionAuthenticator {
+  snapshot?(principal: ParticipantPrincipal): Promise<RoomSnapshotDto>;
+  markConnected?(principal: ParticipantPrincipal): Promise<void>;
+  markDisconnected?(principal: ParticipantPrincipal): Promise<void>;
+  events?: {
+    on(event: "room.changed", listener: (roomId: string) => void): unknown;
+    on(event: "presence.changed", listener: (update: PresenceUpdate) => void): unknown;
+    on(event: "session.revoked", listener: (sessionId: string, reason: string) => void): unknown;
+  };
+}
 
 export function attachRealtimeServer(
   httpServer: HttpServer,
   config: AppConfig,
   logger: Logger,
-  authenticator: ParticipantSessionAuthenticator,
+  authenticator: RealtimeRoomProvider,
 ): Server {
   const io = new Server(httpServer, {
     path: "/realtime",
@@ -40,11 +56,93 @@ export function attachRealtimeServer(
     }
   });
 
+  const emitSnapshot = async (socket: Socket) => {
+    if (!authenticator.snapshot) return;
+    const principal = (socket.data as Record<string, unknown>).principal as ParticipantPrincipal;
+    const snapshot = await authenticator.snapshot(principal);
+    socket.emit("room.snapshot", {
+      schemaVersion: 1,
+      type: "room.snapshot",
+      roomId: principal.roomId,
+      occurredAt: new Date().toISOString(),
+      data: snapshot,
+    });
+  };
+
   io.on("connection", (socket) => {
     const socketData = socket.data as Record<string, unknown>;
-    const principal = socketData.principal as { roomId: string };
+    const principal = socketData.principal as ParticipantPrincipal;
     void socket.join(`room:${principal.roomId}`);
+    void socket.join(`session:${principal.sessionId}`);
+    void socket.join(`participant:${principal.participantId}`);
+    void authenticator
+      .markConnected?.(principal)
+      .catch((error: unknown) =>
+        logger.warn({ err: error, roomId: principal.roomId }, "Realtime presence update failed"),
+      );
     socket.emit("server.ready", { schemaVersion: 1, occurredAt: new Date().toISOString() });
+    void emitSnapshot(socket).catch((error: unknown) => {
+      logger.warn({ err: error, roomId: principal.roomId }, "Initial room snapshot failed");
+      socket.emit("server.resync_required", {
+        schemaVersion: 1,
+        type: "server.resync_required",
+        roomId: principal.roomId,
+        occurredAt: new Date().toISOString(),
+        data: { reason: "snapshot_failed" },
+      });
+    });
+    socket.on("heartbeat", (ack?: (value: unknown) => void) => {
+      ack?.({
+        occurredAt: new Date().toISOString(),
+        reconnect: {
+          strategy: "exponential",
+          initialDelayMs: 500,
+          maximumDelayMs: 10000,
+          jitter: true,
+        },
+      });
+    });
+    socket.on("room.resync", () => void emitSnapshot(socket));
+    socket.on("disconnect", () => {
+      const remaining =
+        io.sockets.adapter.rooms.get(`participant:${principal.participantId}`)?.size ?? 0;
+      if (remaining === 0)
+        void authenticator
+          .markDisconnected?.(principal)
+          .catch((error: unknown) =>
+            logger.warn(
+              { err: error, roomId: principal.roomId },
+              "Realtime disconnect persistence failed",
+            ),
+          );
+    });
+  });
+
+  authenticator.events?.on("room.changed", (roomId) => {
+    const sockets = io.sockets.adapter.rooms.get(`room:${roomId}`);
+    if (!sockets) return;
+    for (const socketId of sockets) {
+      const socket = io.sockets.sockets.get(socketId);
+      if (socket) void emitSnapshot(socket);
+    }
+  });
+  authenticator.events?.on("presence.changed", (update) => {
+    io.to(`room:${update.roomId}`).emit("presence.changed", {
+      schemaVersion: 1,
+      type: "presence.changed",
+      roomId: update.roomId,
+      occurredAt: update.occurredAt,
+      data: { participantId: update.participantId, presence: update.presence },
+    });
+  });
+  authenticator.events?.on("session.revoked", (sessionId, reason) => {
+    io.to(`session:${sessionId}`).emit("session.revoked", {
+      schemaVersion: 1,
+      type: "session.revoked",
+      occurredAt: new Date().toISOString(),
+      data: { reason },
+    });
+    void io.in(`session:${sessionId}`).disconnectSockets(true);
   });
 
   return io;

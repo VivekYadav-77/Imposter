@@ -77,6 +77,56 @@ export interface AdminIdempotencyRecordsTable {
   expires_at: Timestamp;
 }
 
+export interface RoomsTable {
+  id: string;
+  code: string;
+  status: "lobby" | "active" | "completed" | "abandoned" | "expired";
+  host_participant_id: string | null;
+  selected_task_pack_id: string | null;
+  max_players: number;
+  imposter_count: number;
+  tasks_per_crew: number;
+  task_phase_seconds: number;
+  discussion_seconds: number;
+  review_seconds: number;
+  voting_seconds: number;
+  created_at: Timestamp;
+  last_activity_at: Timestamp;
+  expires_at: Timestamp;
+}
+
+export interface ParticipantsTable {
+  id: string;
+  room_id: string;
+  nickname: string;
+  normalized_nickname: string;
+  membership_status: "joined" | "left" | "removed";
+  joined_at: Timestamp;
+  last_seen_at: Timestamp;
+  disconnected_at: NullableTimestamp;
+}
+
+export interface ParticipantSessionsTable {
+  id: string;
+  participant_id: string;
+  token_hash: string;
+  issued_at: Timestamp;
+  expires_at: Timestamp;
+  last_used_at: NullableTimestamp;
+  revoked_at: NullableTimestamp;
+}
+
+export interface RoomIdempotencyRecordsTable {
+  scope: string;
+  key: string;
+  operation: string;
+  request_hash: string;
+  response_body: Record<string, unknown>;
+  session_id: string | null;
+  created_at: Timestamp;
+  expires_at: Timestamp;
+}
+
 export interface DatabaseSchema {
   "app.admin_users": AdminUsersTable;
   "app.admin_sessions": AdminSessionsTable;
@@ -84,6 +134,10 @@ export interface DatabaseSchema {
   "app.task_pack_items": TaskPackItemsTable;
   "app.admin_audit_events": AdminAuditEventsTable;
   "app.admin_idempotency_records": AdminIdempotencyRecordsTable;
+  "app.rooms": RoomsTable;
+  "app.participants": ParticipantsTable;
+  "app.participant_sessions": ParticipantSessionsTable;
+  "app.room_idempotency_records": RoomIdempotencyRecordsTable;
 }
 
 export type Database = Kysely<DatabaseSchema>;

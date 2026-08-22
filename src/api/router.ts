@@ -13,12 +13,22 @@ import {
   updatePackSchema,
 } from "../modules/task-packs/schemas.js";
 import type { TaskPackRepository } from "../modules/task-packs/repository.js";
+import {
+  emptyBodySchema,
+  roomMembershipSchema,
+  roomSettingsSchema,
+} from "../modules/rooms/schemas.js";
+import type { RoomService } from "../modules/rooms/service.js";
+import type { ParticipantPrincipal } from "../modules/rooms/types.js";
 import { successEnvelope } from "../shared/contracts/envelope.js";
 import { ApplicationError } from "../shared/errors/application-error.js";
 import {
   ADMIN_COOKIE_NAME,
   adminSessionCookie,
   clearAdminSessionCookie,
+  clearParticipantSessionCookie,
+  PARTICIPANT_COOKIE_NAME,
+  participantSessionCookie,
   readCookie,
 } from "../shared/security/cookies.js";
 import { readJsonBody } from "./body.js";
@@ -35,6 +45,7 @@ export interface ApiDependencies {
   readinessCheck?: () => Promise<void>;
   adminAuth?: AdminAuthService;
   taskPacks?: TaskPackRepository;
+  rooms?: RoomService;
   authorizePublishedPackRead?: (request: IncomingMessage) => Promise<void>;
 }
 
@@ -106,6 +117,15 @@ export function createApiHandler(dependencies: ApiDependencies): ApiHandler {
         dependencies.config.exposeApiDocs
       ) {
         sendJson(response, 200, openApiDocument, requestId);
+      } else if (dependencies.rooms && isRoomRoute(path)) {
+        await handleRoomRoute(
+          request,
+          response,
+          path,
+          requestId,
+          dependencies.rooms,
+          dependencies.config,
+        );
       } else if (dependencies.adminAuth && dependencies.taskPacks && path.startsWith("/api/v1/")) {
         await handlePhaseTwoRoute(request, response, path, requestId, {
           ...dependencies,
@@ -138,6 +158,163 @@ export function createApiHandler(dependencies: ApiDependencies): ApiHandler {
     }
     return true;
   };
+}
+
+function isRoomRoute(path: string): boolean {
+  return (
+    path === "/api/v1/rooms" ||
+    path.startsWith("/api/v1/rooms/") ||
+    path.startsWith("/api/v1/participant-sessions/")
+  );
+}
+
+function bearerCredential(request: IncomingMessage): string | null {
+  const authorization = request.headers.authorization;
+  if (!authorization?.startsWith("Bearer ")) return null;
+  const value = authorization.slice(7).trim();
+  return value || null;
+}
+
+function participantCredential(request: IncomingMessage): string | null {
+  return bearerCredential(request) ?? readCookie(request, PARTICIPANT_COOKIE_NAME);
+}
+
+async function participantPrincipal(
+  request: IncomingMessage,
+  rooms: RoomService,
+): Promise<ParticipantPrincipal> {
+  const credential = participantCredential(request);
+  const principal = credential ? await rooms.authenticate(credential) : null;
+  if (!principal)
+    throw new ApplicationError(
+      401,
+      "SESSION_INVALID",
+      "An active participant session is required.",
+    );
+  return principal;
+}
+
+function usesCookieTransport(request: IncomingMessage): boolean {
+  return (
+    request.headers["x-session-transport"] === "cookie" ||
+    (!bearerCredential(request) && Boolean(readCookie(request, PARTICIPANT_COOKIE_NAME)))
+  );
+}
+
+function sendIssuedSession(
+  request: IncomingMessage,
+  response: ServerResponse,
+  status: number,
+  issued: Awaited<ReturnType<RoomService["createRoom"]>>,
+  requestId: string,
+  config: AppConfig,
+): void {
+  if (usesCookieTransport(request)) {
+    const maxAge = Math.max(
+      0,
+      Math.floor((Date.parse(issued.sessionExpiresAt) - Date.now()) / 1000),
+    );
+    response.setHeader("Set-Cookie", participantSessionCookie(issued.sessionToken, maxAge));
+    const safe = {
+      room: issued.room,
+      participant: issued.participant,
+      sessionExpiresAt: issued.sessionExpiresAt,
+    };
+    sendJson(response, status, successEnvelope(safe, requestId), requestId);
+    return;
+  }
+  sendJson(response, status, successEnvelope(issued, requestId), requestId);
+  void config;
+}
+
+async function handleRoomRoute(
+  request: IncomingMessage,
+  response: ServerResponse,
+  path: string,
+  requestId: string,
+  rooms: RoomService,
+  config: AppConfig,
+): Promise<void> {
+  const method = request.method ?? "GET";
+  const publicScope = `public:${request.socket.remoteAddress ?? "unknown"}`;
+  if (method === "POST" && path === "/api/v1/rooms") {
+    const key = requireIdempotencyKey(request);
+    const body = await validatedBody(request, config.maxJsonBodyBytes, roomMembershipSchema);
+    const issued = await rooms.createRoom(body, key, publicScope);
+    sendIssuedSession(request, response, 201, issued, requestId, config);
+    return;
+  }
+  const joinMatch = path.match(/^\/api\/v1\/rooms\/([A-Za-z0-9]{6})\/participants$/);
+  if (method === "POST" && joinMatch) {
+    const key = requireIdempotencyKey(request);
+    const body = await validatedBody(request, config.maxJsonBodyBytes, roomMembershipSchema);
+    const issued = await rooms.joinRoom(
+      joinMatch[1],
+      body,
+      key,
+      `${publicScope}:${joinMatch[1].toUpperCase()}`,
+    );
+    sendIssuedSession(request, response, 201, issued, requestId, config);
+    return;
+  }
+  const principal = await participantPrincipal(request, rooms);
+  if (["POST", "PATCH", "PUT", "DELETE"].includes(method) && usesCookieTransport(request))
+    validateOriginForCookieMutation(request, config);
+  if (method === "GET" && path === "/api/v1/rooms/current") {
+    sendJson(response, 200, successEnvelope(await rooms.snapshot(principal), requestId), requestId);
+    return;
+  }
+  if (method === "PATCH" && path === "/api/v1/rooms/current/settings") {
+    const key = requireIdempotencyKey(request);
+    const body = await validatedBody(request, config.maxJsonBodyBytes, roomSettingsSchema);
+    sendJson(
+      response,
+      200,
+      successEnvelope(await rooms.updateSettings(principal, body, key), requestId),
+      requestId,
+    );
+    return;
+  }
+  if (method === "POST" && path === "/api/v1/rooms/current/leave") {
+    const key = requireIdempotencyKey(request);
+    await validatedBody(request, config.maxJsonBodyBytes, emptyBodySchema);
+    sendJson(
+      response,
+      200,
+      successEnvelope(await rooms.leave(principal, key), requestId),
+      requestId,
+    );
+    return;
+  }
+  if (method === "POST" && path === "/api/v1/participant-sessions/current/rotate") {
+    const key = requireIdempotencyKey(request);
+    await validatedBody(request, config.maxJsonBodyBytes, emptyBodySchema);
+    const issued = await rooms.rotate(principal, key);
+    if (usesCookieTransport(request)) {
+      const maxAge = Math.max(
+        0,
+        Math.floor((Date.parse(issued.sessionExpiresAt) - Date.now()) / 1000),
+      );
+      response.setHeader("Set-Cookie", participantSessionCookie(issued.sessionToken, maxAge));
+      sendJson(
+        response,
+        200,
+        successEnvelope({ sessionExpiresAt: issued.sessionExpiresAt }, requestId),
+        requestId,
+      );
+    } else sendJson(response, 200, successEnvelope(issued, requestId), requestId);
+    return;
+  }
+  if (method === "DELETE" && path === "/api/v1/participant-sessions/current") {
+    await rooms.revoke(principal);
+    if (usesCookieTransport(request))
+      response.setHeader("Set-Cookie", clearParticipantSessionCookie());
+    response.statusCode = 204;
+    response.setHeader("X-Request-ID", requestId);
+    response.end();
+    return;
+  }
+  throw new ApplicationError(404, "NOT_FOUND", "The requested resource was not found.");
 }
 
 function requireIdempotencyKey(request: IncomingMessage): string {
