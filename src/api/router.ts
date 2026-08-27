@@ -20,6 +20,8 @@ import {
 } from "../modules/rooms/schemas.js";
 import type { RoomService } from "../modules/rooms/service.js";
 import type { ParticipantPrincipal } from "../modules/rooms/types.js";
+import type { GameService } from "../modules/games/service.js";
+import { developmentCompleteTaskSchema, startGameSchema } from "../modules/games/schemas.js";
 import { successEnvelope } from "../shared/contracts/envelope.js";
 import { ApplicationError } from "../shared/errors/application-error.js";
 import {
@@ -46,6 +48,7 @@ export interface ApiDependencies {
   adminAuth?: AdminAuthService;
   taskPacks?: TaskPackRepository;
   rooms?: RoomService;
+  games?: GameService;
   authorizePublishedPackRead?: (request: IncomingMessage) => Promise<void>;
 }
 
@@ -117,6 +120,18 @@ export function createApiHandler(dependencies: ApiDependencies): ApiHandler {
         dependencies.config.exposeApiDocs
       ) {
         sendJson(response, 200, openApiDocument, requestId);
+      } else if (dependencies.rooms && isGameRoute(path)) {
+        if (!dependencies.games)
+          throw new ApplicationError(404, "NOT_FOUND", "The requested resource was not found.");
+        await handleGameRoute(
+          request,
+          response,
+          path,
+          requestId,
+          dependencies.rooms,
+          dependencies.games,
+          dependencies.config,
+        );
       } else if (dependencies.rooms && isRoomRoute(path)) {
         await handleRoomRoute(
           request,
@@ -124,6 +139,7 @@ export function createApiHandler(dependencies: ApiDependencies): ApiHandler {
           path,
           requestId,
           dependencies.rooms,
+          dependencies.games,
           dependencies.config,
         );
       } else if (dependencies.adminAuth && dependencies.taskPacks && path.startsWith("/api/v1/")) {
@@ -165,6 +181,13 @@ function isRoomRoute(path: string): boolean {
     path === "/api/v1/rooms" ||
     path.startsWith("/api/v1/rooms/") ||
     path.startsWith("/api/v1/participant-sessions/")
+  );
+}
+
+function isGameRoute(path: string): boolean {
+  return (
+    path === "/api/v1/games/current/snapshot" ||
+    /^\/api\/v1\/development\/task-assignments\/[0-9a-f-]+\/complete$/i.test(path)
   );
 }
 
@@ -233,6 +256,7 @@ async function handleRoomRoute(
   path: string,
   requestId: string,
   rooms: RoomService,
+  games: GameService | undefined,
   config: AppConfig,
 ): Promise<void> {
   const method = request.method ?? "GET";
@@ -260,6 +284,19 @@ async function handleRoomRoute(
   const principal = await participantPrincipal(request, rooms);
   if (["POST", "PATCH", "PUT", "DELETE"].includes(method) && usesCookieTransport(request))
     validateOriginForCookieMutation(request, config);
+  if (method === "POST" && path === "/api/v1/rooms/current/start") {
+    if (!games)
+      throw new ApplicationError(404, "NOT_FOUND", "The requested resource was not found.");
+    const key = requireIdempotencyKey(request);
+    await validatedBody(request, config.maxJsonBodyBytes, startGameSchema);
+    sendJson(
+      response,
+      201,
+      successEnvelope(await games.start(principal, key), requestId),
+      requestId,
+    );
+    return;
+  }
   if (method === "GET" && path === "/api/v1/rooms/current") {
     sendJson(response, 200, successEnvelope(await rooms.snapshot(principal), requestId), requestId);
     return;
@@ -312,6 +349,65 @@ async function handleRoomRoute(
     response.statusCode = 204;
     response.setHeader("X-Request-ID", requestId);
     response.end();
+    return;
+  }
+  throw new ApplicationError(404, "NOT_FOUND", "The requested resource was not found.");
+}
+
+async function handleGameRoute(
+  request: IncomingMessage,
+  response: ServerResponse,
+  path: string,
+  requestId: string,
+  rooms: RoomService,
+  games: GameService,
+  config: AppConfig,
+): Promise<void> {
+  const method = request.method ?? "GET";
+  if (path.startsWith("/api/v1/development/") && config.appEnv === "production")
+    throw new ApplicationError(404, "NOT_FOUND", "The requested resource was not found.");
+  const principal = await participantPrincipal(request, rooms);
+  if (["POST", "PATCH", "PUT", "DELETE"].includes(method) && usesCookieTransport(request))
+    validateOriginForCookieMutation(request, config);
+  if (method === "GET" && path === "/api/v1/games/current/snapshot") {
+    const url = new URL(request.url ?? path, "http://localhost");
+    const known = url.searchParams.get("knownStateVersion");
+    if (known !== null && (!/^\d+$/.test(known) || !Number.isSafeInteger(Number(known))))
+      throw new ApplicationError(
+        422,
+        "VALIDATION_FAILED",
+        "knownStateVersion must be a non-negative integer.",
+      );
+    const snapshot = await games.snapshot(principal);
+    response.setHeader("ETag", `"${snapshot.stateVersion}"`);
+    if (known !== null && Number(known) === snapshot.stateVersion) {
+      response.statusCode = 204;
+      response.setHeader("X-Request-ID", requestId);
+      response.end();
+      return;
+    }
+    sendJson(response, 200, successEnvelope(snapshot, requestId), requestId);
+    return;
+  }
+  const developmentMatch = path.match(
+    /^\/api\/v1\/development\/task-assignments\/([0-9a-f-]+)\/complete$/i,
+  );
+  if (method === "POST" && developmentMatch) {
+    const key = requireIdempotencyKey(request);
+    const body = await validatedBody(
+      request,
+      config.maxJsonBodyBytes,
+      developmentCompleteTaskSchema,
+    );
+    sendJson(
+      response,
+      200,
+      successEnvelope(
+        await games.completeDevelopmentTask(principal, developmentMatch[1], body, key),
+        requestId,
+      ),
+      requestId,
+    );
     return;
   }
   throw new ApplicationError(404, "NOT_FOUND", "The requested resource was not found.");

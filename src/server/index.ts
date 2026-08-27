@@ -11,6 +11,7 @@ import { AdminAuthService } from "../modules/admin-auth/service.js";
 import { MemoryLoginThrottle } from "../modules/admin-auth/throttle.js";
 import { TaskPackRepository } from "../modules/task-packs/repository.js";
 import { RoomService } from "../modules/rooms/service.js";
+import { GameService } from "../modules/games/service.js";
 import { attachRealtimeServer } from "../realtime/server.js";
 import { PARTICIPANT_COOKIE_NAME, readCookie } from "../shared/security/cookies.js";
 import { ApplicationError } from "../shared/errors/application-error.js";
@@ -45,6 +46,10 @@ async function main(): Promise<void> {
   );
   const taskPacks = new TaskPackRepository(database.db);
   const rooms = new RoomService(database.db, config);
+  const games = new GameService(database.db, config);
+  games.events.on("game.changed", ({ roomId }: { roomId: string }) => {
+    rooms.events.roomChanged(roomId);
+  });
   const apiHandler = createApiHandler({
     config,
     database: database.db,
@@ -53,6 +58,7 @@ async function main(): Promise<void> {
     adminAuth,
     taskPacks,
     rooms,
+    games,
     authorizePublishedPackRead: async (request) => {
       const header = request.headers.authorization;
       const bearer = header?.startsWith("Bearer ") ? header.slice(7).trim() : null;
@@ -78,7 +84,7 @@ async function main(): Promise<void> {
         }
       });
   });
-  const realtime = attachRealtimeServer(httpServer, config, logger, rooms);
+  const realtime = attachRealtimeServer(httpServer, config, logger, rooms, games);
   const maintenance = setInterval(() => {
     void rooms
       .runMaintenance()

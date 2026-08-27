@@ -8,6 +8,7 @@ import { loadConfig } from "../../src/infrastructure/configuration/config.js";
 import type { Database } from "../../src/infrastructure/database/database.js";
 import { InMemoryMetrics } from "../../src/infrastructure/observability/metrics.js";
 import type { RoomService } from "../../src/modules/rooms/service.js";
+import type { GameService } from "../../src/modules/games/service.js";
 import { normalizeNickname, roomMembershipSchema } from "../../src/modules/rooms/schemas.js";
 
 const servers: ReturnType<typeof createServer>[] = [];
@@ -50,7 +51,7 @@ const snapshot = {
   gameId: null,
 };
 
-function roomApi() {
+function roomApi(options: { appEnv?: "test" | "production"; games?: GameService } = {}) {
   const rooms = {
     createRoom: () =>
       Promise.resolve({
@@ -72,7 +73,7 @@ function roomApi() {
     snapshot: () => Promise.resolve(snapshot),
   } as unknown as RoomService;
   const config = loadConfig({
-    APP_ENV: "test",
+    APP_ENV: options.appEnv ?? "test",
     DATABASE_URL: "postgresql://test:test@localhost:5432/test",
     CORS_ALLOWED_ORIGINS: "https://game.example",
   });
@@ -82,6 +83,7 @@ function roomApi() {
     logger: pino({ enabled: false }),
     metrics: new InMemoryMetrics(),
     rooms,
+    games: options.games,
   });
   const server = createServer((req, res) => void handler(req, res));
   servers.push(server);
@@ -122,6 +124,31 @@ describe("room HTTP transport", () => {
       .get("/api/v1/rooms/current")
       .set("Authorization", "Bearer valid");
     expect(allowed.status).toBe(200);
+  });
+
+  it("uses version-aware game snapshots", async () => {
+    const gameSnapshot = {
+      id: "00000000-0000-4000-8000-000000000010",
+      stateVersion: 7,
+    };
+    const games = {
+      snapshot: () => Promise.resolve(gameSnapshot),
+    } as unknown as GameService;
+    const response = await roomApi({ games })
+      .get("/api/v1/games/current/snapshot?knownStateVersion=7")
+      .set("Authorization", "Bearer valid");
+    expect(response.status).toBe(204);
+    expect(response.headers.etag).toBe('"7"');
+  });
+
+  it("makes the temporary completion route nonexistent in production", async () => {
+    const games = {} as GameService;
+    const response = await roomApi({ appEnv: "production", games })
+      .post("/api/v1/development/task-assignments/00000000-0000-4000-8000-000000000011/complete")
+      .set("Authorization", "Bearer valid")
+      .set("Idempotency-Key", "complete-task-1")
+      .send({ expectedStateVersion: 1 });
+    expect(response.status).toBe(404);
   });
 });
 

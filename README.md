@@ -2,7 +2,7 @@
 
 Foundation repository for a real-life, room-based social deduction game. Players complete physical tasks, submit photo evidence, and use the app for game state, meetings, evidence review, and voting.
 
-Phase 3 adds temporary participant sessions, room creation/join, host-controlled lobby settings, presence, reconnect snapshots, deterministic host transfer, and persisted lobby expiry. Game start and role/task assignment begin in Phase 4.
+Phase 4 adds authoritative game start, secret roles, immutable task snapshots, real and fake assignments, safe player projections, versioned realtime state, and task-progress win checks.
 
 ## Requirements
 

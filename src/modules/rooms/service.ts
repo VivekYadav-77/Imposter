@@ -145,6 +145,7 @@ export class RoomService {
     const room = await executor
       .selectFrom("app.rooms as rooms")
       .leftJoin("app.task_packs as packs", "packs.id", "rooms.selected_task_pack_id")
+      .leftJoin("app.games as games", "games.room_id", "rooms.id")
       .select([
         "rooms.id",
         "rooms.code",
@@ -159,6 +160,7 @@ export class RoomService {
         "packs.id as pack_id",
         "packs.name as pack_name",
         "packs.revision as pack_revision",
+        "games.id as game_id",
       ])
       .where("rooms.id", "=", principal.roomId)
       .executeTakeFirst();
@@ -207,13 +209,13 @@ export class RoomService {
         isHost,
         capabilities:
           isHost && room.status === "lobby"
-            ? ["change_settings", "leave_room"]
+            ? ["change_settings", "start_game", "leave_room"]
             : room.status === "lobby"
               ? ["leave_room"]
               : [],
       },
       expiresAt: iso(room.expires_at),
-      gameId: null,
+      gameId: room.game_id,
     };
   }
 

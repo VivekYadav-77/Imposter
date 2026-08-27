@@ -53,7 +53,7 @@ export const openApiDocument: OpenAPIObject = {
   openapi: "3.1.0",
   info: {
     title: "Imposter Game API",
-    version: "0.3.0",
+    version: "0.4.0",
     description: "Versioned HTTP contract for web and native clients.",
   },
   servers: [{ url: "/" }],
@@ -182,6 +182,82 @@ export const openApiDocument: OpenAPIObject = {
             properties: { left: { type: "boolean", const: true } },
           }),
           "401": error,
+          "409": error,
+        },
+      },
+    },
+    "/api/v1/rooms/current/start": {
+      post: {
+        operationId: "startGame",
+        security: participantSecurity,
+        parameters: [idempotency],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: { type: "object", additionalProperties: false } },
+          },
+        },
+        responses: {
+          "201": envelope({ $ref: "#/components/schemas/GameSnapshot" }),
+          "401": error,
+          "403": error,
+          "409": error,
+          "422": error,
+        },
+      },
+    },
+    "/api/v1/games/current/snapshot": {
+      get: {
+        operationId: "getCurrentGameSnapshot",
+        security: participantSecurity,
+        parameters: [
+          {
+            name: "knownStateVersion",
+            in: "query",
+            schema: { type: "integer", minimum: 0 },
+          },
+        ],
+        responses: {
+          "200": envelope({ $ref: "#/components/schemas/GameSnapshot" }),
+          "204": { description: "The supplied state version is current" },
+          "401": error,
+          "404": error,
+          "422": error,
+        },
+      },
+    },
+    "/api/v1/development/task-assignments/{assignmentId}/complete": {
+      post: {
+        operationId: "completeDevelopmentTask",
+        summary: "Non-production-only adapter; removed when evidence uploads land",
+        security: participantSecurity,
+        parameters: [
+          {
+            name: "assignmentId",
+            in: "path",
+            required: true,
+            schema: { type: "string", format: "uuid" },
+          },
+          idempotency,
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                additionalProperties: false,
+                required: ["expectedStateVersion"],
+                properties: { expectedStateVersion: { type: "integer", minimum: 1 } },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": envelope({ $ref: "#/components/schemas/GameSnapshot" }),
+          "401": error,
+          "403": error,
+          "404": error,
           "409": error,
         },
       },
@@ -486,7 +562,91 @@ export const openApiDocument: OpenAPIObject = {
           },
           self: { $ref: "#/components/schemas/ParticipantSelf" },
           expiresAt: { type: "string", format: "date-time" },
-          gameId: { type: "null" },
+          gameId: { type: ["string", "null"], format: "uuid" },
+        },
+      },
+      GameSnapshot: {
+        type: "object",
+        additionalProperties: false,
+        required: [
+          "id",
+          "roomId",
+          "phase",
+          "stateVersion",
+          "winner",
+          "taskPack",
+          "phaseStartedAt",
+          "phaseDeadlineAt",
+          "participants",
+          "self",
+          "assignments",
+          "progress",
+        ],
+        properties: {
+          id: { type: "string", format: "uuid" },
+          roomId: { type: "string", format: "uuid" },
+          phase: {
+            type: "string",
+            enum: ["task", "discussion", "review", "voting", "result", "game_over", "abandoned"],
+          },
+          stateVersion: { type: "integer", minimum: 1 },
+          winner: { type: ["string", "null"], enum: ["crew", "imposters", null] },
+          taskPack: {
+            type: "object",
+            additionalProperties: false,
+            required: ["name"],
+            properties: { name: { type: "string" } },
+          },
+          phaseStartedAt: { type: "string", format: "date-time" },
+          phaseDeadlineAt: { type: ["string", "null"], format: "date-time" },
+          participants: {
+            type: "array",
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["id", "nickname", "isHost", "lifeStatus"],
+              properties: {
+                id: { type: "string", format: "uuid" },
+                nickname: { type: "string" },
+                isHost: { type: "boolean" },
+                lifeStatus: { type: "string", enum: ["alive", "killed", "ejected"] },
+              },
+            },
+          },
+          self: {
+            type: "object",
+            additionalProperties: false,
+            required: ["participantId", "role", "lifeStatus", "capabilities"],
+            properties: {
+              participantId: { type: "string", format: "uuid" },
+              role: { type: "string", enum: ["crew", "imposter"] },
+              lifeStatus: { type: "string", enum: ["alive", "killed", "ejected"] },
+              capabilities: { type: "array", items: { type: "string" } },
+            },
+          },
+          assignments: {
+            type: "array",
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["id", "description", "status", "completedAt"],
+              properties: {
+                id: { type: "string", format: "uuid" },
+                description: { type: "string" },
+                status: { type: "string", enum: ["assigned", "completed"] },
+                completedAt: { type: ["string", "null"], format: "date-time" },
+              },
+            },
+          },
+          progress: {
+            type: "object",
+            additionalProperties: false,
+            required: ["completed", "total"],
+            properties: {
+              completed: { type: "integer", minimum: 0 },
+              total: { type: "integer", minimum: 1 },
+            },
+          },
         },
       },
       SessionCredential: {

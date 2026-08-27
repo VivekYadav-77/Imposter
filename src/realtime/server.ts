@@ -9,6 +9,7 @@ import type {
   PresenceUpdate,
   RoomSnapshotDto,
 } from "../modules/rooms/types.js";
+import type { GameSnapshotDto } from "../modules/games/types.js";
 
 interface RealtimeRoomProvider extends ParticipantSessionAuthenticator {
   snapshot?(principal: ParticipantPrincipal): Promise<RoomSnapshotDto>;
@@ -21,11 +22,22 @@ interface RealtimeRoomProvider extends ParticipantSessionAuthenticator {
   };
 }
 
+interface RealtimeGameProvider {
+  snapshot(principal: ParticipantPrincipal): Promise<GameSnapshotDto>;
+  events: {
+    on(
+      event: "game.changed",
+      listener: (update: { roomId: string; gameId: string; stateVersion: number }) => void,
+    ): unknown;
+  };
+}
+
 export function attachRealtimeServer(
   httpServer: HttpServer,
   config: AppConfig,
   logger: Logger,
   authenticator: RealtimeRoomProvider,
+  games?: RealtimeGameProvider,
 ): Server {
   const io = new Server(httpServer, {
     path: "/realtime",
@@ -69,6 +81,25 @@ export function attachRealtimeServer(
     });
   };
 
+  const emitGameSnapshot = async (socket: Socket) => {
+    if (!games) return;
+    const principal = (socket.data as Record<string, unknown>).principal as ParticipantPrincipal;
+    try {
+      const snapshot = await games.snapshot(principal);
+      socket.emit("game.snapshot", {
+        schemaVersion: 1,
+        type: "game.snapshot",
+        roomId: principal.roomId,
+        gameId: snapshot.id,
+        stateVersion: snapshot.stateVersion,
+        occurredAt: new Date().toISOString(),
+        data: snapshot,
+      });
+    } catch (error) {
+      if ((error as { code?: string }).code !== "GAME_NOT_FOUND") throw error;
+    }
+  };
+
   io.on("connection", (socket) => {
     const socketData = socket.data as Record<string, unknown>;
     const principal = socketData.principal as ParticipantPrincipal;
@@ -91,6 +122,9 @@ export function attachRealtimeServer(
         data: { reason: "snapshot_failed" },
       });
     });
+    void emitGameSnapshot(socket).catch((error: unknown) => {
+      logger.warn({ err: error, roomId: principal.roomId }, "Initial game snapshot failed");
+    });
     socket.on("heartbeat", (ack?: (value: unknown) => void) => {
       ack?.({
         occurredAt: new Date().toISOString(),
@@ -103,6 +137,7 @@ export function attachRealtimeServer(
       });
     });
     socket.on("room.resync", () => void emitSnapshot(socket));
+    socket.on("game.resync", () => void emitGameSnapshot(socket));
     socket.on("disconnect", () => {
       const remaining =
         io.sockets.adapter.rooms.get(`participant:${principal.participantId}`)?.size ?? 0;
@@ -143,6 +178,14 @@ export function attachRealtimeServer(
       data: { reason },
     });
     void io.in(`session:${sessionId}`).disconnectSockets(true);
+  });
+  games?.events.on("game.changed", (update) => {
+    const sockets = io.sockets.adapter.rooms.get(`room:${update.roomId}`);
+    if (!sockets) return;
+    for (const socketId of sockets) {
+      const socket = io.sockets.sockets.get(socketId);
+      if (socket) void emitGameSnapshot(socket);
+    }
   });
 
   return io;

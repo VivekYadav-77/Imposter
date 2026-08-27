@@ -229,6 +229,16 @@ Joins an open lobby.
 
 ## 5. Game and task endpoints
 
+### `POST /api/v1/development/task-assignments/{assignmentId}/complete`
+
+- Explicitly temporary Phase 4 adapter for exercising progress without evidence storage.
+- Available only when `APP_ENV` is `development` or `test`; production always returns `404`.
+- Authentication: participant. Authorization: owns assignment and is eligible to complete it.
+- Idempotency and `expectedStateVersion` are required.
+- Body: `{ "expectedStateVersion": 1 }`.
+- Response `200`: updated player-specific game snapshot.
+- This route is not a production client dependency and must be removed in Phase 5.
+
 ### `GET /api/v1/games/current/snapshot`
 
 - Authentication: participant.

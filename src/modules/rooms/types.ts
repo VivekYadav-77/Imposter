@@ -29,7 +29,7 @@ export interface RoomSnapshotDto {
   participants: ParticipantDto[];
   self: { participantId: string; nickname: string; isHost: boolean; capabilities: string[] };
   expiresAt: string;
-  gameId: null;
+  gameId: string | null;
 }
 
 export interface SessionIssueDto {
