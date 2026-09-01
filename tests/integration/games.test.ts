@@ -29,7 +29,7 @@ describeWithDatabase("authoritative game start and progress", () => {
     });
     dependencies = createDatabase(config);
     rooms = new RoomService(dependencies.db, config);
-    games = new GameService(dependencies.db, config);
+    games = new GameService(dependencies.db);
     await dependencies.db
       .insertInto("app.admin_users")
       .values({
@@ -136,9 +136,9 @@ describeWithDatabase("authoritative game start and progress", () => {
     expect(typeof details.reasons.selectedTaskPack).toBe("string");
   });
 
-  it("projects only self secrets and reaches crew task victory through the test adapter", async () => {
+  it("projects only self secrets without exposing a temporary completion adapter", async () => {
     const ready = await readyRoom(4);
-    let snapshot = await games.start(ready.host, randomUUID());
+    const snapshot = await games.start(ready.host, randomUUID());
     for (const principal of ready.principals) {
       const projected = await games.snapshot(principal);
       const serialized = JSON.stringify(projected);
@@ -148,22 +148,6 @@ describeWithDatabase("authoritative game start and progress", () => {
       expect(projected.assignments).toHaveLength(3);
     }
 
-    const realAssignments = await dependencies.db
-      .selectFrom("app.task_assignments")
-      .select(["id", "participant_id"])
-      .where("game_id", "=", snapshot.id)
-      .where("counts_toward_progress", "=", true)
-      .orderBy("id")
-      .execute();
-    const principalById = new Map(ready.principals.map((entry) => [entry.participantId, entry]));
-    for (const assignment of realAssignments) {
-      snapshot = await games.completeDevelopmentTask(
-        principalById.get(assignment.participant_id)!,
-        assignment.id,
-        { expectedStateVersion: snapshot.stateVersion },
-        randomUUID(),
-      );
-    }
-    expect(snapshot).toMatchObject({ phase: "game_over", winner: "crew" });
+    expect(snapshot).toMatchObject({ phase: "task", winner: null });
   });
 });

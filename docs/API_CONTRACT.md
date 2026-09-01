@@ -229,16 +229,6 @@ Joins an open lobby.
 
 ## 5. Game and task endpoints
 
-### `POST /api/v1/development/task-assignments/{assignmentId}/complete`
-
-- Explicitly temporary Phase 4 adapter for exercising progress without evidence storage.
-- Available only when `APP_ENV` is `development` or `test`; production always returns `404`.
-- Authentication: participant. Authorization: owns assignment and is eligible to complete it.
-- Idempotency and `expectedStateVersion` are required.
-- Body: `{ "expectedStateVersion": 1 }`.
-- Response `200`: updated player-specific game snapshot.
-- This route is not a production client dependency and must be removed in Phase 5.
-
 ### `GET /api/v1/games/current/snapshot`
 
 - Authentication: participant.
@@ -257,6 +247,7 @@ Joins an open lobby.
 
 ```json
 {
+  "expectedStateVersion": 1,
   "contentType": "image/jpeg",
   "byteSize": 1240021,
   "checksum": "provider-supported-checksum"
@@ -274,7 +265,7 @@ Confirms that the direct object upload completed.
 - Authentication: participant.
 - Authorization: assignment owner and original upload-intent owner.
 - Idempotency and expected state version: required.
-- Body: `{ "uploadId": "opaque" }`.
+- Body: `{ "uploadId": "uuid", "expectedStateVersion": 1 }`.
 - Server verifies object identity and metadata before accepting.
 - Response `201`: submission DTO, assignment status, team progress, state version, and processing status.
 - Errors: `409 UPLOAD_NOT_COMPLETE` or state conflict; `422 UPLOAD_INVALID`; `503 STORAGE_UNAVAILABLE`.
@@ -292,7 +283,7 @@ Confirms that the direct object upload completed.
 - Authentication: participant.
 - Authorization: living participant; current game; not own submission; submission eligible and unresolved.
 - Idempotency and expected state version: required.
-- Body: `{ "reason": "optional bounded text" }`.
+- Body: `{ "expectedStateVersion": 2, "reason": "optional bounded text" }`.
 - Response `201`: flag acknowledgement and safe submission status.
 - Errors: `403 PLAYER_NOT_ELIGIBLE`; `409 ALREADY_FLAGGED` or `SUBMISSION_ALREADY_RESOLVED`; `422`.
 

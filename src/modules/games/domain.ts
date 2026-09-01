@@ -65,9 +65,10 @@ export function capabilitiesFor(state: CapabilityState): string[] {
   const capabilities: string[] = [];
   if (state.isHost) capabilities.push("end_game");
   if (state.phase === "task") {
-    if (state.lifeStatus === "alive" || state.role === "crew") capabilities.push("complete_task");
+    if (state.lifeStatus === "alive" || state.role === "crew") capabilities.push("submit_evidence");
     if (state.role === "imposter" && state.lifeStatus === "alive") capabilities.push("kill");
   }
+  if (state.lifeStatus === "alive") capabilities.push("flag_evidence");
   if (["discussion", "review", "voting"].includes(state.phase) && state.lifeStatus === "alive")
     capabilities.push("participate_in_meeting");
   return capabilities;

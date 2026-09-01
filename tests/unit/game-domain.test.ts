@@ -72,7 +72,7 @@ describe("game domain policies", () => {
         isHost: false,
         winner: null,
       }),
-    ).toEqual(["complete_task"]);
+    ).toEqual(["submit_evidence"]);
     expect(
       capabilitiesFor({
         phase: "voting",
@@ -109,7 +109,7 @@ describe("game domain policies", () => {
             });
             if (phase === "game_over" || phase === "abandoned") expect(capabilities).toEqual([]);
             if (lifeStatus !== "alive" && role === "imposter")
-              expect(capabilities).not.toContain("complete_task");
+              expect(capabilities).not.toContain("submit_evidence");
             if (lifeStatus !== "alive") {
               expect(capabilities).not.toContain("kill");
               expect(capabilities).not.toContain("participate_in_meeting");

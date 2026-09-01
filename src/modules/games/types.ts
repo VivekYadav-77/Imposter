@@ -31,7 +31,3 @@ export interface GameSnapshotDto {
   assignments: GameAssignmentDto[];
   progress: { completed: number; total: number };
 }
-
-export interface CompleteDevelopmentTaskInput {
-  expectedStateVersion: number;
-}

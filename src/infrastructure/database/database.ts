@@ -189,6 +189,61 @@ export interface GameIdempotencyRecordsTable {
   expires_at: Timestamp;
 }
 
+export interface EvidenceUploadIntentsTable {
+  id: string;
+  assignment_id: string;
+  participant_id: string;
+  object_key: string;
+  content_type: "image/jpeg" | "image/png" | "image/webp";
+  byte_size: ColumnType<string, string | number, string | number>;
+  checksum: string | null;
+  status: "pending" | "confirmed" | "expired";
+  expires_at: Timestamp;
+  confirmed_at: NullableTimestamp;
+  created_at: Timestamp;
+}
+
+export interface TaskSubmissionsTable {
+  id: string;
+  assignment_id: string;
+  uploader_participant_id: string;
+  object_key: string;
+  content_type: "image/jpeg" | "image/png" | "image/webp";
+  byte_size: ColumnType<string, string | number, string | number>;
+  checksum: string | null;
+  processing_status: "pending" | "accepted" | "rejected" | "deleted";
+  review_status: "valid" | "flagged" | "invalid";
+  created_at: Timestamp;
+  processed_at: NullableTimestamp;
+  delete_after: NullableTimestamp;
+  deleted_at: NullableTimestamp;
+}
+
+export interface SubmissionFlagsTable {
+  id: string;
+  submission_id: string;
+  flagger_participant_id: string;
+  reason: string | null;
+  created_at: Timestamp;
+  resolved_at: NullableTimestamp;
+}
+
+export interface JobsTable {
+  id: string;
+  type: "process_evidence" | "delete_evidence" | "delete_orphan";
+  deduplication_key: string | null;
+  payload: Record<string, unknown>;
+  status: "pending" | "running" | "succeeded" | "failed" | "dead";
+  run_at: Timestamp;
+  attempt_count: Generated<number>;
+  max_attempts: Generated<number>;
+  locked_by: string | null;
+  locked_at: NullableTimestamp;
+  last_error_code: string | null;
+  created_at: Timestamp;
+  updated_at: Timestamp;
+}
+
 export interface DatabaseSchema {
   "app.admin_users": AdminUsersTable;
   "app.admin_sessions": AdminSessionsTable;
@@ -206,6 +261,10 @@ export interface DatabaseSchema {
   "app.task_assignments": TaskAssignmentsTable;
   "app.game_events": GameEventsTable;
   "app.game_idempotency_records": GameIdempotencyRecordsTable;
+  "app.evidence_upload_intents": EvidenceUploadIntentsTable;
+  "app.task_submissions": TaskSubmissionsTable;
+  "app.submission_flags": SubmissionFlagsTable;
+  "app.jobs": JobsTable;
 }
 
 export type Database = Kysely<DatabaseSchema>;

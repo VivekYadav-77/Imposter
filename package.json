@@ -27,6 +27,8 @@
     "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run contracts:check"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1136.0",
+    "@aws-sdk/s3-request-presigner": "^3.1136.0",
     "kysely": "^0.29.6",
     "next": "^16.3.5",
     "openapi3-ts": "^4.5.0",
@@ -34,6 +36,7 @@
     "pino": "^10.3.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "sharp": "^0.35.4",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
     "zod": "^4.6.5"

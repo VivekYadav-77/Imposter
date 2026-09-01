@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Imposter Game API",
-    "version": "0.4.0",
+    "version": "0.5.0",
     "description": "Versioned HTTP contract for web and native clients."
   },
   "servers": [
@@ -881,10 +881,9 @@
         }
       }
     },
-    "/api/v1/development/task-assignments/{assignmentId}/complete": {
+    "/api/v1/task-assignments/{assignmentId}/upload-intents": {
       "post": {
-        "operationId": "completeDevelopmentTask",
-        "summary": "Non-production-only adapter; removed when evidence uploads land",
+        "operationId": "createEvidenceUploadIntent",
         "security": [
           {
             "participantBearer": []
@@ -922,12 +921,34 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [
-                  "expectedStateVersion"
+                  "expectedStateVersion",
+                  "contentType",
+                  "byteSize"
                 ],
                 "properties": {
                   "expectedStateVersion": {
                     "type": "integer",
                     "minimum": 1
+                  },
+                  "contentType": {
+                    "type": "string",
+                    "enum": [
+                      "image/jpeg",
+                      "image/png",
+                      "image/webp"
+                    ]
+                  },
+                  "byteSize": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5242880
+                  },
+                  "checksum": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "pattern": "^[A-Za-z0-9+/]{43}=$"
                   }
                 }
               }
@@ -935,7 +956,7 @@
           }
         },
         "responses": {
-          "200": {
+          "201": {
             "description": "Successful response",
             "content": {
               "application/json": {
@@ -947,7 +968,7 @@
                   ],
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/GameSnapshot"
+                      "$ref": "#/components/schemas/UploadIntent"
                     },
                     "meta": {
                       "type": "object",
@@ -1001,6 +1022,467 @@
             }
           },
           "409": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/task-assignments/{assignmentId}/submissions": {
+      "post": {
+        "operationId": "confirmEvidenceSubmission",
+        "security": [
+          {
+            "participantBearer": []
+          },
+          {
+            "participantCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "assignmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "expectedStateVersion",
+                  "uploadId"
+                ],
+                "properties": {
+                  "expectedStateVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "uploadId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SubmissionConfirmation"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "requestId",
+                        "serverTime"
+                      ],
+                      "properties": {
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "serverTime": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/games/current/submissions": {
+      "get": {
+        "operationId": "listCurrentGameSubmissions",
+        "security": [
+          {
+            "participantBearer": []
+          },
+          {
+            "participantCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          },
+          {
+            "name": "flagged",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Submission"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "requestId",
+                        "serverTime"
+                      ],
+                      "properties": {
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "serverTime": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/submissions/{submissionId}/flags": {
+      "post": {
+        "operationId": "flagEvidenceSubmission",
+        "security": [
+          {
+            "participantBearer": []
+          },
+          {
+            "participantCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "submissionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "expectedStateVersion"
+                ],
+                "properties": {
+                  "expectedStateVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "reason": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 280
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "submissionId",
+                        "reviewStatus",
+                        "stateVersion"
+                      ],
+                      "properties": {
+                        "submissionId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "reviewStatus": {
+                          "type": "string",
+                          "const": "flagged"
+                        },
+                        "stateVersion": {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "requestId",
+                        "serverTime"
+                      ],
+                      "properties": {
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "serverTime": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
             "description": "Safe error envelope",
             "content": {
               "application/json": {
@@ -2226,6 +2708,231 @@
               "null"
             ],
             "format": "uuid"
+          }
+        }
+      },
+      "EvidencePolicy": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "version",
+          "minimumAge",
+          "retentionHours",
+          "notice"
+        ],
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "minimumAge": {
+            "type": "integer",
+            "const": 18
+          },
+          "retentionHours": {
+            "type": "integer",
+            "const": 24
+          },
+          "notice": {
+            "type": "string"
+          }
+        }
+      },
+      "UploadIntent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "uploadId",
+          "expiresAt",
+          "method",
+          "url",
+          "headers",
+          "policy"
+        ],
+        "properties": {
+          "uploadId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "method": {
+            "type": "string",
+            "const": "PUT"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "writeOnly": true
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "writeOnly": true
+          },
+          "policy": {
+            "$ref": "#/components/schemas/EvidencePolicy"
+          }
+        }
+      },
+      "Submission": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "assignmentId",
+          "uploader",
+          "processingStatus",
+          "reviewStatus",
+          "createdAt",
+          "image",
+          "flaggedBySelf"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "assignmentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "uploader": {
+            "type": "object",
+            "required": [
+              "id",
+              "nickname"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "nickname": {
+                "type": "string"
+              }
+            }
+          },
+          "processingStatus": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "accepted",
+              "rejected",
+              "deleted"
+            ]
+          },
+          "reviewStatus": {
+            "type": "string",
+            "enum": [
+              "valid",
+              "flagged",
+              "invalid"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "image": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "url",
+                  "expiresAt"
+                ],
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "writeOnly": true
+                  },
+                  "expiresAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              }
+            ]
+          },
+          "flaggedBySelf": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SubmissionConfirmation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "submission",
+          "assignmentStatus",
+          "progress",
+          "stateVersion"
+        ],
+        "properties": {
+          "submission": {
+            "type": "object",
+            "required": [
+              "id",
+              "assignmentId",
+              "processingStatus",
+              "reviewStatus",
+              "createdAt"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "assignmentId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "processingStatus": {
+                "type": "string",
+                "const": "pending"
+              },
+              "reviewStatus": {
+                "type": "string",
+                "const": "valid"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          },
+          "assignmentStatus": {
+            "type": "string",
+            "const": "completed"
+          },
+          "progress": {
+            "type": "object",
+            "required": [
+              "completed",
+              "total"
+            ],
+            "properties": {
+              "completed": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "total": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          },
+          "stateVersion": {
+            "type": "integer",
+            "minimum": 1
           }
         }
       },

@@ -21,7 +21,13 @@ import {
 import type { RoomService } from "../modules/rooms/service.js";
 import type { ParticipantPrincipal } from "../modules/rooms/types.js";
 import type { GameService } from "../modules/games/service.js";
-import { developmentCompleteTaskSchema, startGameSchema } from "../modules/games/schemas.js";
+import { startGameSchema } from "../modules/games/schemas.js";
+import type { EvidenceService } from "../modules/evidence/service.js";
+import {
+  confirmSubmissionSchema,
+  flagSubmissionSchema,
+  uploadIntentSchema,
+} from "../modules/evidence/schemas.js";
 import { successEnvelope } from "../shared/contracts/envelope.js";
 import { ApplicationError } from "../shared/errors/application-error.js";
 import {
@@ -49,6 +55,7 @@ export interface ApiDependencies {
   taskPacks?: TaskPackRepository;
   rooms?: RoomService;
   games?: GameService;
+  evidence?: EvidenceService;
   authorizePublishedPackRead?: (request: IncomingMessage) => Promise<void>;
 }
 
@@ -130,6 +137,7 @@ export function createApiHandler(dependencies: ApiDependencies): ApiHandler {
           requestId,
           dependencies.rooms,
           dependencies.games,
+          dependencies.evidence,
           dependencies.config,
         );
       } else if (dependencies.rooms && isRoomRoute(path)) {
@@ -187,7 +195,9 @@ function isRoomRoute(path: string): boolean {
 function isGameRoute(path: string): boolean {
   return (
     path === "/api/v1/games/current/snapshot" ||
-    /^\/api\/v1\/development\/task-assignments\/[0-9a-f-]+\/complete$/i.test(path)
+    path === "/api/v1/games/current/submissions" ||
+    /^\/api\/v1\/task-assignments\/[0-9a-f-]+\/(upload-intents|submissions)$/i.test(path) ||
+    /^\/api\/v1\/submissions\/[0-9a-f-]+\/flags$/i.test(path)
   );
 }
 
@@ -361,11 +371,10 @@ async function handleGameRoute(
   requestId: string,
   rooms: RoomService,
   games: GameService,
+  evidence: EvidenceService | undefined,
   config: AppConfig,
 ): Promise<void> {
   const method = request.method ?? "GET";
-  if (path.startsWith("/api/v1/development/") && config.appEnv === "production")
-    throw new ApplicationError(404, "NOT_FOUND", "The requested resource was not found.");
   const principal = await participantPrincipal(request, rooms);
   if (["POST", "PATCH", "PUT", "DELETE"].includes(method) && usesCookieTransport(request))
     validateOriginForCookieMutation(request, config);
@@ -389,23 +398,69 @@ async function handleGameRoute(
     sendJson(response, 200, successEnvelope(snapshot, requestId), requestId);
     return;
   }
-  const developmentMatch = path.match(
-    /^\/api\/v1\/development\/task-assignments\/([0-9a-f-]+)\/complete$/i,
+  const assignmentMatch = path.match(
+    /^\/api\/v1\/task-assignments\/([0-9a-f-]+)\/(upload-intents|submissions)$/i,
   );
-  if (method === "POST" && developmentMatch) {
+  if (method === "POST" && assignmentMatch) {
+    if (!evidence)
+      throw new ApplicationError(503, "STORAGE_UNAVAILABLE", "Evidence storage is unavailable.");
     const key = requireIdempotencyKey(request);
-    const body = await validatedBody(
-      request,
-      config.maxJsonBodyBytes,
-      developmentCompleteTaskSchema,
-    );
+    if (assignmentMatch[2] === "upload-intents") {
+      const body = await validatedBody(request, config.maxJsonBodyBytes, uploadIntentSchema);
+      sendJson(
+        response,
+        201,
+        successEnvelope(
+          await evidence.createUploadIntent(principal, assignmentMatch[1], body, key),
+          requestId,
+        ),
+        requestId,
+      );
+    } else {
+      const body = await validatedBody(request, config.maxJsonBodyBytes, confirmSubmissionSchema);
+      sendJson(
+        response,
+        201,
+        successEnvelope(
+          await evidence.confirm(principal, assignmentMatch[1], body, key),
+          requestId,
+        ),
+        requestId,
+      );
+    }
+    return;
+  }
+  if (method === "GET" && path === "/api/v1/games/current/submissions") {
+    if (!evidence)
+      throw new ApplicationError(503, "STORAGE_UNAVAILABLE", "Evidence storage is unavailable.");
+    const url = new URL(request.url ?? path, "http://localhost");
+    const limit = parseLimit(url);
+    const flagged = url.searchParams.get("flagged") === "true";
+    const fingerprint = `submissions:${flagged}`;
+    const offset = parseCursor(url, fingerprint);
+    const rows = await evidence.list(principal, flagged, limit + 1, offset);
     sendJson(
       response,
       200,
       successEnvelope(
-        await games.completeDevelopmentTask(principal, developmentMatch[1], body, key),
+        rows.slice(0, limit),
         requestId,
+        nextCursor(offset, rows.length, limit, fingerprint),
       ),
+      requestId,
+    );
+    return;
+  }
+  const flagMatch = path.match(/^\/api\/v1\/submissions\/([0-9a-f-]+)\/flags$/i);
+  if (method === "POST" && flagMatch) {
+    if (!evidence)
+      throw new ApplicationError(503, "STORAGE_UNAVAILABLE", "Evidence storage is unavailable.");
+    const key = requireIdempotencyKey(request);
+    const body = await validatedBody(request, config.maxJsonBodyBytes, flagSubmissionSchema);
+    sendJson(
+      response,
+      201,
+      successEnvelope(await evidence.flag(principal, flagMatch[1], body, key), requestId),
       requestId,
     );
     return;

@@ -53,7 +53,7 @@ export const openApiDocument: OpenAPIObject = {
   openapi: "3.1.0",
   info: {
     title: "Imposter Game API",
-    version: "0.4.0",
+    version: "0.5.0",
     description: "Versioned HTTP contract for web and native clients.",
   },
   servers: [{ url: "/" }],
@@ -226,10 +226,9 @@ export const openApiDocument: OpenAPIObject = {
         },
       },
     },
-    "/api/v1/development/task-assignments/{assignmentId}/complete": {
+    "/api/v1/task-assignments/{assignmentId}/upload-intents": {
       post: {
-        operationId: "completeDevelopmentTask",
-        summary: "Non-production-only adapter; removed when evidence uploads land",
+        operationId: "createEvidenceUploadIntent",
         security: participantSecurity,
         parameters: [
           {
@@ -247,18 +246,130 @@ export const openApiDocument: OpenAPIObject = {
               schema: {
                 type: "object",
                 additionalProperties: false,
-                required: ["expectedStateVersion"],
-                properties: { expectedStateVersion: { type: "integer", minimum: 1 } },
+                required: ["expectedStateVersion", "contentType", "byteSize"],
+                properties: {
+                  expectedStateVersion: { type: "integer", minimum: 1 },
+                  contentType: { type: "string", enum: ["image/jpeg", "image/png", "image/webp"] },
+                  byteSize: { type: "integer", minimum: 1, maximum: 5242880 },
+                  checksum: { type: ["string", "null"], pattern: "^[A-Za-z0-9+/]{43}=$" },
+                },
               },
             },
           },
         },
         responses: {
-          "200": envelope({ $ref: "#/components/schemas/GameSnapshot" }),
+          "201": envelope({ $ref: "#/components/schemas/UploadIntent" }),
           "401": error,
           "403": error,
           "404": error,
           "409": error,
+          "413": error,
+          "422": error,
+          "503": error,
+        },
+      },
+    },
+    "/api/v1/task-assignments/{assignmentId}/submissions": {
+      post: {
+        operationId: "confirmEvidenceSubmission",
+        security: participantSecurity,
+        parameters: [
+          {
+            name: "assignmentId",
+            in: "path",
+            required: true,
+            schema: { type: "string", format: "uuid" },
+          },
+          idempotency,
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                additionalProperties: false,
+                required: ["expectedStateVersion", "uploadId"],
+                properties: {
+                  expectedStateVersion: { type: "integer", minimum: 1 },
+                  uploadId: { type: "string", format: "uuid" },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "201": envelope({ $ref: "#/components/schemas/SubmissionConfirmation" }),
+          "401": error,
+          "403": error,
+          "404": error,
+          "409": error,
+          "422": error,
+          "503": error,
+        },
+      },
+    },
+    "/api/v1/games/current/submissions": {
+      get: {
+        operationId: "listCurrentGameSubmissions",
+        security: participantSecurity,
+        parameters: [
+          { name: "cursor", in: "query", schema: { type: "string" } },
+          { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 50 } },
+          { name: "flagged", in: "query", schema: { type: "boolean" } },
+        ],
+        responses: {
+          "200": envelope({ type: "array", items: { $ref: "#/components/schemas/Submission" } }),
+          "401": error,
+          "404": error,
+          "503": error,
+        },
+      },
+    },
+    "/api/v1/submissions/{submissionId}/flags": {
+      post: {
+        operationId: "flagEvidenceSubmission",
+        security: participantSecurity,
+        parameters: [
+          {
+            name: "submissionId",
+            in: "path",
+            required: true,
+            schema: { type: "string", format: "uuid" },
+          },
+          idempotency,
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                additionalProperties: false,
+                required: ["expectedStateVersion"],
+                properties: {
+                  expectedStateVersion: { type: "integer", minimum: 1 },
+                  reason: { type: ["string", "null"], maxLength: 280 },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "201": envelope({
+            type: "object",
+            required: ["submissionId", "reviewStatus", "stateVersion"],
+            properties: {
+              submissionId: { type: "string", format: "uuid" },
+              reviewStatus: { type: "string", const: "flagged" },
+              stateVersion: { type: "integer", minimum: 1 },
+            },
+          }),
+          "401": error,
+          "403": error,
+          "404": error,
+          "409": error,
+          "422": error,
         },
       },
     },
@@ -563,6 +674,101 @@ export const openApiDocument: OpenAPIObject = {
           self: { $ref: "#/components/schemas/ParticipantSelf" },
           expiresAt: { type: "string", format: "date-time" },
           gameId: { type: ["string", "null"], format: "uuid" },
+        },
+      },
+      EvidencePolicy: {
+        type: "object",
+        additionalProperties: false,
+        required: ["version", "minimumAge", "retentionHours", "notice"],
+        properties: {
+          version: { type: "string" },
+          minimumAge: { type: "integer", const: 18 },
+          retentionHours: { type: "integer", const: 24 },
+          notice: { type: "string" },
+        },
+      },
+      UploadIntent: {
+        type: "object",
+        additionalProperties: false,
+        required: ["uploadId", "expiresAt", "method", "url", "headers", "policy"],
+        properties: {
+          uploadId: { type: "string", format: "uuid" },
+          expiresAt: { type: "string", format: "date-time" },
+          method: { type: "string", const: "PUT" },
+          url: { type: "string", format: "uri", writeOnly: true },
+          headers: { type: "object", additionalProperties: { type: "string" }, writeOnly: true },
+          policy: { $ref: "#/components/schemas/EvidencePolicy" },
+        },
+      },
+      Submission: {
+        type: "object",
+        additionalProperties: false,
+        required: [
+          "id",
+          "assignmentId",
+          "uploader",
+          "processingStatus",
+          "reviewStatus",
+          "createdAt",
+          "image",
+          "flaggedBySelf",
+        ],
+        properties: {
+          id: { type: "string", format: "uuid" },
+          assignmentId: { type: "string", format: "uuid" },
+          uploader: {
+            type: "object",
+            required: ["id", "nickname"],
+            properties: { id: { type: "string", format: "uuid" }, nickname: { type: "string" } },
+          },
+          processingStatus: {
+            type: "string",
+            enum: ["pending", "accepted", "rejected", "deleted"],
+          },
+          reviewStatus: { type: "string", enum: ["valid", "flagged", "invalid"] },
+          createdAt: { type: "string", format: "date-time" },
+          image: {
+            oneOf: [
+              { type: "null" },
+              {
+                type: "object",
+                required: ["url", "expiresAt"],
+                properties: {
+                  url: { type: "string", format: "uri", writeOnly: true },
+                  expiresAt: { type: "string", format: "date-time" },
+                },
+              },
+            ],
+          },
+          flaggedBySelf: { type: "boolean" },
+        },
+      },
+      SubmissionConfirmation: {
+        type: "object",
+        additionalProperties: false,
+        required: ["submission", "assignmentStatus", "progress", "stateVersion"],
+        properties: {
+          submission: {
+            type: "object",
+            required: ["id", "assignmentId", "processingStatus", "reviewStatus", "createdAt"],
+            properties: {
+              id: { type: "string", format: "uuid" },
+              assignmentId: { type: "string", format: "uuid" },
+              processingStatus: { type: "string", const: "pending" },
+              reviewStatus: { type: "string", const: "valid" },
+              createdAt: { type: "string", format: "date-time" },
+            },
+          },
+          assignmentStatus: { type: "string", const: "completed" },
+          progress: {
+            type: "object",
+            required: ["completed", "total"],
+            properties: {
+              completed: { type: "integer", minimum: 0 },
+              total: { type: "integer", minimum: 1 },
+            },
+          },
+          stateVersion: { type: "integer", minimum: 1 },
         },
       },
       GameSnapshot: {

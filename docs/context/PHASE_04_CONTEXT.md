@@ -14,7 +14,7 @@ The fixed bands are one imposter and three assignments per player for 4–7 play
 
 `GET /api/v1/games/current/snapshot` and `game.snapshot` return only the requesting player's role and assignments. Roster life status, aggregate real-task progress, phase, deadline, and winner are public game data. Other roles, `counts_toward_progress`, kill availability, source item IDs, idempotency records, and internal event payloads are never serialized.
 
-Alive players can act according to phase. Eliminated crew retain `complete_task` in task phase but cannot influence meetings. Eliminated imposters cannot complete tasks or kill. Host status adds only the explicit host capability and never reveals secrets.
+Alive players can act according to phase. Eliminated crew retain `submit_evidence` in task phase but cannot influence meetings. Eliminated imposters cannot submit evidence or kill. Host status adds only the explicit host capability and never reveals secrets.
 
 ## Schema, API, and realtime
 
@@ -24,10 +24,9 @@ Implemented HTTP operations:
 
 - `POST /api/v1/rooms/current/start`
 - `GET /api/v1/games/current/snapshot` with optional `knownStateVersion` and `204` recovery optimization
-- `POST /api/v1/development/task-assignments/{assignmentId}/complete`
 
 Game mutations lock the room or game row, validate actor and expected version, write domain state/event/idempotency result atomically, commit, and only then publish player-specific `game.snapshot` messages. Reconnect and `game.resync` rebuild projections from PostgreSQL.
 
-## Temporary path warning and Phase 5 dependencies
+## Phase 5 handoff status
 
-The development completion adapter is hard-disabled in production by `APP_ENV` and returns `404` there. It exists only to verify progress and wins before photo evidence is available. Phase 5 must replace it with upload-intent and confirmed-submission flows, reuse the same assignment ownership/version/win transaction, and remove the temporary route, schema, tests, and documentation before production release.
+Phase 5 removed the temporary development-completion adapter. Task completion now occurs only through the upload-intent and confirmed-submission flow documented in `PHASE_05_CONTEXT.md`.

@@ -1,6 +1,6 @@
 # Architecture
 
-**Status:** Phase 2 administrator authentication and task-pack modules implemented; gameplay modules remain planned.
+**Status:** Phases 1–5 implemented through private photo evidence; meetings and outcomes remain planned.
 
 ## 1. Architecture style
 

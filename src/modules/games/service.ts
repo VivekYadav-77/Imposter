@@ -2,14 +2,13 @@ import { createHash, randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { sql, type Transaction } from "kysely";
 
-import type { AppConfig } from "../../infrastructure/configuration/config.js";
 import type { Database, DatabaseSchema } from "../../infrastructure/database/database.js";
 import { inTransaction } from "../../infrastructure/database/transaction.js";
 import type { ParticipantPrincipal } from "../rooms/types.js";
 import { ApplicationError } from "../../shared/errors/application-error.js";
-import { capabilitiesFor, determineWinner, playerBand } from "./domain.js";
+import { capabilitiesFor, playerBand } from "./domain.js";
 import { createAssignmentPlan } from "./random.js";
-import type { CompleteDevelopmentTaskInput, GameSnapshotDto } from "./types.js";
+import type { GameSnapshotDto } from "./types.js";
 
 type Executor = Database | Transaction<DatabaseSchema>;
 
@@ -30,10 +29,7 @@ export class GameEvents extends EventEmitter {
 export class GameService {
   readonly events = new GameEvents();
 
-  constructor(
-    private readonly database: Database,
-    private readonly config: AppConfig,
-  ) {}
+  constructor(private readonly database: Database) {}
 
   private async replay<T>(
     trx: Transaction<DatabaseSchema>,
@@ -356,149 +352,6 @@ export class GameService {
         .execute();
       const snapshot = await this.snapshotWith(trx, principal);
       await this.remember(trx, principal.participantId, key, operation, {}, snapshot);
-      return { snapshot, changed: true };
-    });
-    if (result.changed)
-      this.events.gameChanged(principal.roomId, result.snapshot.id, result.snapshot.stateVersion);
-    return result.snapshot;
-  }
-
-  private async currentWinner(trx: Transaction<DatabaseSchema>, gameId: string) {
-    const [life, tasks] = await Promise.all([
-      trx
-        .selectFrom("app.game_participants")
-        .select([
-          sql<number>`count(*) filter (where role = 'crew' and life_status = 'alive')::int`.as(
-            "livingCrew",
-          ),
-          sql<number>`count(*) filter (where role = 'imposter' and life_status = 'alive')::int`.as(
-            "livingImposters",
-          ),
-        ])
-        .where("game_id", "=", gameId)
-        .executeTakeFirstOrThrow(),
-      trx
-        .selectFrom("app.task_assignments")
-        .select([
-          sql<number>`count(*)::int`.as("totalRealTasks"),
-          sql<number>`count(*) filter (where status = 'completed')::int`.as("completedRealTasks"),
-        ])
-        .where("game_id", "=", gameId)
-        .where("counts_toward_progress", "=", true)
-        .executeTakeFirstOrThrow(),
-    ]);
-    return determineWinner({ ...life, ...tasks });
-  }
-
-  async completeDevelopmentTask(
-    principal: ParticipantPrincipal,
-    assignmentId: string,
-    input: CompleteDevelopmentTaskInput,
-    key: string,
-  ): Promise<GameSnapshotDto> {
-    if (this.config.appEnv === "production")
-      throw new ApplicationError(404, "NOT_FOUND", "The requested resource was not found.");
-    const result = await inTransaction(this.database, async (trx) => {
-      const operation = `development.task.complete:${assignmentId}`;
-      const replayed = await this.replay<GameSnapshotDto>(
-        trx,
-        principal.participantId,
-        key,
-        operation,
-        input,
-      );
-      if (replayed) return { snapshot: replayed, changed: false };
-      const assignment = await trx
-        .selectFrom("app.task_assignments")
-        .selectAll()
-        .where("id", "=", assignmentId)
-        .where("participant_id", "=", principal.participantId)
-        .executeTakeFirst();
-      if (!assignment)
-        throw new ApplicationError(
-          404,
-          "ASSIGNMENT_NOT_FOUND",
-          "The task assignment was not found.",
-        );
-      const game = await trx
-        .selectFrom("app.games")
-        .selectAll()
-        .where("id", "=", assignment.game_id)
-        .forUpdate()
-        .executeTakeFirstOrThrow();
-      if (game.room_id !== principal.roomId)
-        throw new ApplicationError(
-          404,
-          "ASSIGNMENT_NOT_FOUND",
-          "The task assignment was not found.",
-        );
-      if (Number(game.state_version) !== input.expectedStateVersion)
-        throw new ApplicationError(409, "GAME_STATE_CONFLICT", "The game state has changed.", {
-          currentStateVersion: Number(game.state_version),
-        });
-      if (game.phase !== "task")
-        throw new ApplicationError(
-          409,
-          "ACTION_NOT_ALLOWED_IN_PHASE",
-          "Tasks can only be completed during the task phase.",
-        );
-      if (assignment.status === "completed")
-        throw new ApplicationError(409, "ASSIGNMENT_ALREADY_COMPLETED", "The task is complete.");
-      const actor = await trx
-        .selectFrom("app.game_participants")
-        .select(["role", "life_status"])
-        .where("game_id", "=", game.id)
-        .where("participant_id", "=", principal.participantId)
-        .executeTakeFirstOrThrow();
-      if (actor.life_status !== "alive" && actor.role !== "crew")
-        throw new ApplicationError(
-          403,
-          "PLAYER_NOT_ELIGIBLE",
-          "This player cannot complete tasks.",
-        );
-
-      const now = new Date();
-      const nextVersion = Number(game.state_version) + 1;
-      await trx
-        .updateTable("app.task_assignments")
-        .set({ status: "completed", completed_at: now })
-        .where("id", "=", assignment.id)
-        .execute();
-      const winner = await this.currentWinner(trx, game.id);
-      await trx
-        .updateTable("app.games")
-        .set(
-          winner
-            ? {
-                state_version: nextVersion,
-                winner,
-                phase: "game_over",
-                phase_deadline_at: null,
-                ended_at: now,
-              }
-            : { state_version: nextVersion },
-        )
-        .where("id", "=", game.id)
-        .execute();
-      if (winner)
-        await trx
-          .updateTable("app.rooms")
-          .set({ status: "completed", last_activity_at: now })
-          .where("id", "=", game.room_id)
-          .execute();
-      await trx
-        .insertInto("app.game_events")
-        .values({
-          game_id: game.id,
-          state_version: nextVersion,
-          type: winner ? "game.completed" : "task.completed.development",
-          actor_participant_id: principal.participantId,
-          visibility: "public",
-          payload: winner ? { schemaVersion: 1, winner } : { schemaVersion: 1 },
-        })
-        .execute();
-      const snapshot = await this.snapshotWith(trx, principal);
-      await this.remember(trx, principal.participantId, key, operation, input, snapshot);
       return { snapshot, changed: true };
     });
     if (result.changed)

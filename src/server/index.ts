@@ -12,6 +12,8 @@ import { MemoryLoginThrottle } from "../modules/admin-auth/throttle.js";
 import { TaskPackRepository } from "../modules/task-packs/repository.js";
 import { RoomService } from "../modules/rooms/service.js";
 import { GameService } from "../modules/games/service.js";
+import { EvidenceService } from "../modules/evidence/service.js";
+import { S3ObjectStorage } from "../infrastructure/object-storage/storage.js";
 import { attachRealtimeServer } from "../realtime/server.js";
 import { PARTICIPANT_COOKIE_NAME, readCookie } from "../shared/security/cookies.js";
 import { ApplicationError } from "../shared/errors/application-error.js";
@@ -46,7 +48,13 @@ async function main(): Promise<void> {
   );
   const taskPacks = new TaskPackRepository(database.db);
   const rooms = new RoomService(database.db, config);
-  const games = new GameService(database.db, config);
+  const games = new GameService(database.db);
+  const evidence = new EvidenceService(
+    database.db,
+    config,
+    new S3ObjectStorage(config),
+    games.events,
+  );
   games.events.on("game.changed", ({ roomId }: { roomId: string }) => {
     rooms.events.roomChanged(roomId);
   });
@@ -59,6 +67,7 @@ async function main(): Promise<void> {
     taskPacks,
     rooms,
     games,
+    evidence,
     authorizePublishedPackRead: async (request) => {
       const header = request.headers.authorization;
       const bearer = header?.startsWith("Bearer ") ? header.slice(7).trim() : null;
@@ -91,12 +100,21 @@ async function main(): Promise<void> {
       .catch((error: unknown) => logger.error({ err: error }, "Room maintenance failed"));
   }, config.roomMaintenanceIntervalMs);
   maintenance.unref();
+  const evidenceWorkerId = `evidence-${process.pid}`;
+  const evidenceWorker = setInterval(() => {
+    void evidence
+      .scheduleTerminalRetention()
+      .then(() => evidence.runNextJob(evidenceWorkerId))
+      .catch((error: unknown) => logger.error({ err: error }, "Evidence worker failed"));
+  }, config.evidenceWorkerIntervalMs);
+  evidenceWorker.unref();
   void rooms
     .runMaintenance()
     .catch((error: unknown) => logger.warn({ err: error }, "Initial room maintenance failed"));
   const shutdown = new ShutdownManager(logger, config.shutdownTimeoutMs, [
     () => {
       clearInterval(maintenance);
+      clearInterval(evidenceWorker);
       return Promise.resolve();
     },
     () => new Promise<void>((resolve) => realtime.close(() => resolve())),

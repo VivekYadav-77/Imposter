@@ -9,6 +9,7 @@ import type { Database } from "../../src/infrastructure/database/database.js";
 import { InMemoryMetrics } from "../../src/infrastructure/observability/metrics.js";
 import type { RoomService } from "../../src/modules/rooms/service.js";
 import type { GameService } from "../../src/modules/games/service.js";
+import type { EvidenceService } from "../../src/modules/evidence/service.js";
 import { normalizeNickname, roomMembershipSchema } from "../../src/modules/rooms/schemas.js";
 
 const servers: ReturnType<typeof createServer>[] = [];
@@ -51,7 +52,7 @@ const snapshot = {
   gameId: null,
 };
 
-function roomApi(options: { appEnv?: "test" | "production"; games?: GameService } = {}) {
+function roomApi(options: { games?: GameService; evidence?: EvidenceService } = {}) {
   const rooms = {
     createRoom: () =>
       Promise.resolve({
@@ -73,7 +74,7 @@ function roomApi(options: { appEnv?: "test" | "production"; games?: GameService 
     snapshot: () => Promise.resolve(snapshot),
   } as unknown as RoomService;
   const config = loadConfig({
-    APP_ENV: options.appEnv ?? "test",
+    APP_ENV: "test",
     DATABASE_URL: "postgresql://test:test@localhost:5432/test",
     CORS_ALLOWED_ORIGINS: "https://game.example",
   });
@@ -84,6 +85,7 @@ function roomApi(options: { appEnv?: "test" | "production"; games?: GameService 
     metrics: new InMemoryMetrics(),
     rooms,
     games: options.games,
+    evidence: options.evidence,
   });
   const server = createServer((req, res) => void handler(req, res));
   servers.push(server);
@@ -141,14 +143,35 @@ describe("room HTTP transport", () => {
     expect(response.headers.etag).toBe('"7"');
   });
 
-  it("makes the temporary completion route nonexistent in production", async () => {
+  it("returns the privacy policy with a constrained upload capability", async () => {
     const games = {} as GameService;
-    const response = await roomApi({ appEnv: "production", games })
-      .post("/api/v1/development/task-assignments/00000000-0000-4000-8000-000000000011/complete")
+    const evidence = {
+      createUploadIntent: () =>
+        Promise.resolve({
+          uploadId: "00000000-0000-4000-8000-000000000020",
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+          method: "PUT",
+          url: "https://storage.example/signed",
+          headers: { "content-type": "image/jpeg", "content-length": "12" },
+          policy: {
+            version: "2026-09-20",
+            minimumAge: 18,
+            retentionHours: 24,
+            notice: "Consent notice",
+          },
+        }),
+    } as unknown as EvidenceService;
+    const response = await roomApi({ games, evidence })
+      .post("/api/v1/task-assignments/00000000-0000-4000-8000-000000000011/upload-intents")
       .set("Authorization", "Bearer valid")
-      .set("Idempotency-Key", "complete-task-1")
-      .send({ expectedStateVersion: 1 });
-    expect(response.status).toBe(404);
+      .set("Idempotency-Key", "evidence-intent-1")
+      .send({ expectedStateVersion: 1, contentType: "image/jpeg", byteSize: 12 });
+    expect(response.status).toBe(201);
+    const body = response.body as {
+      data: { policy: { minimumAge: number; retentionHours: number } };
+    };
+    expect(body.data.policy).toMatchObject({ minimumAge: 18, retentionHours: 24 });
+    expect(body.data).not.toHaveProperty("objectKey");
   });
 });
 
