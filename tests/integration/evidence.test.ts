@@ -324,4 +324,47 @@ describeWithDatabase("private evidence lifecycle", () => {
     expect(deleted.processing_status).toBe("deleted");
     expect(deleted.deleted_at).not.toBeNull();
   });
+
+  it("finishes a full game with the last real crew evidence submission", async () => {
+    const { principals, snapshot } = await startedRoom();
+    const realAssignments = await dependencies.db
+      .selectFrom("app.task_assignments")
+      .select(["id", "participant_id"])
+      .where("game_id", "=", snapshot.id)
+      .where("counts_toward_progress", "=", true)
+      .execute();
+    const last = realAssignments[0];
+    await dependencies.db
+      .updateTable("app.task_assignments")
+      .set({ status: "completed", completed_at: new Date() })
+      .where("game_id", "=", snapshot.id)
+      .where("counts_toward_progress", "=", true)
+      .where("id", "!=", last.id)
+      .execute();
+    const owner = principals.find((principal) => principal.participantId === last.participant_id)!;
+    const image = await sharp({
+      create: { width: 8, height: 8, channels: 3, background: "green" },
+    })
+      .jpeg()
+      .toBuffer();
+    const intent = await evidence.createUploadIntent(
+      owner,
+      last.id,
+      {
+        expectedStateVersion: snapshot.stateVersion,
+        contentType: "image/jpeg",
+        byteSize: image.byteLength,
+      },
+      randomUUID(),
+    );
+    storage.seed(image, "image/jpeg");
+    const confirmation = await evidence.confirm(
+      owner,
+      last.id,
+      { expectedStateVersion: snapshot.stateVersion, uploadId: intent.uploadId },
+      randomUUID(),
+    );
+    expect(confirmation.progress.completed).toBe(confirmation.progress.total);
+    expect(await games.snapshot(owner)).toMatchObject({ phase: "game_over", winner: "crew" });
+  });
 });

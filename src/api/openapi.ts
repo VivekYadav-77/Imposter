@@ -53,7 +53,7 @@ export const openApiDocument: OpenAPIObject = {
   openapi: "3.1.0",
   info: {
     title: "Imposter Game API",
-    version: "0.5.0",
+    version: "0.6.0",
     description: "Versioned HTTP contract for web and native clients.",
   },
   servers: [{ url: "/" }],
@@ -222,6 +222,118 @@ export const openApiDocument: OpenAPIObject = {
           "204": { description: "The supplied state version is current" },
           "401": error,
           "404": error,
+          "422": error,
+        },
+      },
+    },
+    "/api/v1/games/current/kills": {
+      post: {
+        operationId: "createKill",
+        security: participantSecurity,
+        parameters: [idempotency],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                additionalProperties: false,
+                required: ["expectedStateVersion", "targetParticipantId"],
+                properties: {
+                  expectedStateVersion: { type: "integer", minimum: 1 },
+                  targetParticipantId: { type: "string", format: "uuid" },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "201": envelope({ $ref: "#/components/schemas/GameSnapshot" }),
+          "403": error,
+          "409": error,
+          "422": error,
+        },
+      },
+    },
+    "/api/v1/meetings/current": {
+      get: {
+        operationId: "getCurrentMeeting",
+        security: participantSecurity,
+        responses: { "200": envelope({ $ref: "#/components/schemas/Meeting" }), "404": error },
+      },
+    },
+    "/api/v1/evidence-review-items/{reviewItemId}/vote": {
+      put: {
+        operationId: "putEvidenceReviewVote",
+        security: participantSecurity,
+        parameters: [
+          {
+            name: "reviewItemId",
+            in: "path",
+            required: true,
+            schema: { type: "string", format: "uuid" },
+          },
+          idempotency,
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                additionalProperties: false,
+                required: ["expectedStateVersion", "decision"],
+                properties: {
+                  expectedStateVersion: { type: "integer", minimum: 1 },
+                  decision: { type: "string", enum: ["valid", "invalid"] },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": envelope({ $ref: "#/components/schemas/VoteAcknowledgement" }),
+          "403": error,
+          "404": error,
+          "409": error,
+          "422": error,
+        },
+      },
+    },
+    "/api/v1/meetings/{meetingId}/ejection-vote": {
+      put: {
+        operationId: "putEjectionVote",
+        security: participantSecurity,
+        parameters: [
+          {
+            name: "meetingId",
+            in: "path",
+            required: true,
+            schema: { type: "string", format: "uuid" },
+          },
+          idempotency,
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                additionalProperties: false,
+                required: ["expectedStateVersion", "targetParticipantId"],
+                properties: {
+                  expectedStateVersion: { type: "integer", minimum: 1 },
+                  targetParticipantId: { type: ["string", "null"], format: "uuid" },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": envelope({ $ref: "#/components/schemas/VoteAcknowledgement" }),
+          "403": error,
+          "404": error,
+          "409": error,
           "422": error,
         },
       },
@@ -787,6 +899,7 @@ export const openApiDocument: OpenAPIObject = {
           "self",
           "assignments",
           "progress",
+          "meeting",
         ],
         properties: {
           id: { type: "string", format: "uuid" },
@@ -853,6 +966,57 @@ export const openApiDocument: OpenAPIObject = {
               total: { type: "integer", minimum: 1 },
             },
           },
+          meeting: { oneOf: [{ type: "null" }, { $ref: "#/components/schemas/Meeting" }] },
+        },
+      },
+      Meeting: {
+        type: "object",
+        additionalProperties: false,
+        required: [
+          "id",
+          "sequenceNumber",
+          "triggerType",
+          "reportedParticipantId",
+          "phase",
+          "deadlineAt",
+          "eligibleParticipants",
+          "reviewItem",
+          "ownEjectionTargetParticipantId",
+          "hasCastEjectionVote",
+          "votesCast",
+          "result",
+          "capabilities",
+        ],
+        properties: {
+          id: { type: "string", format: "uuid" },
+          sequenceNumber: { type: "integer", minimum: 1 },
+          triggerType: { type: "string", enum: ["kill", "task_deadline"] },
+          reportedParticipantId: { type: ["string", "null"], format: "uuid" },
+          phase: { type: "string", enum: ["discussion", "review", "voting", "resolved"] },
+          deadlineAt: { type: ["string", "null"], format: "date-time" },
+          eligibleParticipants: {
+            type: "array",
+            items: {
+              type: "object",
+              required: ["id", "nickname"],
+              properties: { id: { type: "string", format: "uuid" }, nickname: { type: "string" } },
+            },
+          },
+          reviewItem: { type: ["object", "null"], additionalProperties: true },
+          ownEjectionTargetParticipantId: { type: ["string", "null"], format: "uuid" },
+          hasCastEjectionVote: { type: "boolean" },
+          votesCast: { type: "integer", minimum: 0 },
+          result: { type: ["object", "null"], additionalProperties: true },
+          capabilities: { type: "array", items: { type: "string" } },
+        },
+      },
+      VoteAcknowledgement: {
+        type: "object",
+        additionalProperties: true,
+        required: ["stateVersion", "votesCast"],
+        properties: {
+          stateVersion: { type: "integer", minimum: 1 },
+          votesCast: { type: "integer", minimum: 0 },
         },
       },
       SessionCredential: {

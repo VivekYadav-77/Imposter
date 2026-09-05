@@ -30,4 +30,34 @@ export interface GameSnapshotDto {
   };
   assignments: GameAssignmentDto[];
   progress: { completed: number; total: number };
+  meeting: MeetingDto | null;
+}
+
+export interface MeetingDto {
+  id: string;
+  sequenceNumber: number;
+  triggerType: "kill" | "task_deadline";
+  reportedParticipantId: string | null;
+  phase: "discussion" | "review" | "voting" | "resolved";
+  deadlineAt: string | null;
+  eligibleParticipants: Array<{ id: string; nickname: string }>;
+  reviewItem: null | {
+    id: string;
+    submissionId: string;
+    position: number;
+    total: number;
+    uploader: { id: string; nickname: string };
+    assignmentDescription: string;
+    ownDecision: "valid" | "invalid" | null;
+    votesCast: number;
+  };
+  ownEjectionTargetParticipantId: string | null;
+  hasCastEjectionVote: boolean;
+  votesCast: number;
+  result: null | {
+    ejectedParticipantId: string | null;
+    totals: Array<{ participantId: string; votes: number }>;
+    skipVotes: number;
+  };
+  capabilities: string[];
 }

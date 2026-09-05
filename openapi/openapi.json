@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Imposter Game API",
-    "version": "0.5.0",
+    "version": "0.6.0",
     "description": "Versioned HTTP contract for web and native clients."
   },
   "servers": [
@@ -859,6 +859,461 @@
             }
           },
           "404": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/games/current/kills": {
+      "post": {
+        "operationId": "createKill",
+        "security": [
+          {
+            "participantBearer": []
+          },
+          {
+            "participantCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "expectedStateVersion",
+                  "targetParticipantId"
+                ],
+                "properties": {
+                  "expectedStateVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "targetParticipantId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/GameSnapshot"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "requestId",
+                        "serverTime"
+                      ],
+                      "properties": {
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "serverTime": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/meetings/current": {
+      "get": {
+        "operationId": "getCurrentMeeting",
+        "security": [
+          {
+            "participantBearer": []
+          },
+          {
+            "participantCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Meeting"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "requestId",
+                        "serverTime"
+                      ],
+                      "properties": {
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "serverTime": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/evidence-review-items/{reviewItemId}/vote": {
+      "put": {
+        "operationId": "putEvidenceReviewVote",
+        "security": [
+          {
+            "participantBearer": []
+          },
+          {
+            "participantCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "reviewItemId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "expectedStateVersion",
+                  "decision"
+                ],
+                "properties": {
+                  "expectedStateVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "decision": {
+                    "type": "string",
+                    "enum": [
+                      "valid",
+                      "invalid"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/VoteAcknowledgement"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "requestId",
+                        "serverTime"
+                      ],
+                      "properties": {
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "serverTime": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/meetings/{meetingId}/ejection-vote": {
+      "put": {
+        "operationId": "putEjectionVote",
+        "security": [
+          {
+            "participantBearer": []
+          },
+          {
+            "participantCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "meetingId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "expectedStateVersion",
+                  "targetParticipantId"
+                ],
+                "properties": {
+                  "expectedStateVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "targetParticipantId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/VoteAcknowledgement"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "requestId",
+                        "serverTime"
+                      ],
+                      "properties": {
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "serverTime": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
             "description": "Safe error envelope",
             "content": {
               "application/json": {
@@ -2951,7 +3406,8 @@
           "participants",
           "self",
           "assignments",
-          "progress"
+          "progress",
+          "meeting"
         ],
         "properties": {
           "id": {
@@ -3135,6 +3591,146 @@
                 "minimum": 1
               }
             }
+          },
+          "meeting": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Meeting"
+              }
+            ]
+          }
+        }
+      },
+      "Meeting": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "sequenceNumber",
+          "triggerType",
+          "reportedParticipantId",
+          "phase",
+          "deadlineAt",
+          "eligibleParticipants",
+          "reviewItem",
+          "ownEjectionTargetParticipantId",
+          "hasCastEjectionVote",
+          "votesCast",
+          "result",
+          "capabilities"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sequenceNumber": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "triggerType": {
+            "type": "string",
+            "enum": [
+              "kill",
+              "task_deadline"
+            ]
+          },
+          "reportedParticipantId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "discussion",
+              "review",
+              "voting",
+              "resolved"
+            ]
+          },
+          "deadlineAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "eligibleParticipants": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "nickname"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "nickname": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "reviewItem": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          },
+          "ownEjectionTargetParticipantId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "hasCastEjectionVote": {
+            "type": "boolean"
+          },
+          "votesCast": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "result": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "VoteAcknowledgement": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "stateVersion",
+          "votesCast"
+        ],
+        "properties": {
+          "stateVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "votesCast": {
+            "type": "integer",
+            "minimum": 0
           }
         }
       },

@@ -39,7 +39,14 @@ export type SafeErrorCode =
   | "SUBMISSION_NOT_FOUND"
   | "SELF_FLAG_NOT_ALLOWED"
   | "SUBMISSION_ALREADY_RESOLVED"
-  | "ALREADY_FLAGGED";
+  | "ALREADY_FLAGGED"
+  | "ROLE_NOT_ALLOWED"
+  | "KILL_COOLDOWN"
+  | "TARGET_NOT_ELIGIBLE"
+  | "MEETING_NOT_FOUND"
+  | "REVIEW_ITEM_NOT_FOUND"
+  | "REVIEW_LOCKED"
+  | "VOTING_LOCKED";
 
 export class ApplicationError extends Error {
   constructor(

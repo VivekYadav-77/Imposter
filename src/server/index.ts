@@ -108,6 +108,12 @@ async function main(): Promise<void> {
       .catch((error: unknown) => logger.error({ err: error }, "Evidence worker failed"));
   }, config.evidenceWorkerIntervalMs);
   evidenceWorker.unref();
+  const meetingWorker = setInterval(() => {
+    void games
+      .runDueTransitions()
+      .catch((error: unknown) => logger.error({ err: error }, "Meeting deadline worker failed"));
+  }, 1000);
+  meetingWorker.unref();
   void rooms
     .runMaintenance()
     .catch((error: unknown) => logger.warn({ err: error }, "Initial room maintenance failed"));
@@ -115,6 +121,7 @@ async function main(): Promise<void> {
     () => {
       clearInterval(maintenance);
       clearInterval(evidenceWorker);
+      clearInterval(meetingWorker);
       return Promise.resolve();
     },
     () => new Promise<void>((resolve) => realtime.close(() => resolve())),

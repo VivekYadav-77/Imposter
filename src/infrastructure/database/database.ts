@@ -228,6 +228,62 @@ export interface SubmissionFlagsTable {
   resolved_at: NullableTimestamp;
 }
 
+export interface MeetingsTable {
+  id: string;
+  game_id: string;
+  sequence_number: number;
+  trigger_type: "kill" | "task_deadline";
+  trigger_actor_participant_id: string | null;
+  reported_participant_id: string | null;
+  phase: "discussion" | "review" | "voting" | "resolved";
+  deadline_at: NullableTimestamp;
+  ejected_participant_id: string | null;
+  created_at: Timestamp;
+  resolved_at: NullableTimestamp;
+}
+
+export interface MeetingEligibleVotersTable {
+  meeting_id: string;
+  participant_id: string;
+}
+
+export interface EvidenceReviewItemsTable {
+  id: string;
+  meeting_id: string;
+  submission_id: string;
+  position: number;
+  resolution: "valid" | "invalid" | null;
+  resolved_at: NullableTimestamp;
+}
+
+export interface EvidenceReviewVotesTable {
+  id: string;
+  review_item_id: string;
+  voter_participant_id: string;
+  decision: "valid" | "invalid";
+  created_at: Timestamp;
+  updated_at: Timestamp;
+}
+
+export interface EjectionVotesTable {
+  id: string;
+  meeting_id: string;
+  voter_participant_id: string;
+  target_participant_id: string | null;
+  created_at: Timestamp;
+  updated_at: Timestamp;
+}
+
+export interface EliminationsTable {
+  id: string;
+  game_id: string;
+  meeting_id: string | null;
+  target_participant_id: string;
+  actor_participant_id: string | null;
+  type: "killed" | "ejected";
+  occurred_at: Timestamp;
+}
+
 export interface JobsTable {
   id: string;
   type: "process_evidence" | "delete_evidence" | "delete_orphan";
@@ -264,6 +320,12 @@ export interface DatabaseSchema {
   "app.evidence_upload_intents": EvidenceUploadIntentsTable;
   "app.task_submissions": TaskSubmissionsTable;
   "app.submission_flags": SubmissionFlagsTable;
+  "app.meetings": MeetingsTable;
+  "app.meeting_eligible_voters": MeetingEligibleVotersTable;
+  "app.evidence_review_items": EvidenceReviewItemsTable;
+  "app.evidence_review_votes": EvidenceReviewVotesTable;
+  "app.ejection_votes": EjectionVotesTable;
+  "app.eliminations": EliminationsTable;
   "app.jobs": JobsTable;
 }
 

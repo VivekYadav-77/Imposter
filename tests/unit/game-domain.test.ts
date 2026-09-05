@@ -5,6 +5,8 @@ import {
   capabilitiesFor,
   determineWinner,
   playerBand,
+  resolveEjection,
+  resolveReview,
 } from "../../src/modules/games/domain.js";
 import { createAssignmentPlan } from "../../src/modules/games/random.js";
 
@@ -61,6 +63,16 @@ describe("game domain policies", () => {
         completedRealTasks: 2,
       }),
     ).toBe("imposters");
+  });
+
+  it("keeps review ties valid and requires one unique non-skip ejection leader", () => {
+    expect(resolveReview([])).toBe("valid");
+    expect(resolveReview(["invalid", "valid"])).toBe("valid");
+    expect(resolveReview(["invalid", "invalid", "valid"])).toBe("invalid");
+    expect(resolveEjection(["a", "a", "b", null]).targetParticipantId).toBe("a");
+    expect(resolveEjection(["a", "b"])).toMatchObject({ targetParticipantId: null });
+    expect(resolveEjection(["a", null])).toMatchObject({ targetParticipantId: null, skip: 1 });
+    expect(resolveEjection([]).targetParticipantId).toBeNull();
   });
 
   it("allows crew ghosts to work without meeting influence", () => {

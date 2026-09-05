@@ -21,7 +21,12 @@ import {
 import type { RoomService } from "../modules/rooms/service.js";
 import type { ParticipantPrincipal } from "../modules/rooms/types.js";
 import type { GameService } from "../modules/games/service.js";
-import { startGameSchema } from "../modules/games/schemas.js";
+import {
+  ejectionVoteSchema,
+  killSchema,
+  reviewVoteSchema,
+  startGameSchema,
+} from "../modules/games/schemas.js";
 import type { EvidenceService } from "../modules/evidence/service.js";
 import {
   confirmSubmissionSchema,
@@ -196,8 +201,12 @@ function isGameRoute(path: string): boolean {
   return (
     path === "/api/v1/games/current/snapshot" ||
     path === "/api/v1/games/current/submissions" ||
+    path === "/api/v1/games/current/kills" ||
+    path === "/api/v1/meetings/current" ||
     /^\/api\/v1\/task-assignments\/[0-9a-f-]+\/(upload-intents|submissions)$/i.test(path) ||
-    /^\/api\/v1\/submissions\/[0-9a-f-]+\/flags$/i.test(path)
+    /^\/api\/v1\/submissions\/[0-9a-f-]+\/flags$/i.test(path) ||
+    /^\/api\/v1\/evidence-review-items\/[0-9a-f-]+\/vote$/i.test(path) ||
+    /^\/api\/v1\/meetings\/[0-9a-f-]+\/ejection-vote$/i.test(path)
   );
 }
 
@@ -396,6 +405,53 @@ async function handleGameRoute(
       return;
     }
     sendJson(response, 200, successEnvelope(snapshot, requestId), requestId);
+    return;
+  }
+  if (method === "POST" && path === "/api/v1/games/current/kills") {
+    const key = requireIdempotencyKey(request);
+    const body = await validatedBody(request, config.maxJsonBodyBytes, killSchema);
+    sendJson(
+      response,
+      201,
+      successEnvelope(await games.kill(principal, body, key), requestId),
+      requestId,
+    );
+    return;
+  }
+  if (method === "GET" && path === "/api/v1/meetings/current") {
+    sendJson(
+      response,
+      200,
+      successEnvelope(await games.currentMeeting(principal), requestId),
+      requestId,
+    );
+    return;
+  }
+  const reviewVoteMatch = path.match(/^\/api\/v1\/evidence-review-items\/([0-9a-f-]+)\/vote$/i);
+  if (method === "PUT" && reviewVoteMatch) {
+    const key = requireIdempotencyKey(request);
+    const body = await validatedBody(request, config.maxJsonBodyBytes, reviewVoteSchema);
+    sendJson(
+      response,
+      200,
+      successEnvelope(await games.reviewVote(principal, reviewVoteMatch[1], body, key), requestId),
+      requestId,
+    );
+    return;
+  }
+  const ejectionVoteMatch = path.match(/^\/api\/v1\/meetings\/([0-9a-f-]+)\/ejection-vote$/i);
+  if (method === "PUT" && ejectionVoteMatch) {
+    const key = requireIdempotencyKey(request);
+    const body = await validatedBody(request, config.maxJsonBodyBytes, ejectionVoteSchema);
+    sendJson(
+      response,
+      200,
+      successEnvelope(
+        await games.ejectionVote(principal, ejectionVoteMatch[1], body, key),
+        requestId,
+      ),
+      requestId,
+    );
     return;
   }
   const assignmentMatch = path.match(

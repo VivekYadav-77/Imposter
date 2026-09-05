@@ -1,6 +1,6 @@
 # Architecture
 
-**Status:** Phases 1–5 implemented through private photo evidence; meetings and outcomes remain planned.
+**Status:** Phases 1–6 implemented through authoritative meetings, voting, deadlines, and outcomes.
 
 ## 1. Architecture style
 

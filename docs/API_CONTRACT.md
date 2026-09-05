@@ -476,6 +476,6 @@ Room snapshots, participant rosters, meetings, and personal task lists are inten
 - Socket.IO versus a lower-level WebSocket protocol; message semantics above remain unchanged.
 - Final web cookie bootstrap flow without exposing the raw token to browser JavaScript.
 - Whether pack task descriptions are previewable to hosts.
-- Whether voters may replace a vote before its deadline.
-- Whether the host may advance a fully-completed meeting subphase early; this is not an emergency-meeting capability.
-- Exact cooldown/timer bounds and rate-limit values.
+- Exact deployment rate-limit values.
+
+Phase 6 finalized meeting behavior: voters may replace decisions until lock, all-voter completion advances synchronously, there is no host advance endpoint, result display is 10 seconds, and the post-meeting kill cooldown is 30 seconds. Configurable room timer bounds remain task 300–3600 seconds, discussion 30–300 seconds, and review/voting 30–180 seconds.

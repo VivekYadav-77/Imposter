@@ -2,7 +2,7 @@
 
 **Status:** Approved for phased implementation  
 **Planning baseline:** 2026-09-20  
-**Implementation status:** Phases 1–5 implemented; PostgreSQL integration verification runs in CI
+**Implementation status:** Phases 1–6 implemented; PostgreSQL integration verification runs in CI
 
 ## 1. Product overview
 

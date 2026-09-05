@@ -52,6 +52,30 @@ export function determineWinner(state: WinState): Winner | null {
   return null;
 }
 
+export function resolveReview(votes: readonly ("valid" | "invalid")[]): "valid" | "invalid" {
+  const invalid = votes.filter((vote) => vote === "invalid").length;
+  const valid = votes.length - invalid;
+  return invalid > valid ? "invalid" : "valid";
+}
+
+export function resolveEjection(votes: readonly (string | null)[]): {
+  targetParticipantId: string | null;
+  totals: Record<string, number>;
+  skip: number;
+} {
+  const totals: Record<string, number> = {};
+  let skip = 0;
+  for (const vote of votes) {
+    if (vote === null) skip += 1;
+    else totals[vote] = (totals[vote] ?? 0) + 1;
+  }
+  const entries = Object.entries(totals);
+  const highest = Math.max(skip, 0, ...entries.map(([, count]) => count));
+  const leaders = entries.filter(([, count]) => count === highest);
+  const targetParticipantId = highest > skip && leaders.length === 1 ? leaders[0][0] : null;
+  return { targetParticipantId, totals, skip };
+}
+
 export interface CapabilityState {
   phase: GamePhase;
   role: GameRole;
