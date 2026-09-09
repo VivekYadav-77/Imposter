@@ -20,11 +20,13 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "contracts:generate": "tsx scripts/generate-openapi.ts",
     "contracts:check": "tsx scripts/check-openapi.ts",
+    "contracts:fixtures:check": "tsx scripts/check-contract-fixtures.ts",
     "admin:bootstrap": "tsx scripts/bootstrap-admin.ts",
+    "ops:status": "tsx scripts/operations-status.ts",
     "migrate:up": "node-pg-migrate up --migrations-dir migrations --database-url-var DATABASE_URL",
     "migrate:down": "node-pg-migrate down --migrations-dir migrations --database-url-var DATABASE_URL",
-    "migrate:verify": "npm run migrate:up && npm run migrate:down && npm run migrate:up",
-    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run contracts:check"
+    "migrate:verify": "npm run migrate:up && node-pg-migrate down 6 --migrations-dir migrations --database-url-var DATABASE_URL && npm run migrate:up",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run contracts:check && npm run contracts:fixtures:check"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1136.0",

@@ -8,13 +8,13 @@ exports.up = (pgm) => {
         type: "uuid",
         notNull: true,
         unique: true,
-        references: "app.rooms",
+        references: { schema: "app", name: "rooms" },
         onDelete: "CASCADE",
       },
       source_task_pack_id: {
         type: "uuid",
         notNull: true,
-        references: "app.task_packs",
+        references: { schema: "app", name: "task_packs" },
         onDelete: "RESTRICT",
       },
       task_pack_name_snapshot: { type: "text", notNull: true },
@@ -51,11 +51,16 @@ exports.up = (pgm) => {
   pgm.createTable(
     { schema: "app", name: "game_participants" },
     {
-      game_id: { type: "uuid", notNull: true, references: "app.games", onDelete: "CASCADE" },
+      game_id: {
+        type: "uuid",
+        notNull: true,
+        references: { schema: "app", name: "games" },
+        onDelete: "CASCADE",
+      },
       participant_id: {
         type: "uuid",
         notNull: true,
-        references: "app.participants",
+        references: { schema: "app", name: "participants" },
         onDelete: "CASCADE",
       },
       role: { type: "text", notNull: true },
@@ -90,10 +95,15 @@ exports.up = (pgm) => {
     { schema: "app", name: "game_tasks" },
     {
       id: { type: "uuid", primaryKey: true },
-      game_id: { type: "uuid", notNull: true, references: "app.games", onDelete: "CASCADE" },
+      game_id: {
+        type: "uuid",
+        notNull: true,
+        references: { schema: "app", name: "games" },
+        onDelete: "CASCADE",
+      },
       source_pack_item_id: {
         type: "uuid",
-        references: "app.task_pack_items",
+        references: { schema: "app", name: "task_pack_items" },
         onDelete: "SET NULL",
       },
       description_snapshot: { type: "text", notNull: true },
@@ -118,17 +128,22 @@ exports.up = (pgm) => {
     { schema: "app", name: "task_assignments" },
     {
       id: { type: "uuid", primaryKey: true },
-      game_id: { type: "uuid", notNull: true, references: "app.games", onDelete: "CASCADE" },
+      game_id: {
+        type: "uuid",
+        notNull: true,
+        references: { schema: "app", name: "games" },
+        onDelete: "CASCADE",
+      },
       game_task_id: {
         type: "uuid",
         notNull: true,
-        references: "app.game_tasks",
+        references: { schema: "app", name: "game_tasks" },
         onDelete: "CASCADE",
       },
       participant_id: {
         type: "uuid",
         notNull: true,
-        references: "app.participants",
+        references: { schema: "app", name: "participants" },
         onDelete: "CASCADE",
       },
       counts_toward_progress: { type: "boolean", notNull: true },
@@ -152,7 +167,7 @@ exports.up = (pgm) => {
     {
       foreignKeys: {
         columns: ["game_id", "participant_id"],
-        references: "app.game_participants(game_id, participant_id)",
+        references: pgm.func('"app"."game_participants" ("game_id", "participant_id")'),
         onDelete: "CASCADE",
       },
     },
@@ -160,7 +175,7 @@ exports.up = (pgm) => {
   pgm.addConstraint({ schema: "app", name: "task_assignments" }, "task_assignments_game_task_fk", {
     foreignKeys: {
       columns: ["game_id", "game_task_id"],
-      references: "app.game_tasks(game_id, id)",
+      references: pgm.func('"app"."game_tasks" ("game_id", "id")'),
       onDelete: "CASCADE",
     },
   });
@@ -178,10 +193,19 @@ exports.up = (pgm) => {
     { schema: "app", name: "game_events" },
     {
       id: { type: "bigserial", primaryKey: true },
-      game_id: { type: "uuid", notNull: true, references: "app.games", onDelete: "CASCADE" },
+      game_id: {
+        type: "uuid",
+        notNull: true,
+        references: { schema: "app", name: "games" },
+        onDelete: "CASCADE",
+      },
       state_version: { type: "bigint", notNull: true },
       type: { type: "text", notNull: true },
-      actor_participant_id: { type: "uuid", references: "app.participants", onDelete: "SET NULL" },
+      actor_participant_id: {
+        type: "uuid",
+        references: { schema: "app", name: "participants" },
+        onDelete: "SET NULL",
+      },
       visibility: { type: "text", notNull: true },
       payload: { type: "jsonb", notNull: true, default: "{}" },
       created_at: { type: "timestamptz", notNull: true, default: pgm.func("current_timestamp") },
@@ -203,7 +227,7 @@ exports.up = (pgm) => {
       participant_id: {
         type: "uuid",
         notNull: true,
-        references: "app.participants",
+        references: { schema: "app", name: "participants" },
         onDelete: "CASCADE",
       },
       key: { type: "text", notNull: true },

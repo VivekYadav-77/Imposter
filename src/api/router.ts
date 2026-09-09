@@ -1,10 +1,12 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { timingSafeEqual } from "node:crypto";
 import type { Logger } from "pino";
 
 import type { Database } from "../infrastructure/database/database.js";
 import { checkDatabaseReadiness } from "../infrastructure/database/database.js";
 import type { AppConfig } from "../infrastructure/configuration/config.js";
 import type { Metrics } from "../infrastructure/observability/metrics.js";
+import { MemoryRateLimiter } from "../infrastructure/security/rate-limiter.js";
 import type { AdminAuthService } from "../modules/admin-auth/service.js";
 import {
   createPackSchema,
@@ -67,13 +69,18 @@ export interface ApiDependencies {
 export type ApiHandler = (request: IncomingMessage, response: ServerResponse) => Promise<boolean>;
 
 export function createApiHandler(dependencies: ApiDependencies): ApiHandler {
+  const rateLimiter = new MemoryRateLimiter(
+    dependencies.config.httpRateLimitMaxRequests,
+    dependencies.config.httpRateLimitWindowSeconds,
+  );
   return async (request, response) => {
     const requestId = resolveRequestId(request);
     const startedAt = performance.now();
-    applySecurityHeaders(response);
+    applySecurityHeaders(response, dependencies.config);
 
     const path = new URL(request.url ?? "/", "http://localhost").pathname;
-    const isOwnedPath = path.startsWith("/api/") || path.startsWith("/health/");
+    const isOwnedPath =
+      path.startsWith("/api/") || path.startsWith("/health/") || path === "/internal/metrics";
     if (!isOwnedPath) return false;
 
     response.setHeader("Cache-Control", "no-store");
@@ -90,6 +97,23 @@ export function createApiHandler(dependencies: ApiDependencies): ApiHandler {
       response.setHeader("X-Request-ID", requestId);
       response.end();
       return true;
+    }
+
+    if (path.startsWith("/api/")) {
+      const clientAddress = trustedClientAddress(request, dependencies.config);
+      const limit = rateLimiter.consume(`${clientAddress}:${request.method}:${metricPath(path)}`);
+      if (!limit.allowed) {
+        response.setHeader("Retry-After", String(limit.retryAfterSeconds));
+        dependencies.metrics.increment("http.rate_limited", { path: metricPath(path) });
+        sendError(
+          response,
+          new ApplicationError(429, "RATE_LIMITED", "Too many requests.", {
+            retryAfterSeconds: limit.retryAfterSeconds,
+          }),
+          requestId,
+        );
+        return true;
+      }
     }
 
     const contentLength = Number(request.headers["content-length"] ?? 0);
@@ -124,6 +148,15 @@ export function createApiHandler(dependencies: ApiDependencies): ApiHandler {
             "A required dependency is unavailable.",
           );
         }
+      } else if (request.method === "GET" && path === "/internal/metrics") {
+        if (!validMetricsCredential(request, dependencies.config.metricsBearerToken))
+          throw new ApplicationError(404, "NOT_FOUND", "The requested resource was not found.");
+        const payload = dependencies.metrics.renderPrometheus();
+        response.statusCode = 200;
+        response.setHeader("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
+        response.setHeader("Content-Length", Buffer.byteLength(payload));
+        response.setHeader("X-Request-ID", requestId);
+        response.end(payload);
       } else if (request.method === "GET" && path === "/api/v1") {
         sendJson(response, 200, successEnvelope({ version: "v1" }, requestId), requestId);
       } else if (
@@ -175,11 +208,15 @@ export function createApiHandler(dependencies: ApiDependencies): ApiHandler {
       sendError(response, error, requestId);
     } finally {
       const durationMs = performance.now() - startedAt;
+      const normalizedPath = metricPath(path);
       dependencies.metrics.increment("http.requests", {
         method: request.method ?? "UNKNOWN",
-        path,
+        path: normalizedPath,
+        status: String(response.statusCode),
       });
-      dependencies.metrics.observe("http.request.duration_ms", durationMs, { path });
+      dependencies.metrics.observe("http.request.duration_ms", durationMs, {
+        path: normalizedPath,
+      });
       dependencies.logger.info(
         { requestId, method: request.method, path, status: response.statusCode, durationMs },
         "HTTP request completed",
@@ -187,6 +224,30 @@ export function createApiHandler(dependencies: ApiDependencies): ApiHandler {
     }
     return true;
   };
+}
+
+function validMetricsCredential(request: IncomingMessage, expected: string | undefined): boolean {
+  const supplied = bearerCredential(request);
+  if (!expected || !supplied) return false;
+  const actualBytes = Buffer.from(supplied);
+  const expectedBytes = Buffer.from(expected);
+  return actualBytes.length === expectedBytes.length && timingSafeEqual(actualBytes, expectedBytes);
+}
+
+function metricPath(path: string): string {
+  return path.replace(
+    /\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?=\/|$)/gi,
+    "/:id",
+  );
+}
+
+function trustedClientAddress(request: IncomingMessage, config: AppConfig): string {
+  if (config.trustProxy) {
+    const forwarded = request.headers["x-forwarded-for"];
+    const first = (Array.isArray(forwarded) ? forwarded[0] : forwarded)?.split(",")[0]?.trim();
+    if (first) return first.slice(0, 64);
+  }
+  return request.socket.remoteAddress ?? "unknown";
 }
 
 function isRoomRoute(path: string): boolean {
@@ -279,7 +340,7 @@ async function handleRoomRoute(
   config: AppConfig,
 ): Promise<void> {
   const method = request.method ?? "GET";
-  const publicScope = `public:${request.socket.remoteAddress ?? "unknown"}`;
+  const publicScope = `public:${trustedClientAddress(request, config)}`;
   if (method === "POST" && path === "/api/v1/rooms") {
     const key = requireIdempotencyKey(request);
     const body = await validatedBody(request, config.maxJsonBodyBytes, roomMembershipSchema);

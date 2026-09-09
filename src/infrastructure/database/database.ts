@@ -340,6 +340,9 @@ export function createDatabase(config: AppConfig): DatabaseDependencies {
   const poolConfig: PoolConfig = {
     connectionString: config.databaseUrl,
     max: config.databasePoolMax,
+    connectionTimeoutMillis: config.databaseConnectionTimeoutMs,
+    idleTimeoutMillis: config.databaseIdleTimeoutMs,
+    statement_timeout: config.databaseStatementTimeoutMs,
     ssl: config.databaseSsl ? { rejectUnauthorized: true } : undefined,
     application_name: "imposter-game",
   };

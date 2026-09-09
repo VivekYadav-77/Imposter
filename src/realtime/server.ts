@@ -3,6 +3,7 @@ import type { Logger } from "pino";
 import { Server, type Socket } from "socket.io";
 
 import type { AppConfig } from "../infrastructure/configuration/config.js";
+import type { Metrics } from "../infrastructure/observability/metrics.js";
 import { credentialFromSocket, type ParticipantSessionAuthenticator } from "./authentication.js";
 import type {
   ParticipantPrincipal,
@@ -38,12 +39,15 @@ export function attachRealtimeServer(
   logger: Logger,
   authenticator: RealtimeRoomProvider,
   games?: RealtimeGameProvider,
+  metrics?: Metrics,
 ): Server {
   const io = new Server(httpServer, {
     path: "/realtime",
     serveClient: false,
     transports: ["websocket"],
     maxHttpBufferSize: config.maxJsonBodyBytes,
+    pingInterval: config.realtimePingIntervalMs,
+    pingTimeout: config.realtimePingTimeoutMs,
     cors: { origin: config.corsAllowedOrigins, credentials: true },
   });
 
@@ -52,6 +56,7 @@ export function attachRealtimeServer(
       const token = credentialFromSocket(socket);
       const principal = token ? await authenticator.authenticate(token) : null;
       if (!principal) {
+        metrics?.increment("realtime.authentication_failures");
         const error = new Error("Session is invalid.");
         Object.assign(error, { data: { code: "SESSION_INVALID" } });
         next(error);
@@ -61,6 +66,7 @@ export function attachRealtimeServer(
       socketData.principal = principal;
       next();
     } catch (error) {
+      metrics?.increment("realtime.authentication_failures");
       logger.warn({ err: error }, "Realtime authentication failed");
       const safeError = new Error("Session is invalid.");
       Object.assign(safeError, { data: { code: "SESSION_INVALID" } });
@@ -101,6 +107,8 @@ export function attachRealtimeServer(
   };
 
   io.on("connection", (socket) => {
+    metrics?.increment("realtime.connections");
+    metrics?.set("realtime.active_connections", io.engine.clientsCount);
     const socketData = socket.data as Record<string, unknown>;
     const principal = socketData.principal as ParticipantPrincipal;
     void socket.join(`room:${principal.roomId}`);
@@ -139,6 +147,8 @@ export function attachRealtimeServer(
     socket.on("room.resync", () => void emitSnapshot(socket));
     socket.on("game.resync", () => void emitGameSnapshot(socket));
     socket.on("disconnect", () => {
+      metrics?.increment("realtime.disconnects");
+      metrics?.set("realtime.active_connections", Math.max(0, io.engine.clientsCount));
       const remaining =
         io.sockets.adapter.rooms.get(`participant:${principal.participantId}`)?.size ?? 0;
       if (remaining === 0)

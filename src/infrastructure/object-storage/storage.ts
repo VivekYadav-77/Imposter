@@ -45,7 +45,19 @@ export class S3ObjectStorage implements ObjectStorage {
       region: config.evidenceS3Region,
       endpoint: config.evidenceS3Endpoint,
       forcePathStyle: config.evidenceS3ForcePathStyle,
+      maxAttempts: config.evidenceS3MaxAttempts,
     });
+  }
+
+  private async withTimeout<T>(operation: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.config.evidenceS3RequestTimeoutMs);
+    timer.unref();
+    try {
+      return await operation(controller.signal);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   async createUploadCapability(input: {
@@ -75,8 +87,11 @@ export class S3ObjectStorage implements ObjectStorage {
 
   async head(objectKey: string): Promise<StoredObjectMetadata | null> {
     try {
-      const result = await this.client.send(
-        new HeadObjectCommand({ Bucket: this.config.evidenceBucket, Key: objectKey }),
+      const result = await this.withTimeout((abortSignal) =>
+        this.client.send(
+          new HeadObjectCommand({ Bucket: this.config.evidenceBucket, Key: objectKey }),
+          { abortSignal },
+        ),
       );
       return {
         byteSize: result.ContentLength ?? 0,
@@ -92,23 +107,31 @@ export class S3ObjectStorage implements ObjectStorage {
   }
 
   async read(objectKey: string): Promise<Uint8Array> {
-    const result = await this.client.send(
-      new GetObjectCommand({ Bucket: this.config.evidenceBucket, Key: objectKey }),
+    const result = await this.withTimeout((abortSignal) =>
+      this.client.send(
+        new GetObjectCommand({ Bucket: this.config.evidenceBucket, Key: objectKey }),
+        {
+          abortSignal,
+        },
+      ),
     );
     if (!result.Body) throw new Error("STORAGE_OBJECT_EMPTY");
     return result.Body.transformToByteArray();
   }
 
   async replace(objectKey: string, bytes: Uint8Array, contentType: string): Promise<void> {
-    await this.client.send(
-      new PutObjectCommand({
-        Bucket: this.config.evidenceBucket,
-        Key: objectKey,
-        Body: bytes,
-        ContentType: contentType,
-        ContentLength: bytes.byteLength,
-        Metadata: { normalized: "true" },
-      }),
+    await this.withTimeout((abortSignal) =>
+      this.client.send(
+        new PutObjectCommand({
+          Bucket: this.config.evidenceBucket,
+          Key: objectKey,
+          Body: bytes,
+          ContentType: contentType,
+          ContentLength: bytes.byteLength,
+          Metadata: { normalized: "true" },
+        }),
+        { abortSignal },
+      ),
     );
   }
 
@@ -127,8 +150,11 @@ export class S3ObjectStorage implements ObjectStorage {
   }
 
   async delete(objectKey: string): Promise<void> {
-    await this.client.send(
-      new DeleteObjectCommand({ Bucket: this.config.evidenceBucket, Key: objectKey }),
+    await this.withTimeout((abortSignal) =>
+      this.client.send(
+        new DeleteObjectCommand({ Bucket: this.config.evidenceBucket, Key: objectKey }),
+        { abortSignal },
+      ),
     );
   }
 }

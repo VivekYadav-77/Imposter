@@ -53,8 +53,9 @@ export const openApiDocument: OpenAPIObject = {
   openapi: "3.1.0",
   info: {
     title: "Imposter Game API",
-    version: "0.6.0",
-    description: "Versioned HTTP contract for web and native clients.",
+    version: "1.0.0",
+    description:
+      "Frozen v1 HTTP contract for web and native clients. Additive changes remain within /api/v1; breaking changes require /api/v2.",
   },
   servers: [{ url: "/" }],
   paths: {
@@ -1017,6 +1018,10 @@ export const openApiDocument: OpenAPIObject = {
         properties: {
           stateVersion: { type: "integer", minimum: 1 },
           votesCast: { type: "integer", minimum: 0 },
+          meetingId: { type: "string", format: "uuid" },
+          targetParticipantId: { type: ["string", "null"], format: "uuid" },
+          resolved: { type: "boolean" },
+          winner: { type: ["string", "null"], enum: ["crew", "imposters", null] },
         },
       },
       SessionCredential: {

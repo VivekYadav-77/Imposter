@@ -1,6 +1,6 @@
 # API Contract
 
-**Status:** Proposed human-readable contract. Phase 1 will encode approved HTTP schemas in OpenAPI 3.1 and realtime schemas in a versioned catalog.
+**Status:** Frozen HTTP `/api/v1` contract at OpenAPI `1.0.0`. Additive compatibility and deprecation rules are defined in `CLIENT_INTEGRATION.md`; breaking changes require a new versioned surface.
 
 ## 1. Conventions
 

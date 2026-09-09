@@ -7,7 +7,11 @@ exports.up = (pgm) => {
       code: { type: "text", notNull: true },
       status: { type: "text", notNull: true, default: "lobby" },
       host_participant_id: { type: "uuid" },
-      selected_task_pack_id: { type: "uuid", references: "app.task_packs", onDelete: "RESTRICT" },
+      selected_task_pack_id: {
+        type: "uuid",
+        references: { schema: "app", name: "task_packs" },
+        onDelete: "RESTRICT",
+      },
       max_players: { type: "smallint", notNull: true, default: 12 },
       imposter_count: { type: "smallint", notNull: true, default: 1 },
       tasks_per_crew: { type: "smallint", notNull: true, default: 3 },
@@ -54,7 +58,12 @@ exports.up = (pgm) => {
     { schema: "app", name: "participants" },
     {
       id: { type: "uuid", primaryKey: true },
-      room_id: { type: "uuid", notNull: true, references: "app.rooms", onDelete: "CASCADE" },
+      room_id: {
+        type: "uuid",
+        notNull: true,
+        references: { schema: "app", name: "rooms" },
+        onDelete: "CASCADE",
+      },
       nickname: { type: "text", notNull: true },
       normalized_nickname: { type: "text", notNull: true },
       membership_status: { type: "text", notNull: true, default: "joined" },
@@ -85,7 +94,7 @@ exports.up = (pgm) => {
   pgm.addConstraint({ schema: "app", name: "rooms" }, "rooms_host_participant_fk", {
     foreignKeys: {
       columns: "host_participant_id",
-      references: "app.participants(id)",
+      references: pgm.func('"app"."participants" ("id")'),
       onDelete: "SET NULL",
     },
     deferrable: true,
@@ -99,7 +108,7 @@ exports.up = (pgm) => {
       participant_id: {
         type: "uuid",
         notNull: true,
-        references: "app.participants",
+        references: { schema: "app", name: "participants" },
         onDelete: "CASCADE",
       },
       token_hash: { type: "text", notNull: true, unique: true },

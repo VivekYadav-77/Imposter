@@ -1219,6 +1219,7 @@ export class GameService {
         targetParticipantId: input.targetParticipantId,
         votesCast: cast.count,
         resolved: Boolean(resolution),
+        winner: resolution?.winner ?? null,
         stateVersion,
       };
       await this.remember(trx, principal.participantId, key, operation, input, response);

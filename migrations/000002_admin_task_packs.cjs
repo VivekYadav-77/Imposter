@@ -35,7 +35,7 @@ exports.up = (pgm) => {
       admin_user_id: {
         type: "uuid",
         notNull: true,
-        references: "app.admin_users",
+        references: { schema: "app", name: "admin_users" },
         onDelete: "CASCADE",
       },
       token_hash: { type: "text", notNull: true, unique: true },
@@ -66,7 +66,7 @@ exports.up = (pgm) => {
       created_by_admin_id: {
         type: "uuid",
         notNull: true,
-        references: "app.admin_users",
+        references: { schema: "app", name: "admin_users" },
         onDelete: "RESTRICT",
       },
       slug: { type: "text", notNull: true, unique: true },
@@ -115,7 +115,7 @@ exports.up = (pgm) => {
       task_pack_id: {
         type: "uuid",
         notNull: true,
-        references: "app.task_packs",
+        references: { schema: "app", name: "task_packs" },
         onDelete: "CASCADE",
       },
       position: { type: "integer", notNull: true },
@@ -145,7 +145,11 @@ exports.up = (pgm) => {
     { schema: "app", name: "admin_audit_events" },
     {
       id: { type: "uuid", primaryKey: true },
-      admin_user_id: { type: "uuid", references: "app.admin_users", onDelete: "SET NULL" },
+      admin_user_id: {
+        type: "uuid",
+        references: { schema: "app", name: "admin_users" },
+        onDelete: "SET NULL",
+      },
       action: { type: "text", notNull: true },
       target_type: { type: "text" },
       target_id: { type: "uuid" },
@@ -171,7 +175,7 @@ exports.up = (pgm) => {
       admin_user_id: {
         type: "uuid",
         notNull: true,
-        references: "app.admin_users",
+        references: { schema: "app", name: "admin_users" },
         onDelete: "CASCADE",
       },
       key: { type: "text", notNull: true },

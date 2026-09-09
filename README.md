@@ -2,7 +2,7 @@
 
 Foundation repository for a real-life, room-based social deduction game. Players complete physical tasks, submit photo evidence, and use the app for game state, meetings, evidence review, and voting.
 
-Phase 4 adds authoritative game start, secret roles, immutable task snapshots, real and fake assignments, safe player projections, versioned realtime state, and task-progress win checks.
+The backend gameplay loop and production-readiness baseline are complete. HTTP `/api/v1` and realtime schema v1 are frozen for independent web and Android client implementation.
 
 ## Requirements
 
@@ -31,6 +31,7 @@ npm run build
 ```
 
 `TEST_DATABASE_URL` must point to an isolated disposable database for integration tests.
+`migrate:verify` intentionally reverses every current migration and must only target an isolated disposable database, never staging or production.
 
 ## Planning documents
 
@@ -41,10 +42,11 @@ npm run build
 - [Security design](docs/SECURITY.md)
 - [Implementation phases](docs/phases/README.md)
 - [Realtime contract](docs/REALTIME_CONTRACT.md)
-- [Current handoff context](docs/context/PHASE_03_CONTEXT.md)
+- [Current handoff context](docs/context/PHASE_07_CONTEXT.md)
+- [Production operations](docs/PRODUCTION_OPERATIONS.md)
 
 The original concept is preserved in [imposter-game-agent-prompt.md](imposter-game-agent-prompt.md).
 
 ## Current boundary
 
-Rooms remain in the lobby in Phase 3: there is intentionally no start-game route yet. Participant and administrator credentials are separate cookie/bearer realms. Games, roles, tasks, evidence, and meetings are introduced by later phases.
+The launch topology is deliberately one persistent application process behind a TLS/WebSocket proxy, backed by managed PostgreSQL and private S3-compatible storage. Multiple replicas are unsupported until shared realtime coordination is introduced. Provider account setup, public domain approval, privacy/legal approval, and a witnessed restore drill remain launch-owner actions rather than repository code.

@@ -2,15 +2,19 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import type { AppConfig } from "../infrastructure/configuration/config.js";
 
-export function applySecurityHeaders(response: ServerResponse): void {
+export function applySecurityHeaders(response: ServerResponse, config: AppConfig): void {
+  const imageSources = ["'self'", "blob:", ...config.cspImageSources].join(" ");
   response.setHeader(
     "Content-Security-Policy",
-    "default-src 'self'; frame-ancestors 'none'; base-uri 'self'",
+    `default-src 'self'; img-src ${imageSources}; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`,
   );
   response.setHeader("Cross-Origin-Opener-Policy", "same-origin");
   response.setHeader("Referrer-Policy", "no-referrer");
   response.setHeader("X-Content-Type-Options", "nosniff");
   response.setHeader("X-Frame-Options", "DENY");
+  response.setHeader("Permissions-Policy", "camera=(self), microphone=(), geolocation=()");
+  if (config.appEnv === "production")
+    response.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
 }
 
 export function applyCors(
@@ -25,7 +29,7 @@ export function applyCors(
   response.setHeader("Access-Control-Allow-Credentials", "true");
   response.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, Idempotency-Key, If-Match, If-Match-State-Version, X-Request-ID",
+    "Authorization, Content-Type, Idempotency-Key, If-Match, If-Match-State-Version, X-Request-ID, X-Session-Transport",
   );
   response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
   response.setHeader("Vary", "Origin");

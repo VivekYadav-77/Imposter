@@ -1,5 +1,7 @@
 # Realtime contract v1
 
+This contract is frozen at schema version 1. The machine-readable catalog is `contracts/realtime-v1.schema.json`, with examples in `contracts/fixtures/realtime-v1.json`. The additive/backward-compatibility policy is documented in `CLIENT_INTEGRATION.md`.
+
 Socket.IO is served at `/realtime` with WebSocket transport only. Authentication uses `auth.token`, an `Authorization: Bearer` header, or the `__Host-participant_session` cookie; credentials are never accepted in a query string. A valid socket is subscribed only to its authenticated room, participant, and session channels.
 
 Every typed server message contains `schemaVersion: 1`, `type`, `occurredAt`, and (when room-scoped) `roomId`.

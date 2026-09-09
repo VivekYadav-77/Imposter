@@ -3,7 +3,11 @@ import next from "next";
 
 import { createApiHandler } from "../api/router.js";
 import { loadConfig } from "../infrastructure/configuration/config.js";
-import { closeDatabase, createDatabase } from "../infrastructure/database/database.js";
+import {
+  checkDatabaseReadiness,
+  closeDatabase,
+  createDatabase,
+} from "../infrastructure/database/database.js";
 import { createLogger } from "../infrastructure/observability/logger.js";
 import { InMemoryMetrics } from "../infrastructure/observability/metrics.js";
 import { PostgresAdminAuthRepository } from "../modules/admin-auth/repository.js";
@@ -24,6 +28,7 @@ async function main(): Promise<void> {
   const logger = createLogger(config);
   const database = createDatabase(config);
   const metrics = new InMemoryMetrics();
+  let acceptingTraffic = true;
   const nextApp = next({
     dev: config.appEnv === "development",
     hostname: config.host,
@@ -68,6 +73,10 @@ async function main(): Promise<void> {
     rooms,
     games,
     evidence,
+    readinessCheck: async () => {
+      if (!acceptingTraffic) throw new Error("Application is draining");
+      await checkDatabaseReadiness(database.db, config.databaseReadyTimeoutMs);
+    },
     authorizePublishedPackRead: async (request) => {
       const header = request.headers.authorization;
       const bearer = header?.startsWith("Bearer ") ? header.slice(7).trim() : null;
@@ -93,10 +102,23 @@ async function main(): Promise<void> {
         }
       });
   });
-  const realtime = attachRealtimeServer(httpServer, config, logger, rooms, games);
+  httpServer.requestTimeout = config.httpRequestTimeoutMs;
+  httpServer.headersTimeout = config.httpHeadersTimeoutMs;
+  httpServer.keepAliveTimeout = config.httpKeepAliveTimeoutMs;
+  const realtime = attachRealtimeServer(httpServer, config, logger, rooms, games, metrics);
+  const updateRuntimeMetrics = () => {
+    metrics.set("database.pool.total", database.pool.totalCount);
+    metrics.set("database.pool.idle", database.pool.idleCount);
+    metrics.set("database.pool.waiting", database.pool.waitingCount);
+    metrics.set("process.uptime_seconds", process.uptime());
+  };
+  const metricsWorker = setInterval(updateRuntimeMetrics, 5000);
+  metricsWorker.unref();
+  updateRuntimeMetrics();
   const maintenance = setInterval(() => {
     void rooms
       .runMaintenance()
+      .then(() => metrics.increment("worker.room_maintenance.success"))
       .catch((error: unknown) => logger.error({ err: error }, "Room maintenance failed"));
   }, config.roomMaintenanceIntervalMs);
   maintenance.unref();
@@ -105,13 +127,25 @@ async function main(): Promise<void> {
     void evidence
       .scheduleTerminalRetention()
       .then(() => evidence.runNextJob(evidenceWorkerId))
-      .catch((error: unknown) => logger.error({ err: error }, "Evidence worker failed"));
+      .then((worked) => {
+        metrics.increment("worker.evidence.tick", { outcome: worked ? "processed" : "idle" });
+      })
+      .catch((error: unknown) => {
+        metrics.increment("worker.evidence.failures");
+        logger.error({ err: error }, "Evidence worker failed");
+      });
   }, config.evidenceWorkerIntervalMs);
   evidenceWorker.unref();
   const meetingWorker = setInterval(() => {
     void games
       .runDueTransitions()
-      .catch((error: unknown) => logger.error({ err: error }, "Meeting deadline worker failed"));
+      .then((count) => {
+        metrics.observe("worker.deadline.transitions", count);
+      })
+      .catch((error: unknown) => {
+        metrics.increment("worker.deadline.failures");
+        logger.error({ err: error }, "Meeting deadline worker failed");
+      });
   }, 1000);
   meetingWorker.unref();
   void rooms
@@ -122,6 +156,7 @@ async function main(): Promise<void> {
       clearInterval(maintenance);
       clearInterval(evidenceWorker);
       clearInterval(meetingWorker);
+      clearInterval(metricsWorker);
       return Promise.resolve();
     },
     () => new Promise<void>((resolve) => realtime.close(() => resolve())),
@@ -134,6 +169,7 @@ async function main(): Promise<void> {
 
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
     process.once(signal, () => {
+      acceptingTraffic = false;
       void shutdown
         .shutdown(signal)
         .then(() => process.exit(0))

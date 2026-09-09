@@ -34,6 +34,10 @@ describeWithDatabase("task-pack lifecycle persistence", () => {
   });
 
   afterAll(async () => {
+    await dependencies.db
+      .deleteFrom("app.task_packs")
+      .where("created_by_admin_id", "=", adminId)
+      .execute();
     await dependencies.db.deleteFrom("app.admin_users").where("id", "=", adminId).execute();
     await closeDatabase(dependencies);
   });

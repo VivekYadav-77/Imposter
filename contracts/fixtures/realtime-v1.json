@@ -1,0 +1,24 @@
+[
+  {
+    "schemaVersion": 1,
+    "type": "server.ready",
+    "occurredAt": "2026-09-21T00:00:00.000Z"
+  },
+  {
+    "schemaVersion": 1,
+    "type": "presence.changed",
+    "roomId": "00000000-0000-4000-8000-000000000001",
+    "occurredAt": "2026-09-21T00:00:00.000Z",
+    "data": {
+      "participantId": "00000000-0000-4000-8000-000000000002",
+      "presence": "connected"
+    }
+  },
+  {
+    "schemaVersion": 1,
+    "type": "server.resync_required",
+    "roomId": "00000000-0000-4000-8000-000000000001",
+    "occurredAt": "2026-09-21T00:00:00.000Z",
+    "data": { "reason": "snapshot_failed" }
+  }
+]

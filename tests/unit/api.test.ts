@@ -26,6 +26,7 @@ function testServer(readinessCheck: () => Promise<void> = () => Promise.resolve(
     APP_ENV: "test",
     DATABASE_URL: "postgresql://test:test@localhost:5432/test",
     EXPOSE_API_DOCS: "true",
+    METRICS_BEARER_TOKEN: "test-metrics-token-at-least-32-characters",
   });
   const handler = createApiHandler({
     config,
@@ -97,6 +98,27 @@ describe("HTTP foundation", () => {
     const body = JSON.parse(response.text) as { error: { code: string } };
     expect(response.status).toBe(404);
     expect(body.error.code).toBe("NOT_FOUND");
+  });
+
+  it("protects Prometheus metrics and exposes no API resource identifiers", async () => {
+    const agent = testServer();
+    await agent.get("/api/v1").expect(200);
+    await agent.get("/internal/metrics").expect(404);
+    const response = await agent
+      .get("/internal/metrics")
+      .set("Authorization", "Bearer test-metrics-token-at-least-32-characters")
+      .expect(200);
+    expect(response.headers["content-type"]).toContain("text/plain");
+    expect(response.text).toContain("imposter_game_http_requests_total");
+  });
+
+  it("allows documented bearer and transport headers in CORS preflight", async () => {
+    const response = await phaseTwoServer({})
+      .options("/api/v1/rooms")
+      .set("Origin", "https://game.example")
+      .expect(204);
+    expect(response.headers["access-control-allow-headers"]).toContain("Authorization");
+    expect(response.headers["access-control-allow-headers"]).toContain("X-Session-Transport");
   });
 });
 

@@ -7,13 +7,13 @@ exports.up = (pgm) => {
       assignment_id: {
         type: "uuid",
         notNull: true,
-        references: "app.task_assignments",
+        references: { schema: "app", name: "task_assignments" },
         onDelete: "CASCADE",
       },
       participant_id: {
         type: "uuid",
         notNull: true,
-        references: "app.participants",
+        references: { schema: "app", name: "participants" },
         onDelete: "CASCADE",
       },
       object_key: { type: "text", notNull: true, unique: true },
@@ -48,13 +48,13 @@ exports.up = (pgm) => {
       assignment_id: {
         type: "uuid",
         notNull: true,
-        references: "app.task_assignments",
+        references: { schema: "app", name: "task_assignments" },
         onDelete: "CASCADE",
       },
       uploader_participant_id: {
         type: "uuid",
         notNull: true,
-        references: "app.participants",
+        references: { schema: "app", name: "participants" },
         onDelete: "CASCADE",
       },
       object_key: { type: "text", notNull: true, unique: true },
@@ -92,13 +92,13 @@ exports.up = (pgm) => {
       submission_id: {
         type: "uuid",
         notNull: true,
-        references: "app.task_submissions",
+        references: { schema: "app", name: "task_submissions" },
         onDelete: "CASCADE",
       },
       flagger_participant_id: {
         type: "uuid",
         notNull: true,
-        references: "app.participants",
+        references: { schema: "app", name: "participants" },
         onDelete: "CASCADE",
       },
       reason: { type: "text" },

@@ -13,14 +13,26 @@ const configSchema = z
     DATABASE_URL: z.string().url().startsWith("postgresql://"),
     DATABASE_SSL: booleanString,
     DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(50).default(10),
+    DATABASE_CONNECTION_TIMEOUT_MS: z.coerce.number().int().min(100).max(30000).default(5000),
+    DATABASE_IDLE_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120000).default(30000),
+    DATABASE_STATEMENT_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(15000),
     DATABASE_READY_TIMEOUT_MS: z.coerce.number().int().min(100).max(10000).default(1500),
+    SERVICE_VERSION: z.string().trim().min(1).max(128).default("development"),
     LOG_LEVEL: z
       .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
       .default("info"),
     CORS_ALLOWED_ORIGINS: z.string().default(""),
+    CSP_IMAGE_SOURCES: z.string().default(""),
     MAX_JSON_BODY_BYTES: z.coerce.number().int().min(1024).max(1048576).default(65536),
     EXPOSE_API_DOCS: booleanString,
     SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().min(1000).max(30000).default(10000),
+    HTTP_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120000).default(30000),
+    HTTP_HEADERS_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120000).default(15000),
+    HTTP_KEEP_ALIVE_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120000).default(5000),
+    HTTP_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().min(1).max(3600).default(60),
+    HTTP_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().min(10).max(10000).default(180),
+    TRUST_PROXY: booleanString,
+    METRICS_BEARER_TOKEN: z.string().min(32).optional(),
     ADMIN_SESSION_TOKEN_PEPPER: z.string().min(32).default("development-only-admin-token-pepper"),
     ADMIN_SESSION_TTL_SECONDS: z.coerce.number().int().min(300).max(86400).default(28800),
     ADMIN_LOGIN_WINDOW_SECONDS: z.coerce.number().int().min(60).max(3600).default(900),
@@ -51,6 +63,76 @@ const configSchema = z
     EVIDENCE_RETENTION_SECONDS: z.coerce.number().int().min(3600).max(86400).default(86400),
     EVIDENCE_ORPHAN_TTL_SECONDS: z.coerce.number().int().min(300).max(86400).default(3600),
     EVIDENCE_WORKER_INTERVAL_MS: z.coerce.number().int().min(1000).max(60000).default(5000),
+    EVIDENCE_S3_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(5).default(3),
+    EVIDENCE_S3_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(500).max(30000).default(5000),
+    REALTIME_PING_INTERVAL_MS: z.coerce.number().int().min(5000).max(60000).default(25000),
+    REALTIME_PING_TIMEOUT_MS: z.coerce.number().int().min(5000).max(60000).default(20000),
+  })
+  .superRefine((values, context) => {
+    if (values.HTTP_HEADERS_TIMEOUT_MS > values.HTTP_REQUEST_TIMEOUT_MS) {
+      context.addIssue({
+        code: "custom",
+        path: ["HTTP_HEADERS_TIMEOUT_MS"],
+        message: "must not exceed HTTP_REQUEST_TIMEOUT_MS",
+      });
+    }
+    if (values.APP_ENV !== "production") return;
+
+    const productionIssues: Array<[string, boolean]> = [
+      [
+        "ADMIN_SESSION_TOKEN_PEPPER",
+        values.ADMIN_SESSION_TOKEN_PEPPER.includes("development-only"),
+      ],
+      [
+        "PARTICIPANT_SESSION_TOKEN_PEPPER",
+        values.PARTICIPANT_SESSION_TOKEN_PEPPER.includes("development-only"),
+      ],
+      ["METRICS_BEARER_TOKEN", !values.METRICS_BEARER_TOKEN],
+      ["SERVICE_VERSION", values.SERVICE_VERSION === "development"],
+      ["CORS_ALLOWED_ORIGINS", values.CORS_ALLOWED_ORIGINS.trim().length === 0],
+      ["CSP_IMAGE_SOURCES", values.CSP_IMAGE_SOURCES.trim().length === 0],
+      ["TRUST_PROXY", !values.TRUST_PROXY],
+    ];
+    for (const [path, invalid] of productionIssues) {
+      if (invalid)
+        context.addIssue({ code: "custom", path: [path], message: "must be set for production" });
+    }
+    if (values.ADMIN_SESSION_TOKEN_PEPPER === values.PARTICIPANT_SESSION_TOKEN_PEPPER) {
+      context.addIssue({
+        code: "custom",
+        path: ["PARTICIPANT_SESSION_TOKEN_PEPPER"],
+        message: "must be distinct from ADMIN_SESSION_TOKEN_PEPPER",
+      });
+    }
+    for (const origin of values.CORS_ALLOWED_ORIGINS.split(",").filter(Boolean)) {
+      try {
+        if (new URL(origin.trim()).protocol !== "https:") throw new Error("not HTTPS");
+      } catch {
+        context.addIssue({
+          code: "custom",
+          path: ["CORS_ALLOWED_ORIGINS"],
+          message: "production origins must be absolute HTTPS URLs",
+        });
+      }
+    }
+    for (const source of values.CSP_IMAGE_SOURCES.split(",").filter(Boolean)) {
+      try {
+        if (new URL(source.trim()).protocol !== "https:") throw new Error("not HTTPS");
+      } catch {
+        context.addIssue({
+          code: "custom",
+          path: ["CSP_IMAGE_SOURCES"],
+          message: "production image sources must be absolute HTTPS origins",
+        });
+      }
+    }
+    if (values.EVIDENCE_S3_ENDPOINT && new URL(values.EVIDENCE_S3_ENDPOINT).protocol !== "https:") {
+      context.addIssue({
+        code: "custom",
+        path: ["EVIDENCE_S3_ENDPOINT"],
+        message: "production storage endpoints must use HTTPS",
+      });
+    }
   })
   .transform((values) => ({
     appEnv: values.APP_ENV,
@@ -59,14 +141,28 @@ const configSchema = z
     databaseUrl: values.DATABASE_URL,
     databaseSsl: values.DATABASE_SSL,
     databasePoolMax: values.DATABASE_POOL_MAX,
+    databaseConnectionTimeoutMs: values.DATABASE_CONNECTION_TIMEOUT_MS,
+    databaseIdleTimeoutMs: values.DATABASE_IDLE_TIMEOUT_MS,
+    databaseStatementTimeoutMs: values.DATABASE_STATEMENT_TIMEOUT_MS,
     databaseReadyTimeoutMs: values.DATABASE_READY_TIMEOUT_MS,
+    serviceVersion: values.SERVICE_VERSION,
     logLevel: values.LOG_LEVEL,
     corsAllowedOrigins: values.CORS_ALLOWED_ORIGINS.split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean),
+    cspImageSources: values.CSP_IMAGE_SOURCES.split(",")
       .map((origin) => origin.trim())
       .filter(Boolean),
     maxJsonBodyBytes: values.MAX_JSON_BODY_BYTES,
     exposeApiDocs: values.EXPOSE_API_DOCS,
     shutdownTimeoutMs: values.SHUTDOWN_TIMEOUT_MS,
+    httpRequestTimeoutMs: values.HTTP_REQUEST_TIMEOUT_MS,
+    httpHeadersTimeoutMs: values.HTTP_HEADERS_TIMEOUT_MS,
+    httpKeepAliveTimeoutMs: values.HTTP_KEEP_ALIVE_TIMEOUT_MS,
+    httpRateLimitWindowSeconds: values.HTTP_RATE_LIMIT_WINDOW_SECONDS,
+    httpRateLimitMaxRequests: values.HTTP_RATE_LIMIT_MAX_REQUESTS,
+    trustProxy: values.TRUST_PROXY,
+    metricsBearerToken: values.METRICS_BEARER_TOKEN,
     adminSessionTokenPepper: values.ADMIN_SESSION_TOKEN_PEPPER,
     adminSessionTtlSeconds: values.ADMIN_SESSION_TTL_SECONDS,
     adminLoginWindowSeconds: values.ADMIN_LOGIN_WINDOW_SECONDS,
@@ -89,6 +185,10 @@ const configSchema = z
     evidenceRetentionSeconds: values.EVIDENCE_RETENTION_SECONDS,
     evidenceOrphanTtlSeconds: values.EVIDENCE_ORPHAN_TTL_SECONDS,
     evidenceWorkerIntervalMs: values.EVIDENCE_WORKER_INTERVAL_MS,
+    evidenceS3MaxAttempts: values.EVIDENCE_S3_MAX_ATTEMPTS,
+    evidenceS3RequestTimeoutMs: values.EVIDENCE_S3_REQUEST_TIMEOUT_MS,
+    realtimePingIntervalMs: values.REALTIME_PING_INTERVAL_MS,
+    realtimePingTimeoutMs: values.REALTIME_PING_TIMEOUT_MS,
   }));
 
 export type AppConfig = z.output<typeof configSchema>;
