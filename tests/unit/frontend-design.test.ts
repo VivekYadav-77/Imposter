@@ -1,0 +1,33 @@
+import { readFile } from "node:fs/promises";
+import { describe, expect, it } from "vitest";
+
+const luminance = (hex: string) => {
+  const channels = hex
+    .slice(1)
+    .match(/.{2}/g)!
+    .map((part) => Number.parseInt(part, 16) / 255)
+    .map((value) => (value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4));
+  return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+};
+
+const contrast = (a: string, b: string) => {
+  const values = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (values[0] + 0.05) / (values[1] + 0.05);
+};
+
+describe("frontend design foundations", () => {
+  it("keeps approved normal-text pairs above WCAG AA", () => {
+    expect(contrast("#ede7d8", "#14130f")).toBeGreaterThanOrEqual(4.5);
+    expect(contrast("#ede7d8", "#4a6878")).toBeGreaterThanOrEqual(4.5);
+    expect(contrast("#14130f", "#c9a227")).toBeGreaterThanOrEqual(4.5);
+    expect(contrast("#ede7d8", "#a63f2b")).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("ships focus, reduced-motion, safe-area, and small-phone rules", async () => {
+    const css = await readFile("app/globals.css", "utf8");
+    expect(css).toContain(":focus-visible");
+    expect(css).toContain("prefers-reduced-motion");
+    expect(css).toContain("safe-area-inset-bottom");
+    expect(css).toContain("max-width: 360px");
+  });
+});

@@ -1,0 +1,22 @@
+import type { Metadata } from "next";
+import { PlayForm } from "@/client/components/play-form";
+import { SiteHeader } from "@/client/components/site-shell";
+export const metadata: Metadata = {
+  title: "Create or join",
+  robots: { index: false, follow: false },
+};
+export default function Play() {
+  return (
+    <div className="funnel-page">
+      <SiteHeader minimal />
+      <main id="main-content">
+        <header>
+          <p className="eyebrow">Enter the room</p>
+          <h1>How are you playing?</h1>
+          <p>It takes one code and no account.</p>
+        </header>
+        <PlayForm />
+      </main>
+    </div>
+  );
+}
