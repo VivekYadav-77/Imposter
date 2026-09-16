@@ -1,10 +1,18 @@
 export type PackStatus = "draft" | "published" | "archived";
+export type TaskDifficulty = "easy" | "medium" | "hard";
+
+export interface MapRoleDto {
+  name: string;
+  specialization: string;
+  ability: string;
+}
 
 export interface PackItemDto {
   id: string;
   position: number;
   description: string;
   isActive: boolean;
+  difficulty: TaskDifficulty;
 }
 
 export interface AdminPackDto {
@@ -18,6 +26,7 @@ export interface AdminPackDto {
   createdAt: string;
   updatedAt: string;
   items: PackItemDto[];
+  roles: MapRoleDto[];
 }
 
 export interface AdminPackSummaryDto extends Omit<AdminPackDto, "items"> {
@@ -31,8 +40,9 @@ export interface PublicPackSummaryDto {
   description: string | null;
   activeTaskCount: number;
   revision: number;
+  roles: MapRoleDto[];
 }
 
 export interface PublicPackDetailDto extends PublicPackSummaryDto {
-  items: Array<{ position: number; description: string }>;
+  items: Array<{ position: number; description: string; difficulty: TaskDifficulty }>;
 }

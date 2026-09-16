@@ -7,7 +7,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <Link href="/">
           <Brand compact />
         </Link>
-        <span>ADMINISTRATION</span>
+        <nav aria-label="Admin navigation">
+          <Link href="/admin/task-packs">Dashboard</Link>
+          <Link href="/admin/task-packs/new">New map</Link>
+        </nav>
       </header>
       <main id="main-content" className="admin-content">
         {children}

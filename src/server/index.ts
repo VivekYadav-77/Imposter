@@ -1,7 +1,10 @@
 import { createServer } from "node:http";
+import { randomBytes } from "node:crypto";
+import { loadEnvFile } from "node:process";
 import next from "next";
 
 import { createApiHandler } from "../api/router.js";
+import { contentSecurityPolicy } from "../api/security-headers.js";
 import { loadConfig } from "../infrastructure/configuration/config.js";
 import {
   checkDatabaseReadiness,
@@ -22,6 +25,12 @@ import { attachRealtimeServer } from "../realtime/server.js";
 import { PARTICIPANT_COOKIE_NAME, readCookie } from "../shared/security/cookies.js";
 import { ApplicationError } from "../shared/errors/application-error.js";
 import { ShutdownManager } from "./shutdown.js";
+
+try {
+  loadEnvFile();
+} catch (error) {
+  if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+}
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -90,6 +99,9 @@ async function main(): Promise<void> {
     },
   });
   const httpServer = createServer((request, response) => {
+    const nonce = randomBytes(16).toString("base64");
+    request.headers["x-nonce"] = nonce;
+    request.headers["content-security-policy"] = contentSecurityPolicy(config, nonce);
     void apiHandler(request, response)
       .then((handled) => {
         if (!handled) return nextHandler(request, response);

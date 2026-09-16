@@ -190,7 +190,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RoomMembershipInput"
+                "$ref": "#/components/schemas/RoomCreationInput"
               }
             }
           }
@@ -2965,6 +2965,32 @@
           }
         }
       },
+      "RoomCreationInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "nickname"
+        ],
+        "properties": {
+          "nickname": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 24
+          },
+          "minPlayers": {
+            "type": "integer",
+            "minimum": 3,
+            "maximum": 15,
+            "default": 3
+          },
+          "maxPlayers": {
+            "type": "integer",
+            "minimum": 3,
+            "maximum": 15,
+            "default": 12
+          }
+        }
+      },
       "RoomSettingsInput": {
         "type": "object",
         "additionalProperties": false,
@@ -2982,20 +3008,43 @@
             "minimum": 300,
             "maximum": 3600
           },
-          "discussionSeconds": {
+          "imposterCount": {
             "type": "integer",
-            "minimum": 30,
-            "maximum": 300
+            "minimum": 1,
+            "maximum": 7
           },
-          "reviewSeconds": {
-            "type": "integer",
-            "minimum": 30,
-            "maximum": 180
+          "taskCounts": {
+            "type": "object",
+            "required": [
+              "easy",
+              "medium",
+              "hard"
+            ],
+            "properties": {
+              "easy": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 15
+              },
+              "medium": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 15
+              },
+              "hard": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 15
+              }
+            }
           },
-          "votingSeconds": {
-            "type": "integer",
-            "minimum": 30,
-            "maximum": 180
+          "roleCounts": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 15
+            }
           }
         }
       },
@@ -3034,6 +3083,7 @@
           "id",
           "code",
           "status",
+          "minPlayers",
           "maxPlayers",
           "settings",
           "participants",
@@ -3059,18 +3109,25 @@
               "expired"
             ]
           },
+          "minPlayers": {
+            "type": "integer",
+            "minimum": 3,
+            "maximum": 15
+          },
           "maxPlayers": {
             "type": "integer",
-            "const": 12
+            "minimum": 3,
+            "maximum": 15
           },
           "settings": {
             "type": "object",
             "required": [
               "selectedTaskPack",
               "taskPhaseSeconds",
-              "discussionSeconds",
-              "reviewSeconds",
-              "votingSeconds"
+              "imposterCount",
+              "allowedImposterCounts",
+              "taskCounts",
+              "roleCounts"
             ],
             "properties": {
               "selectedTaskPack": {
@@ -3083,7 +3140,8 @@
                     "required": [
                       "id",
                       "name",
-                      "revision"
+                      "revision",
+                      "roles"
                     ],
                     "properties": {
                       "id": {
@@ -3095,6 +3153,12 @@
                       },
                       "revision": {
                         "type": "integer"
+                      },
+                      "roles": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/components/schemas/MapRole"
+                        }
                       }
                     }
                   }
@@ -3103,14 +3167,26 @@
               "taskPhaseSeconds": {
                 "type": "integer"
               },
-              "discussionSeconds": {
+              "imposterCount": {
                 "type": "integer"
               },
-              "reviewSeconds": {
-                "type": "integer"
+              "allowedImposterCounts": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                }
               },
-              "votingSeconds": {
-                "type": "integer"
+              "taskCounts": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "integer"
+                }
+              },
+              "roleCounts": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "integer"
+                }
               }
             }
           },
@@ -3508,7 +3584,8 @@
               "participantId",
               "role",
               "lifeStatus",
-              "capabilities"
+              "capabilities",
+              "crewRole"
             ],
             "properties": {
               "participantId": {
@@ -3535,6 +3612,16 @@
                 "items": {
                   "type": "string"
                 }
+              },
+              "crewRole": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/MapRole"
+                  }
+                ]
               }
             }
           },
@@ -3547,7 +3634,8 @@
                 "id",
                 "description",
                 "status",
-                "completedAt"
+                "completedAt",
+                "difficulty"
               ],
               "properties": {
                 "id": {
@@ -3570,6 +3658,14 @@
                     "null"
                   ],
                   "format": "date-time"
+                },
+                "difficulty": {
+                  "type": "string",
+                  "enum": [
+                    "easy",
+                    "medium",
+                    "hard"
+                  ]
                 }
               }
             }
@@ -3878,6 +3974,41 @@
           "isActive": {
             "type": "boolean",
             "default": true
+          },
+          "difficulty": {
+            "type": "string",
+            "enum": [
+              "easy",
+              "medium",
+              "hard"
+            ],
+            "default": "medium"
+          }
+        }
+      },
+      "MapRole": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "specialization",
+          "ability"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50
+          },
+          "specialization": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "ability": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
           }
         }
       },
@@ -3943,6 +4074,13 @@
                 }
               ]
             }
+          },
+          "roles": {
+            "type": "array",
+            "maxItems": 12,
+            "items": {
+              "$ref": "#/components/schemas/MapRole"
+            }
           }
         }
       },
@@ -3997,6 +4135,13 @@
                 }
               ]
             }
+          },
+          "roles": {
+            "type": "array",
+            "maxItems": 12,
+            "items": {
+              "$ref": "#/components/schemas/MapRole"
+            }
           }
         }
       },
@@ -4008,7 +4153,8 @@
           "name",
           "description",
           "activeTaskCount",
-          "revision"
+          "revision",
+          "roles"
         ],
         "properties": {
           "id": {
@@ -4029,6 +4175,12 @@
           },
           "revision": {
             "type": "integer"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapRole"
+            }
           }
         }
       },
@@ -4050,7 +4202,8 @@
                   "additionalProperties": false,
                   "required": [
                     "position",
-                    "description"
+                    "description",
+                    "difficulty"
                   ],
                   "properties": {
                     "position": {
@@ -4058,6 +4211,14 @@
                     },
                     "description": {
                       "type": "string"
+                    },
+                    "difficulty": {
+                      "type": "string",
+                      "enum": [
+                        "easy",
+                        "medium",
+                        "hard"
+                      ]
                     }
                   }
                 }
@@ -4079,7 +4240,8 @@
           "createdAt",
           "updatedAt",
           "itemCount",
-          "activeItemCount"
+          "activeItemCount",
+          "roles"
         ],
         "properties": {
           "id": {
@@ -4129,6 +4291,12 @@
           },
           "activeItemCount": {
             "type": "integer"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapRole"
+            }
           }
         }
       },
@@ -4144,7 +4312,8 @@
           "publishedAt",
           "createdAt",
           "updatedAt",
-          "items"
+          "items",
+          "roles"
         ],
         "properties": {
           "id": {
@@ -4188,6 +4357,12 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapRole"
+            }
           },
           "items": {
             "type": "array",

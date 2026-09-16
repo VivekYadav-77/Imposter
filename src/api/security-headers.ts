@@ -2,12 +2,27 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 import type { AppConfig } from "../infrastructure/configuration/config.js";
 
-export function applySecurityHeaders(response: ServerResponse, config: AppConfig): void {
+export function contentSecurityPolicy(config: AppConfig, nonce?: string): string {
   const imageSources = ["'self'", "blob:", ...config.cspImageSources].join(" ");
-  response.setHeader(
-    "Content-Security-Policy",
-    `default-src 'self'; img-src ${imageSources}; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`,
-  );
+  const scriptSources = nonce
+    ? [
+        "'self'",
+        `'nonce-${nonce}'`,
+        "'strict-dynamic'",
+        ...(config.appEnv === "development" ? ["'unsafe-eval'"] : []),
+      ]
+    : ["'self'"];
+  return `default-src 'self'; script-src ${scriptSources.join(" ")}; style-src 'self' 'unsafe-inline'; img-src ${imageSources}; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`;
+}
+
+export function applySecurityHeaders(
+  request: IncomingMessage,
+  response: ServerResponse,
+  config: AppConfig,
+): void {
+  const nonceHeader = request.headers["x-nonce"];
+  const nonce = typeof nonceHeader === "string" ? nonceHeader : undefined;
+  response.setHeader("Content-Security-Policy", contentSecurityPolicy(config, nonce));
   response.setHeader("Cross-Origin-Opener-Policy", "same-origin");
   response.setHeader("Referrer-Policy", "no-referrer");
   response.setHeader("X-Content-Type-Options", "nosniff");

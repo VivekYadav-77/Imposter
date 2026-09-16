@@ -5,6 +5,8 @@ import {
   capabilitiesFor,
   determineWinner,
   playerBand,
+  maximumImposterCount,
+  recommendedImposterCount,
   resolveEjection,
   resolveReview,
 } from "../../src/modules/games/domain.js";
@@ -29,6 +31,15 @@ describe("game domain policies", () => {
       expect(playerBand(count)).toEqual({ imposters: 2, tasksPerPlayer: 4 });
     expect(() => playerBand(3)).toThrow(RangeError);
     expect(() => playerBand(13)).toThrow(RangeError);
+  });
+
+  it("offers balanced impostor counts for configurable 3-15 player rooms", () => {
+    expect(maximumImposterCount(3)).toBe(1);
+    expect(maximumImposterCount(6)).toBe(2);
+    expect(maximumImposterCount(15)).toBe(7);
+    expect(recommendedImposterCount(6)).toBe(1);
+    expect(recommendedImposterCount(7)).toBe(2);
+    expect(recommendedImposterCount(11)).toBe(3);
   });
 
   it("enforces the state graph", () => {

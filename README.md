@@ -20,6 +20,20 @@ The backend gameplay loop and production-readiness baseline are complete. HTTP `
 6. Run `npm run dev`.
 7. Check `GET http://127.0.0.1:3000/health/live` and `/health/ready`.
 
+## Manual testing data
+
+In a development environment, run `npm run seed:demo` to create six representative maps and a
+local administrator. The command is repeatable and resets its own demo records so the same scenarios
+can be tested again.
+
+- Admin URL: `http://127.0.0.1:3000/admin/login`
+- Email: `admin@imposter.local`
+- Password: `DemoAdmin123!`
+
+Set `DEMO_ADMIN_EMAIL` and `DEMO_ADMIN_PASSWORD` before running the command to use different local
+credentials. The demo seed is blocked outside development unless `ALLOW_DEMO_SEED=true` is explicitly
+provided.
+
 The application deliberately fails startup when required configuration is absent. Production API documentation is disabled unless `EXPOSE_API_DOCS=true` is explicitly set.
 
 ## Verification

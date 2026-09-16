@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { parseTaskCsv, sampleTaskCsv } from "../admin/csv";
 import { adminApi, ApiError, errorMessage } from "../api/client";
 import type { AdminPack, AdminPackSummary, PackStatus } from "../api/types";
 import {
@@ -14,7 +15,9 @@ import {
   Field,
   SkeletonList,
   TextArea,
+  Toast,
 } from "./ui";
+import type { MapRole, TaskDifficulty } from "../api/types";
 
 export function AdminLogin() {
   const router = useRouter();
@@ -39,7 +42,7 @@ export function AdminLogin() {
   return (
     <form className="admin-login card" onSubmit={(event) => void submit(event)}>
       <p className="eyebrow">Restricted access</p>
-      <h1>Task-pack administration</h1>
+      <h1>Map administration</h1>
       <p className="muted">Sign in with a pre-provisioned administrator account.</p>
       {error && <Banner tone="danger">{error}</Banner>}
       <Field
@@ -97,26 +100,58 @@ export function AdminList() {
     await adminApi.logout();
     router.replace("/admin/login");
   };
+  const totals = useMemo(
+    () => ({
+      all: packs.length,
+      published: packs.filter((pack) => pack.status === "published").length,
+      drafts: packs.filter((pack) => pack.status === "draft").length,
+      activeTasks: packs.reduce((total, pack) => total + pack.activeItemCount, 0),
+    }),
+    [packs],
+  );
   return (
     <>
       <div className="admin-toolbar">
         <div>
-          <p className="eyebrow">Operations</p>
-          <h1>Task packs</h1>
+          <p className="eyebrow">Admin dashboard</p>
+          <h1>Game maps</h1>
+          <p className="muted">Manage locations, task lists, and what players can select.</p>
         </div>
         <div>
           <Button variant="secondary" onClick={() => void logout()}>
             Log out
           </Button>
           <Link className="button button-primary" href="/admin/task-packs/new">
-            New draft
+            + New map
           </Link>
         </div>
       </div>
+      <section className="admin-stats" aria-label="Map overview">
+        <article>
+          <span>All maps</span>
+          <strong>{loading ? "—" : totals.all}</strong>
+          <small>in this view</small>
+        </article>
+        <article>
+          <span>Live maps</span>
+          <strong>{loading ? "—" : totals.published}</strong>
+          <small>available to rooms</small>
+        </article>
+        <article>
+          <span>Draft maps</span>
+          <strong>{loading ? "—" : totals.drafts}</strong>
+          <small>awaiting review</small>
+        </article>
+        <article>
+          <span>Active tasks</span>
+          <strong>{loading ? "—" : totals.activeTasks}</strong>
+          <small>across listed maps</small>
+        </article>
+      </section>
       <section className="filter-bar" aria-label="Task pack filters">
         <Field
           label="Search"
-          placeholder="Pack name"
+          placeholder="Search map name"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -142,11 +177,11 @@ export function AdminList() {
         <SkeletonList />
       ) : packs.length === 0 ? (
         <EmptyState
-          title="No task packs found"
-          description="Change the filters or create a new draft."
+          title="No maps found"
+          description="Change the filters or create a new map draft."
           action={
             <Link className="button button-primary" href="/admin/task-packs/new">
-              Create draft
+              Create map
             </Link>
           }
         />
@@ -155,9 +190,9 @@ export function AdminList() {
           <table className="admin-table">
             <thead>
               <tr>
-                <th>Name</th>
+                <th>Map</th>
                 <th>Status</th>
-                <th>Active items</th>
+                <th>Tasks</th>
                 <th>Revision</th>
                 <th>Updated</th>
                 <th>
@@ -210,22 +245,29 @@ export function AdminList() {
 interface DraftItem {
   description: string;
   isActive: boolean;
+  difficulty: TaskDifficulty;
 }
 export function AdminEditor({ packId }: { packId?: string }) {
   const router = useRouter();
   const [pack, setPack] = useState<AdminPack | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [items, setItems] = useState<DraftItem[]>([{ description: "", isActive: true }]);
+  const [items, setItems] = useState<DraftItem[]>([
+    { description: "", isActive: true, difficulty: "medium" },
+  ]);
+  const [roles, setRoles] = useState<MapRole[]>([]);
   const [loading, setLoading] = useState(Boolean(packId));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState("");
   const [confirm, setConfirm] = useState<"publish" | "archive" | null>(null);
   const [baseline, setBaseline] = useState("");
+  const [importMode, setImportMode] = useState<"replace" | "append">("replace");
+  const [importNotice, setImportNotice] = useState("");
+  const [toast, setToast] = useState("");
   const serialized = useMemo(
-    () => JSON.stringify({ name, description, items }),
-    [name, description, items],
+    () => JSON.stringify({ name, description, items, roles }),
+    [name, description, items, roles],
   );
   const dirty = Boolean(baseline && serialized !== baseline);
   useEffect(() => {
@@ -233,7 +275,8 @@ export function AdminEditor({ packId }: { packId?: string }) {
       const initial = JSON.stringify({
         name: "",
         description: "",
-        items: [{ description: "", isActive: true }],
+        items: [{ description: "", isActive: true, difficulty: "medium" }],
+        roles: [],
       });
       setBaseline(initial);
       return;
@@ -244,16 +287,22 @@ export function AdminEditor({ packId }: { packId?: string }) {
         const next = r.data;
         const nextItems = next.items
           .sort((a, b) => a.position - b.position)
-          .map((item) => ({ description: item.description, isActive: item.isActive }));
+          .map((item) => ({
+            description: item.description,
+            isActive: item.isActive,
+            difficulty: item.difficulty,
+          }));
         setPack(next);
         setName(next.name);
         setDescription(next.description ?? "");
         setItems(nextItems);
+        setRoles(next.roles);
         setBaseline(
           JSON.stringify({
             name: next.name,
             description: next.description ?? "",
             items: nextItems,
+            roles: next.roles,
           }),
         );
       })
@@ -270,9 +319,19 @@ export function AdminEditor({ packId }: { packId?: string }) {
     window.addEventListener("beforeunload", before);
     return () => window.removeEventListener("beforeunload", before);
   }, [dirty]);
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(""), 2400);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+  const rolesValid = roles.every(
+    (role) => role.name.trim() && role.specialization.trim() && role.ability.trim(),
+  );
   const validation = name.trim()
     ? items.some((item) => item.description.trim())
-      ? ""
+      ? rolesValid
+        ? ""
+        : "Complete every role name, specialization, and ability."
       : "Add at least one described item."
     : "Pack name is required.";
   const save = async () => {
@@ -289,6 +348,11 @@ export function AdminEditor({ packId }: { packId?: string }) {
         items: items
           .filter((item) => item.description.trim())
           .map((item) => ({ ...item, description: item.description.trim() })),
+        roles: roles.map((role) => ({
+          name: role.name.trim(),
+          specialization: role.specialization.trim(),
+          ability: role.ability.trim(),
+        })),
       };
       const next = pack
         ? (await adminApi.update(pack.id, { ...body, expectedRevision: pack.revision })).data
@@ -296,14 +360,25 @@ export function AdminEditor({ packId }: { packId?: string }) {
       setPack(next);
       const nextItems = next.items
         .sort((a, b) => a.position - b.position)
-        .map((item) => ({ description: item.description, isActive: item.isActive }));
+        .map((item) => ({
+          description: item.description,
+          isActive: item.isActive,
+          difficulty: item.difficulty,
+        }));
       setItems(nextItems);
       setName(next.name);
       setDescription(next.description ?? "");
+      setRoles(next.roles);
       setBaseline(
-        JSON.stringify({ name: next.name, description: next.description ?? "", items: nextItems }),
+        JSON.stringify({
+          name: next.name,
+          description: next.description ?? "",
+          items: nextItems,
+          roles: next.roles,
+        }),
       );
       setSaved("Changes saved.");
+      setToast("Map changes saved.");
       if (!pack) router.replace(`/admin/task-packs/${next.id}`);
     } catch (e) {
       setError(
@@ -326,6 +401,7 @@ export function AdminEditor({ packId }: { packId?: string }) {
       setPack(next);
       setConfirm(null);
       setBaseline(serialized);
+      setToast(confirm === "publish" ? "Map published." : "Map archived.");
     } catch (e) {
       setError(errorMessage(e));
       setConfirm(null);
@@ -333,9 +409,12 @@ export function AdminEditor({ packId }: { packId?: string }) {
       setBusy(false);
     }
   };
-  const updateItem = (index: number, change: Partial<DraftItem>) =>
+  const updateItem = (index: number, change: Partial<DraftItem>) => {
     setItems((current) => current.map((item, i) => (i === index ? { ...item, ...change } : item)));
-  const move = (index: number, delta: -1 | 1) =>
+    setSaved("");
+    setToast("Task updated.");
+  };
+  const move = (index: number, delta: -1 | 1) => {
     setItems((current) => {
       const next = [...current];
       const target = index + delta;
@@ -343,16 +422,61 @@ export function AdminEditor({ packId }: { packId?: string }) {
       [next[index], next[target]] = [next[target], next[index]];
       return next;
     });
+    setSaved("");
+    setToast("Task order updated.");
+  };
+  const importCsv = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setError("");
+    setImportNotice("");
+    try {
+      const parsed = parseTaskCsv(await file.text());
+      if (parsed.tasks.length === 0) {
+        setError("No task descriptions were found in that CSV file.");
+        return;
+      }
+      setItems((current) => {
+        const existing = current.filter((item) => item.description.trim());
+        const imported = parsed.tasks.map((item) => ({ ...item, difficulty: "medium" as const }));
+        return (importMode === "append" ? [...existing, ...imported] : imported).slice(0, 15);
+      });
+      setSaved("");
+      const notes = [
+        `${parsed.tasks.length} task${parsed.tasks.length === 1 ? "" : "s"} imported automatically.`,
+        parsed.ignoredRows ? `${parsed.ignoredRows} empty row(s) ignored.` : "",
+        parsed.truncatedRows ||
+        (importMode === "append" &&
+          items.filter((item) => item.description.trim()).length + parsed.tasks.length > 15)
+          ? "Only the first 15 tasks were kept."
+          : "",
+      ].filter(Boolean);
+      setImportNotice(notes.join(" "));
+      setToast("CSV tasks imported.");
+    } catch {
+      setError("The CSV file could not be read. Check its format and try again.");
+    }
+  };
+  const downloadSample = () => {
+    const url = URL.createObjectURL(new Blob([sampleTaskCsv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "map-tasks-template.csv";
+    link.click();
+    URL.revokeObjectURL(url);
+    setToast("Sample CSV downloaded.");
+  };
   if (loading) return <SkeletonList count={6} />;
   return (
     <>
       <div className="editor-heading">
         <div>
-          <Link href="/admin/task-packs">← All task packs</Link>
+          <Link href="/admin/task-packs">← All maps</Link>
           <p className="eyebrow">
             {pack ? `${pack.status} · revision ${pack.revision}` : "New draft"}
           </p>
-          <h1>{pack ? pack.name : "Create a task pack"}</h1>
+          <h1>{pack ? pack.name : "Create a map"}</h1>
         </div>
         {pack && (
           <Badge
@@ -383,6 +507,11 @@ export function AdminEditor({ packId }: { packId?: string }) {
         </Banner>
       )}
       {saved && <Banner tone="success">{saved}</Banner>}
+      {toast && (
+        <div className="toast-stack">
+          <Toast>{toast}</Toast>
+        </div>
+      )}
       <form
         className="editor-form"
         onSubmit={(e) => {
@@ -391,9 +520,9 @@ export function AdminEditor({ packId }: { packId?: string }) {
         }}
       >
         <section className="card">
-          <h2>Pack details</h2>
+          <h2>Map details</h2>
           <Field
-            label="Name"
+            label="Map name"
             maxLength={80}
             value={name}
             onChange={(e) => {
@@ -416,10 +545,49 @@ export function AdminEditor({ packId }: { packId?: string }) {
             disabled={pack?.status === "archived"}
           />
         </section>
+        <section className="card csv-import-panel">
+          <div>
+            <p className="eyebrow">Bulk entry</p>
+            <h2>Import tasks from CSV</h2>
+            <p className="muted">
+              Choose a CSV and its rows are added to the table immediately. Headers such as
+              <code> task</code>, <code>description</code>, <code>active</code>, and
+              <code> status</code> are detected automatically.
+            </p>
+          </div>
+          <div className="csv-import-actions">
+            <label className="field compact-field">
+              <span className="field-label">Import behavior</span>
+              <select
+                value={importMode}
+                onChange={(event) => setImportMode(event.target.value as "replace" | "append")}
+                disabled={pack?.status === "archived"}
+              >
+                <option value="replace">Replace current rows</option>
+                <option value="append">Append to current rows</option>
+              </select>
+            </label>
+            <label
+              className={`button button-primary file-button${pack?.status === "archived" ? " disabled" : ""}`}
+            >
+              Import CSV
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                onChange={(event) => void importCsv(event)}
+                disabled={pack?.status === "archived"}
+              />
+            </label>
+            <Button type="button" variant="secondary" onClick={downloadSample}>
+              Download sample
+            </Button>
+          </div>
+          {importNotice && <Banner tone="success">{importNotice}</Banner>}
+        </section>
         <section className="card item-editor">
           <div className="section-heading">
             <div>
-              <h2>Ordered tasks</h2>
+              <h2>Map task table</h2>
               <p className="muted">
                 Up to 15 descriptions. Published packs require enough active items for supported
                 games.
@@ -429,62 +597,197 @@ export function AdminEditor({ packId }: { packId?: string }) {
               {items.filter((item) => item.isActive && item.description.trim()).length} active
             </Badge>
           </div>
-          {items.map((item, index) => (
-            <div className="item-row" key={index}>
-              <span className="drag-index">{index + 1}</span>
-              <Field
-                label={`Task ${index + 1}`}
-                value={item.description}
-                maxLength={280}
-                onChange={(e) => updateItem(index, { description: e.target.value })}
-                disabled={pack?.status === "archived"}
-              />
-              <label className="toggle">
-                <input
-                  type="checkbox"
-                  checked={item.isActive}
-                  onChange={(e) => updateItem(index, { isActive: e.target.checked })}
-                  disabled={pack?.status === "archived"}
-                />
-                <span>Active</span>
-              </label>
-              <div className="row-actions">
-                <button
-                  type="button"
-                  onClick={() => move(index, -1)}
-                  disabled={index === 0 || pack?.status === "archived"}
-                  aria-label={`Move task ${index + 1} up`}
-                >
-                  ↑
-                </button>
-                <button
-                  type="button"
-                  onClick={() => move(index, 1)}
-                  disabled={index === items.length - 1 || pack?.status === "archived"}
-                  aria-label={`Move task ${index + 1} down`}
-                >
-                  ↓
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setItems((current) => current.filter((_, i) => i !== index))}
-                  disabled={items.length === 1 || pack?.status === "archived"}
-                  aria-label={`Remove task ${index + 1}`}
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-          ))}
+          <div className="task-table-wrap">
+            <table className="task-entry-table">
+              <thead>
+                <tr>
+                  <th scope="col">#</th>
+                  <th scope="col">Task description</th>
+                  <th scope="col">Difficulty</th>
+                  <th scope="col">Active</th>
+                  <th scope="col">Order / remove</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item, index) => (
+                  <tr key={index}>
+                    <td className="drag-index">{index + 1}</td>
+                    <td>
+                      <label className="sr-only" htmlFor={`task-${index}`}>
+                        Task {index + 1}
+                      </label>
+                      <input
+                        id={`task-${index}`}
+                        value={item.description}
+                        maxLength={280}
+                        placeholder="Enter a task players can prove with a photo"
+                        onChange={(event) => {
+                          updateItem(index, { description: event.target.value });
+                        }}
+                        disabled={pack?.status === "archived"}
+                      />
+                    </td>
+                    <td>
+                      <select
+                        aria-label={`Task ${index + 1} difficulty`}
+                        value={item.difficulty}
+                        onChange={(event) =>
+                          updateItem(index, { difficulty: event.target.value as TaskDifficulty })
+                        }
+                        disabled={pack?.status === "archived"}
+                      >
+                        <option value="easy">Easy</option>
+                        <option value="medium">Medium</option>
+                        <option value="hard">Hard</option>
+                      </select>
+                    </td>
+                    <td>
+                      <label className="table-toggle">
+                        <input
+                          type="checkbox"
+                          checked={item.isActive}
+                          onChange={(event) =>
+                            updateItem(index, { isActive: event.target.checked })
+                          }
+                          disabled={pack?.status === "archived"}
+                        />
+                        <span>{item.isActive ? "Yes" : "No"}</span>
+                      </label>
+                    </td>
+                    <td>
+                      <div className="row-actions">
+                        <button
+                          type="button"
+                          onClick={() => move(index, -1)}
+                          disabled={index === 0 || pack?.status === "archived"}
+                          aria-label={`Move task ${index + 1} up`}
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => move(index, 1)}
+                          disabled={index === items.length - 1 || pack?.status === "archived"}
+                          aria-label={`Move task ${index + 1} down`}
+                        >
+                          ↓
+                        </button>
+                        <button
+                          type="button"
+                          className="remove-row"
+                          onClick={() => {
+                            setSaved("");
+                            setItems((current) => current.filter((_, i) => i !== index));
+                            setToast("Task removed.");
+                          }}
+                          disabled={items.length === 1 || pack?.status === "archived"}
+                          aria-label={`Remove task ${index + 1}`}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           {items.length < 15 && pack?.status !== "archived" && (
             <Button
               type="button"
               variant="secondary"
-              onClick={() =>
-                setItems((current) => [...current, { description: "", isActive: true }])
-              }
+              onClick={() => {
+                setSaved("");
+                setItems((current) => [
+                  ...current,
+                  { description: "", isActive: true, difficulty: "medium" },
+                ]);
+                setToast("Task row added.");
+              }}
             >
-              Add task
+              + Add table row
+            </Button>
+          )}
+        </section>
+        <section className="card role-editor">
+          <div className="section-heading">
+            <div>
+              <h2>Crew roles</h2>
+              <p className="muted">
+                Define the specialization and in-game ability available on this map.
+              </p>
+            </div>
+            <Badge>{roles.length} roles</Badge>
+          </div>
+          <div className="role-list">
+            {roles.map((role, index) => (
+              <div className="role-row" key={index}>
+                <Field
+                  label={`Role ${index + 1} name`}
+                  maxLength={50}
+                  value={role.name}
+                  disabled={pack?.status === "archived"}
+                  onChange={(event) => {
+                    setRoles((current) =>
+                      current.map((entry, i) =>
+                        i === index ? { ...entry, name: event.target.value } : entry,
+                      ),
+                    );
+                    setToast("Role updated.");
+                  }}
+                />
+                <Field
+                  label="Specialization"
+                  maxLength={160}
+                  value={role.specialization}
+                  disabled={pack?.status === "archived"}
+                  onChange={(event) => {
+                    setRoles((current) =>
+                      current.map((entry, i) =>
+                        i === index ? { ...entry, specialization: event.target.value } : entry,
+                      ),
+                    );
+                    setToast("Role updated.");
+                  }}
+                />
+                <Field
+                  label="Ability"
+                  maxLength={200}
+                  value={role.ability}
+                  disabled={pack?.status === "archived"}
+                  onChange={(event) => {
+                    setRoles((current) =>
+                      current.map((entry, i) =>
+                        i === index ? { ...entry, ability: event.target.value } : entry,
+                      ),
+                    );
+                    setToast("Role updated.");
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="danger"
+                  disabled={pack?.status === "archived"}
+                  onClick={() => {
+                    setRoles((current) => current.filter((_, i) => i !== index));
+                    setToast("Role removed.");
+                  }}
+                >
+                  Remove role
+                </Button>
+              </div>
+            ))}
+          </div>
+          {roles.length < 12 && pack?.status !== "archived" && (
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setRoles((current) => [...current, { name: "", specialization: "", ability: "" }]);
+                setToast("Role added.");
+              }}
+            >
+              + Add crew role
             </Button>
           )}
         </section>
@@ -502,7 +805,7 @@ export function AdminEditor({ packId }: { packId?: string }) {
               disabled={dirty}
               onClick={() => setConfirm("publish")}
             >
-              Publish pack
+              Publish map
             </Button>
           )}
           {pack && pack.status !== "archived" && (
@@ -521,13 +824,13 @@ export function AdminEditor({ packId }: { packId?: string }) {
         open={Boolean(confirm)}
         onClose={() => setConfirm(null)}
         onConfirm={() => void mutateStatus()}
-        title={confirm === "publish" ? "Publish this pack?" : "Archive this pack?"}
+        title={confirm === "publish" ? "Publish this map?" : "Archive this map?"}
         description={
           confirm === "publish"
             ? "The server will validate its active item count before making it available to rooms."
             : "Archiving is terminal. The pack will no longer be available for new rooms."
         }
-        confirmLabel={confirm === "publish" ? "Publish pack" : "Archive pack"}
+        confirmLabel={confirm === "publish" ? "Publish map" : "Archive map"}
         dangerous={confirm === "archive"}
         loading={busy}
       />

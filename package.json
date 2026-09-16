@@ -22,6 +22,7 @@
     "contracts:check": "tsx scripts/check-openapi.ts",
     "contracts:fixtures:check": "tsx scripts/check-contract-fixtures.ts",
     "admin:bootstrap": "tsx scripts/bootstrap-admin.ts",
+    "seed:demo": "tsx scripts/seed-demo.ts",
     "ops:status": "tsx scripts/operations-status.ts",
     "migrate:up": "node-pg-migrate up --migrations-dir migrations --database-url-var DATABASE_URL",
     "migrate:down": "node-pg-migrate down --migrations-dir migrations --database-url-var DATABASE_URL",

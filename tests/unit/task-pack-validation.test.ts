@@ -25,4 +25,20 @@ describe("task-pack input validation", () => {
     expect(updatePackSchema.safeParse({ expectedRevision: 1 }).success).toBe(false);
     expect(updatePackSchema.safeParse({ expectedRevision: 1, items: [] }).success).toBe(true);
   });
+
+  it("accepts task difficulty and validates complete map roles", () => {
+    const result = createPackSchema.parse({
+      name: "Station",
+      items: [{ description: "Restart reactor", difficulty: "hard" }],
+      roles: [{ name: "Engineer", specialization: "Systems", ability: "Repair one sabotage." }],
+    });
+    expect(result.items[0]).toMatchObject({ difficulty: "hard" });
+    expect(result.roles[0].name).toBe("Engineer");
+    expect(
+      createPackSchema.safeParse({
+        name: "Station",
+        roles: [{ name: "Engineer", specialization: "", ability: "Repair" }],
+      }).success,
+    ).toBe(false);
+  });
 });

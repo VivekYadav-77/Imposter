@@ -55,12 +55,14 @@ async function loadPack(
     publishedAt: pack.published_at ? iso(pack.published_at) : null,
     createdAt: iso(pack.created_at),
     updatedAt: iso(pack.updated_at),
+    roles: pack.roles,
     items: items.map(
       (item): PackItemDto => ({
         id: item.id,
         position: item.position,
         description: item.description,
         isActive: item.is_active,
+        difficulty: item.difficulty,
       }),
     ),
   };
@@ -163,6 +165,15 @@ export class TaskPackRepository {
     requestId: string,
     idempotencyKey: string,
   ): Promise<AdminPackDto> {
+    const inputItems = (input.items ?? []).map((item) =>
+      typeof item === "string"
+        ? { description: item, isActive: true, difficulty: "medium" as const }
+        : {
+            description: item.description,
+            isActive: item.isActive ?? true,
+            difficulty: item.difficulty ?? ("medium" as const),
+          },
+    );
     try {
       return await inTransaction(this.database, async (trx) => {
         const previous = await replay(trx, adminId, idempotencyKey, "task_pack.create", input);
@@ -178,18 +189,20 @@ export class TaskPackRepository {
             description: input.description ?? null,
             status: "draft",
             published_at: null,
+            roles: input.roles ?? [],
           })
           .execute();
-        if (input.items.length)
+        if (inputItems.length)
           await trx
             .insertInto("app.task_pack_items")
             .values(
-              input.items.map((item, index) => ({
+              inputItems.map((item, index) => ({
                 id: randomUUID(),
                 task_pack_id: id,
                 position: index + 1,
                 description: item.description,
                 is_active: item.isActive,
+                difficulty: item.difficulty ?? "medium",
               })),
             )
             .execute();
@@ -198,7 +211,7 @@ export class TaskPackRepository {
           action: "task_pack.created",
           packId: id,
           requestId,
-          metadata: { itemCount: input.items.length },
+          metadata: { itemCount: inputItems.length },
         });
         const response = (await loadPack(trx, id))!;
         await remember(trx, adminId, idempotencyKey, "task_pack.create", input, response);
@@ -255,22 +268,34 @@ export class TaskPackRepository {
         description?: string | null;
         revision: number;
         updated_at: Date;
+        roles?: Array<{ name: string; specialization: string; ability: string }>;
       } = { revision: current.revision + 1, updated_at: new Date() };
       if (input.name !== undefined) values.name = input.name;
       if (input.description !== undefined) values.description = input.description ?? null;
+      if (input.roles !== undefined) values.roles = input.roles;
       await trx.updateTable("app.task_packs").set(values).where("id", "=", id).execute();
       if (input.items !== undefined) {
+        const inputItems = input.items.map((item) =>
+          typeof item === "string"
+            ? { description: item, isActive: true, difficulty: "medium" as const }
+            : {
+                description: item.description,
+                isActive: item.isActive ?? true,
+                difficulty: item.difficulty ?? ("medium" as const),
+              },
+        );
         await trx.deleteFrom("app.task_pack_items").where("task_pack_id", "=", id).execute();
-        if (input.items.length)
+        if (inputItems.length)
           await trx
             .insertInto("app.task_pack_items")
             .values(
-              input.items.map((item, index) => ({
+              inputItems.map((item, index) => ({
                 id: randomUUID(),
                 task_pack_id: id,
                 position: index + 1,
                 description: item.description,
                 is_active: item.isActive,
+                difficulty: item.difficulty ?? "medium",
               })),
             )
             .execute();
@@ -386,6 +411,7 @@ export class TaskPackRepository {
         "packs.published_at",
         "packs.created_at",
         "packs.updated_at",
+        "packs.roles",
         sql<number>`count(items.id)::int`.as("itemCount"),
         sql<number>`count(items.id) filter (where items.is_active)::int`.as("activeItemCount"),
       ])
@@ -416,6 +442,7 @@ export class TaskPackRepository {
       updatedAt: iso(row.updated_at),
       itemCount: row.itemCount,
       activeItemCount: row.activeItemCount,
+      roles: row.roles,
     }));
   }
 
@@ -428,6 +455,7 @@ export class TaskPackRepository {
         "packs.name",
         "packs.description",
         "packs.revision",
+        "packs.roles",
         sql<number>`count(items.id)::int`.as("activeTaskCount"),
       ])
       .where("packs.status", "=", "published")
@@ -449,20 +477,21 @@ export class TaskPackRepository {
       description: row.description,
       revision: row.revision,
       activeTaskCount: row.activeTaskCount,
+      roles: row.roles,
     }));
   }
 
   async getPublic(id: string): Promise<PublicPackDetailDto | null> {
     const pack = await this.database
       .selectFrom("app.task_packs")
-      .select(["id", "name", "description", "revision"])
+      .select(["id", "name", "description", "revision", "roles"])
       .where("id", "=", id)
       .where("status", "=", "published")
       .executeTakeFirst();
     if (!pack) return null;
     const items = await this.database
       .selectFrom("app.task_pack_items")
-      .select(["position", "description"])
+      .select(["position", "description", "difficulty"])
       .where("task_pack_id", "=", id)
       .where("is_active", "=", true)
       .orderBy("position")

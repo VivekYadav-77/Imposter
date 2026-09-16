@@ -111,12 +111,21 @@ export async function apiRequest<T>(
 
 const json = (body: unknown) => JSON.stringify(body);
 export const participantApi = {
-  createRoom: (nickname: string, key = createIdempotencyKey()) =>
+  createRoom: (
+    nickname: string,
+    minPlayersOrKey: number | string = 3,
+    maxPlayers = 12,
+    key = createIdempotencyKey(),
+  ) =>
     apiRequest<SessionIssue>("/api/v1/rooms", {
       method: "POST",
-      body: json({ nickname }),
+      body: json(
+        typeof minPlayersOrKey === "number"
+          ? { nickname, minPlayers: minPlayersOrKey, maxPlayers }
+          : { nickname },
+      ),
       headers: { "X-Session-Transport": "cookie" },
-      idempotencyKey: key,
+      idempotencyKey: typeof minPlayersOrKey === "string" ? minPlayersOrKey : key,
     }),
   joinRoom: (code: string, nickname: string, key = createIdempotencyKey()) =>
     apiRequest<SessionIssue>(`/api/v1/rooms/${encodeURIComponent(code)}/participants`, {
@@ -127,7 +136,7 @@ export const participantApi = {
     }),
   room: () => apiRequest<RoomSnapshot>("/api/v1/rooms/current"),
   packs: () => apiRequest<PublicPackSummary[]>("/api/v1/task-packs?limit=50"),
-  updateSettings: (body: Record<string, string | number | null>, key = createIdempotencyKey()) =>
+  updateSettings: (body: Record<string, unknown>, key = createIdempotencyKey()) =>
     apiRequest<RoomSnapshot>("/api/v1/rooms/current/settings", {
       method: "PATCH",
       body: json(body),
@@ -232,7 +241,12 @@ export const adminApi = {
     body: {
       name: string;
       description: string | null;
-      items: Array<{ description: string; isActive: boolean }>;
+      items: Array<{
+        description: string;
+        isActive: boolean;
+        difficulty: "easy" | "medium" | "hard";
+      }>;
+      roles: Array<{ name: string; specialization: string; ability: string }>;
     },
     key = createIdempotencyKey(),
   ) =>
@@ -247,7 +261,12 @@ export const adminApi = {
       expectedRevision: number;
       name: string;
       description: string | null;
-      items: Array<{ description: string; isActive: boolean }>;
+      items: Array<{
+        description: string;
+        isActive: boolean;
+        difficulty: "easy" | "medium" | "hard";
+      }>;
+      roles: Array<{ name: string; specialization: string; ability: string }>;
     },
     key = createIdempotencyKey(),
   ) =>

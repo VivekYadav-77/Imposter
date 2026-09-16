@@ -94,7 +94,7 @@ export const openApiDocument: OpenAPIObject = {
         requestBody: {
           required: true,
           content: {
-            "application/json": { schema: { $ref: "#/components/schemas/RoomMembershipInput" } },
+            "application/json": { schema: { $ref: "#/components/schemas/RoomCreationInput" } },
           },
         },
         responses: {
@@ -695,6 +695,16 @@ export const openApiDocument: OpenAPIObject = {
         required: ["nickname"],
         properties: { nickname: { type: "string", minLength: 1, maxLength: 24 } },
       },
+      RoomCreationInput: {
+        type: "object",
+        additionalProperties: false,
+        required: ["nickname"],
+        properties: {
+          nickname: { type: "string", minLength: 1, maxLength: 24 },
+          minPlayers: { type: "integer", minimum: 3, maximum: 15, default: 3 },
+          maxPlayers: { type: "integer", minimum: 3, maximum: 15, default: 12 },
+        },
+      },
       RoomSettingsInput: {
         type: "object",
         additionalProperties: false,
@@ -702,9 +712,20 @@ export const openApiDocument: OpenAPIObject = {
         properties: {
           selectedTaskPackId: { type: ["string", "null"], format: "uuid" },
           taskPhaseSeconds: { type: "integer", minimum: 300, maximum: 3600 },
-          discussionSeconds: { type: "integer", minimum: 30, maximum: 300 },
-          reviewSeconds: { type: "integer", minimum: 30, maximum: 180 },
-          votingSeconds: { type: "integer", minimum: 30, maximum: 180 },
+          imposterCount: { type: "integer", minimum: 1, maximum: 7 },
+          taskCounts: {
+            type: "object",
+            required: ["easy", "medium", "hard"],
+            properties: {
+              easy: { type: "integer", minimum: 0, maximum: 15 },
+              medium: { type: "integer", minimum: 0, maximum: 15 },
+              hard: { type: "integer", minimum: 0, maximum: 15 },
+            },
+          },
+          roleCounts: {
+            type: "object",
+            additionalProperties: { type: "integer", minimum: 0, maximum: 15 },
+          },
         },
       },
       ParticipantSelf: {
@@ -725,6 +746,7 @@ export const openApiDocument: OpenAPIObject = {
           "id",
           "code",
           "status",
+          "minPlayers",
           "maxPlayers",
           "settings",
           "participants",
@@ -739,15 +761,17 @@ export const openApiDocument: OpenAPIObject = {
             type: "string",
             enum: ["lobby", "active", "completed", "abandoned", "expired"],
           },
-          maxPlayers: { type: "integer", const: 12 },
+          minPlayers: { type: "integer", minimum: 3, maximum: 15 },
+          maxPlayers: { type: "integer", minimum: 3, maximum: 15 },
           settings: {
             type: "object",
             required: [
               "selectedTaskPack",
               "taskPhaseSeconds",
-              "discussionSeconds",
-              "reviewSeconds",
-              "votingSeconds",
+              "imposterCount",
+              "allowedImposterCounts",
+              "taskCounts",
+              "roleCounts",
             ],
             properties: {
               selectedTaskPack: {
@@ -755,19 +779,21 @@ export const openApiDocument: OpenAPIObject = {
                   { type: "null" },
                   {
                     type: "object",
-                    required: ["id", "name", "revision"],
+                    required: ["id", "name", "revision", "roles"],
                     properties: {
                       id: { type: "string", format: "uuid" },
                       name: { type: "string" },
                       revision: { type: "integer" },
+                      roles: { type: "array", items: { $ref: "#/components/schemas/MapRole" } },
                     },
                   },
                 ],
               },
               taskPhaseSeconds: { type: "integer" },
-              discussionSeconds: { type: "integer" },
-              reviewSeconds: { type: "integer" },
-              votingSeconds: { type: "integer" },
+              imposterCount: { type: "integer" },
+              allowedImposterCounts: { type: "array", items: { type: "integer" } },
+              taskCounts: { type: "object", additionalProperties: { type: "integer" } },
+              roleCounts: { type: "object", additionalProperties: { type: "integer" } },
             },
           },
           participants: {
@@ -936,12 +962,13 @@ export const openApiDocument: OpenAPIObject = {
           self: {
             type: "object",
             additionalProperties: false,
-            required: ["participantId", "role", "lifeStatus", "capabilities"],
+            required: ["participantId", "role", "lifeStatus", "capabilities", "crewRole"],
             properties: {
               participantId: { type: "string", format: "uuid" },
               role: { type: "string", enum: ["crew", "imposter"] },
               lifeStatus: { type: "string", enum: ["alive", "killed", "ejected"] },
               capabilities: { type: "array", items: { type: "string" } },
+              crewRole: { oneOf: [{ type: "null" }, { $ref: "#/components/schemas/MapRole" }] },
             },
           },
           assignments: {
@@ -949,12 +976,13 @@ export const openApiDocument: OpenAPIObject = {
             items: {
               type: "object",
               additionalProperties: false,
-              required: ["id", "description", "status", "completedAt"],
+              required: ["id", "description", "status", "completedAt", "difficulty"],
               properties: {
                 id: { type: "string", format: "uuid" },
                 description: { type: "string" },
                 status: { type: "string", enum: ["assigned", "completed"] },
                 completedAt: { type: ["string", "null"], format: "date-time" },
+                difficulty: { type: "string", enum: ["easy", "medium", "hard"] },
               },
             },
           },
@@ -1079,6 +1107,17 @@ export const openApiDocument: OpenAPIObject = {
         properties: {
           description: { type: "string", minLength: 1, maxLength: 280 },
           isActive: { type: "boolean", default: true },
+          difficulty: { type: "string", enum: ["easy", "medium", "hard"], default: "medium" },
+        },
+      },
+      MapRole: {
+        type: "object",
+        additionalProperties: false,
+        required: ["name", "specialization", "ability"],
+        properties: {
+          name: { type: "string", minLength: 1, maxLength: 50 },
+          specialization: { type: "string", minLength: 1, maxLength: 160 },
+          ability: { type: "string", minLength: 1, maxLength: 200 },
         },
       },
       PackItem: {
@@ -1112,6 +1151,7 @@ export const openApiDocument: OpenAPIObject = {
               ],
             },
           },
+          roles: { type: "array", maxItems: 12, items: { $ref: "#/components/schemas/MapRole" } },
         },
       },
       ExpectedRevision: {
@@ -1138,18 +1178,20 @@ export const openApiDocument: OpenAPIObject = {
               ],
             },
           },
+          roles: { type: "array", maxItems: 12, items: { $ref: "#/components/schemas/MapRole" } },
         },
       },
       PublicPackSummary: {
         type: "object",
         additionalProperties: false,
-        required: ["id", "name", "description", "activeTaskCount", "revision"],
+        required: ["id", "name", "description", "activeTaskCount", "revision", "roles"],
         properties: {
           id: { type: "string", format: "uuid" },
           name: { type: "string" },
           description: { type: ["string", "null"] },
           activeTaskCount: { type: "integer" },
           revision: { type: "integer" },
+          roles: { type: "array", items: { $ref: "#/components/schemas/MapRole" } },
         },
       },
       PublicPackDetail: {
@@ -1164,8 +1206,12 @@ export const openApiDocument: OpenAPIObject = {
                 items: {
                   type: "object",
                   additionalProperties: false,
-                  required: ["position", "description"],
-                  properties: { position: { type: "integer" }, description: { type: "string" } },
+                  required: ["position", "description", "difficulty"],
+                  properties: {
+                    position: { type: "integer" },
+                    description: { type: "string" },
+                    difficulty: { type: "string", enum: ["easy", "medium", "hard"] },
+                  },
                 },
               },
             },
@@ -1186,6 +1232,7 @@ export const openApiDocument: OpenAPIObject = {
           "updatedAt",
           "itemCount",
           "activeItemCount",
+          "roles",
         ],
         properties: {
           id: { type: "string", format: "uuid" },
@@ -1199,6 +1246,7 @@ export const openApiDocument: OpenAPIObject = {
           updatedAt: { type: "string", format: "date-time" },
           itemCount: { type: "integer" },
           activeItemCount: { type: "integer" },
+          roles: { type: "array", items: { $ref: "#/components/schemas/MapRole" } },
         },
       },
       AdminPack: {
@@ -1214,6 +1262,7 @@ export const openApiDocument: OpenAPIObject = {
           "createdAt",
           "updatedAt",
           "items",
+          "roles",
         ],
         properties: {
           id: { type: "string", format: "uuid" },
@@ -1225,6 +1274,7 @@ export const openApiDocument: OpenAPIObject = {
           publishedAt: { type: ["string", "null"], format: "date-time" },
           createdAt: { type: "string", format: "date-time" },
           updatedAt: { type: "string", format: "date-time" },
+          roles: { type: "array", items: { $ref: "#/components/schemas/MapRole" } },
           items: { type: "array", items: { $ref: "#/components/schemas/PackItem" } },
         },
       },

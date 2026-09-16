@@ -1,6 +1,9 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
+import { contentSecurityPolicy } from "../../src/api/security-headers.js";
+import { loadConfig } from "../../src/infrastructure/configuration/config.js";
+
 const luminance = (hex: string) => {
   const channels = hex
     .slice(1)
@@ -29,5 +32,14 @@ describe("frontend design foundations", () => {
     expect(css).toContain("prefers-reduced-motion");
     expect(css).toContain("safe-area-inset-bottom");
     expect(css).toContain("max-width: 360px");
+  });
+
+  it("allows Next.js hydration through a per-request script nonce", () => {
+    const development = contentSecurityPolicy(
+      loadConfig({ APP_ENV: "development", DATABASE_URL: "postgresql://localhost/test" }),
+      "test-nonce",
+    );
+    expect(development).toContain("script-src 'self' 'nonce-test-nonce' 'strict-dynamic'");
+    expect(development).toContain("'unsafe-eval'");
   });
 });

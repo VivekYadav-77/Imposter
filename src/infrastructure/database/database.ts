@@ -42,6 +42,7 @@ export interface TaskPacksTable {
   published_at: NullableTimestamp;
   created_at: Timestamp;
   updated_at: Timestamp;
+  roles: Generated<Array<{ name: string; specialization: string; ability: string }>>;
 }
 
 export interface TaskPackItemsTable {
@@ -52,6 +53,7 @@ export interface TaskPackItemsTable {
   is_active: Generated<boolean>;
   created_at: Timestamp;
   updated_at: Timestamp;
+  difficulty: Generated<"easy" | "medium" | "hard">;
 }
 
 export interface AdminAuditEventsTable {
@@ -84,8 +86,13 @@ export interface RoomsTable {
   host_participant_id: string | null;
   selected_task_pack_id: string | null;
   max_players: number;
+  min_players: number;
   imposter_count: number;
   tasks_per_crew: number;
+  easy_tasks_per_player: number;
+  medium_tasks_per_player: number;
+  hard_tasks_per_player: number;
+  role_counts: Record<string, number>;
   task_phase_seconds: number;
   discussion_seconds: number;
   review_seconds: number;
@@ -148,6 +155,9 @@ export interface GameParticipantsTable {
   life_status: "alive" | "killed" | "ejected";
   kill_available_at: NullableTimestamp;
   created_at: Timestamp;
+  crew_role_name: string | null;
+  crew_role_specialization: string | null;
+  crew_role_ability: string | null;
 }
 
 export interface GameTasksTable {
@@ -156,6 +166,7 @@ export interface GameTasksTable {
   source_pack_item_id: string | null;
   description_snapshot: string;
   position: number;
+  difficulty_snapshot: "easy" | "medium" | "hard";
 }
 
 export interface TaskAssignmentsTable {

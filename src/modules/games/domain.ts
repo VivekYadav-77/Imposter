@@ -23,6 +23,19 @@ export function playerBand(playerCount: number): PlayerBand {
     : { imposters: 2, tasksPerPlayer: 4 };
 }
 
+export function maximumImposterCount(playerCount: number): number {
+  if (!Number.isInteger(playerCount) || playerCount < 3 || playerCount > 15)
+    throw new RangeError("Games require between 3 and 15 players.");
+  // Always leave strictly more crew than impostors when the game begins.
+  return Math.floor((playerCount - 1) / 2);
+}
+
+export function recommendedImposterCount(playerCount: number): number {
+  if (playerCount <= 6) return 1;
+  if (playerCount <= 10) return 2;
+  return 3;
+}
+
 const transitions: Record<GamePhase, readonly GamePhase[]> = {
   task: ["discussion", "game_over", "abandoned"],
   discussion: ["review", "voting", "game_over", "abandoned"],

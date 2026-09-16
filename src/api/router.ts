@@ -17,6 +17,7 @@ import {
 import type { TaskPackRepository } from "../modules/task-packs/repository.js";
 import {
   emptyBodySchema,
+  roomCreationSchema,
   roomMembershipSchema,
   roomSettingsSchema,
 } from "../modules/rooms/schemas.js";
@@ -76,7 +77,7 @@ export function createApiHandler(dependencies: ApiDependencies): ApiHandler {
   return async (request, response) => {
     const requestId = resolveRequestId(request);
     const startedAt = performance.now();
-    applySecurityHeaders(response, dependencies.config);
+    applySecurityHeaders(request, response, dependencies.config);
 
     const path = new URL(request.url ?? "/", "http://localhost").pathname;
     const isOwnedPath =
@@ -343,7 +344,7 @@ async function handleRoomRoute(
   const publicScope = `public:${trustedClientAddress(request, config)}`;
   if (method === "POST" && path === "/api/v1/rooms") {
     const key = requireIdempotencyKey(request);
-    const body = await validatedBody(request, config.maxJsonBodyBytes, roomMembershipSchema);
+    const body = await validatedBody(request, config.maxJsonBodyBytes, roomCreationSchema);
     const issued = await rooms.createRoom(body, key, publicScope);
     sendIssuedSession(request, response, 201, issued, requestId, config);
     return;

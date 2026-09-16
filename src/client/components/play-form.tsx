@@ -11,6 +11,8 @@ export function PlayForm() {
   const [mode, setMode] = useState<Mode>("create");
   const [nickname, setNickname] = useState("");
   const [code, setCode] = useState("");
+  const [minPlayers, setMinPlayers] = useState(3);
+  const [maxPlayers, setMaxPlayers] = useState(12);
   const [accepted, setAccepted] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -34,7 +36,8 @@ export function PlayForm() {
     setBusy(true);
     setError("");
     try {
-      if (mode === "create") await participantApi.createRoom(nickname.trim(), key.current);
+      if (mode === "create")
+        await participantApi.createRoom(nickname.trim(), minPlayers, maxPlayers, key.current);
       else await participantApi.joinRoom(code, nickname.trim(), key.current);
       router.replace("/room");
     } catch (cause) {
@@ -99,6 +102,48 @@ export function PlayForm() {
           hint={`${nickname.length}/24 characters`}
           placeholder="What should the room call you?"
         />
+        {mode === "create" && (
+          <div className="form-grid two-column">
+            <label className="field">
+              <span className="field-label">Minimum players</span>
+              <select
+                value={minPlayers}
+                onChange={(event) => {
+                  const value = Number(event.target.value);
+                  setMinPlayers(value);
+                  if (maxPlayers < value) setMaxPlayers(value);
+                  key.current = createIdempotencyKey();
+                }}
+              >
+                {Array.from({ length: 13 }, (_, index) => index + 3).map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </select>
+              <span className="field-hint">At least 3 players are required.</span>
+            </label>
+            <label className="field">
+              <span className="field-label">Maximum players</span>
+              <select
+                value={maxPlayers}
+                onChange={(event) => {
+                  setMaxPlayers(Number(event.target.value));
+                  key.current = createIdempotencyKey();
+                }}
+              >
+                {Array.from({ length: 16 - minPlayers }, (_, index) => index + minPlayers).map(
+                  (value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ),
+                )}
+              </select>
+              <span className="field-hint">Limited to 15 for reliable realtime play.</span>
+            </label>
+          </div>
+        )}
         <label className="check-row">
           <input
             type="checkbox"

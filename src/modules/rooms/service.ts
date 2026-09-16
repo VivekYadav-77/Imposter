@@ -7,7 +7,13 @@ import type { Database, DatabaseSchema } from "../../infrastructure/database/dat
 import { inTransaction } from "../../infrastructure/database/transaction.js";
 import { ApplicationError } from "../../shared/errors/application-error.js";
 import { hashSecret } from "../../shared/security/tokens.js";
-import { normalizeNickname, type RoomMembershipInput, type RoomSettingsInput } from "./schemas.js";
+import { maximumImposterCount } from "../games/domain.js";
+import {
+  normalizeNickname,
+  type RoomCreationInput,
+  type RoomMembershipInput,
+  type RoomSettingsInput,
+} from "./schemas.js";
 import type {
   ParticipantPrincipal,
   PresenceUpdate,
@@ -152,6 +158,12 @@ export class RoomService {
         "rooms.status",
         "rooms.host_participant_id",
         "rooms.max_players",
+        "rooms.min_players",
+        "rooms.imposter_count",
+        "rooms.easy_tasks_per_player",
+        "rooms.medium_tasks_per_player",
+        "rooms.hard_tasks_per_player",
+        "rooms.role_counts",
         "rooms.task_phase_seconds",
         "rooms.discussion_seconds",
         "rooms.review_seconds",
@@ -160,6 +172,7 @@ export class RoomService {
         "packs.id as pack_id",
         "packs.name as pack_name",
         "packs.revision as pack_revision",
+        "packs.roles as pack_roles",
         "games.id as game_id",
       ])
       .where("rooms.id", "=", principal.roomId)
@@ -185,16 +198,30 @@ export class RoomService {
       id: room.id,
       code: room.code,
       status: room.status,
-      maxPlayers: 12,
+      minPlayers: room.min_players,
+      maxPlayers: room.max_players,
       settings: {
         selectedTaskPack:
           room.pack_id && room.pack_name && room.pack_revision
-            ? { id: room.pack_id, name: room.pack_name, revision: room.pack_revision }
+            ? {
+                id: room.pack_id,
+                name: room.pack_name,
+                revision: room.pack_revision,
+                roles: room.pack_roles ?? [],
+              }
             : null,
         taskPhaseSeconds: room.task_phase_seconds,
-        discussionSeconds: room.discussion_seconds,
-        reviewSeconds: room.review_seconds,
-        votingSeconds: room.voting_seconds,
+        imposterCount: room.imposter_count,
+        allowedImposterCounts: Array.from(
+          { length: maximumImposterCount(Math.max(3, participants.length)) },
+          (_, index) => index + 1,
+        ),
+        taskCounts: {
+          easy: room.easy_tasks_per_player,
+          medium: room.medium_tasks_per_player,
+          hard: room.hard_tasks_per_player,
+        },
+        roleCounts: room.role_counts,
       },
       participants: participants.map((participant) => ({
         id: participant.id,
@@ -252,12 +279,15 @@ export class RoomService {
   }
 
   async createRoom(
-    input: RoomMembershipInput,
+    input: RoomCreationInput | (RoomMembershipInput & { minPlayers?: number; maxPlayers?: number }),
     key: string,
     requestScope: string,
   ): Promise<SessionIssueDto> {
     this.throttlePublic(requestScope);
     const normalized = normalizeNickname(input.nickname);
+    const minPlayers = input.minPlayers ?? 3;
+    const maxPlayers = input.maxPlayers ?? 12;
+    const replayInput = { ...normalized, minPlayers, maxPlayers };
     for (let attempt = 0; attempt < 8; attempt += 1) {
       try {
         const result = await inTransaction(this.database, async (trx) => {
@@ -267,7 +297,7 @@ export class RoomService {
             requestScope,
             key,
             operation,
-            normalized,
+            replayInput,
           );
           if (replayed) {
             if (!replayed.sessionId)
@@ -304,9 +334,14 @@ export class RoomService {
               status: "lobby",
               host_participant_id: null,
               selected_task_pack_id: null,
-              max_players: 12,
+              min_players: minPlayers,
+              max_players: maxPlayers,
               imposter_count: 1,
               tasks_per_crew: 3,
+              easy_tasks_per_player: 0,
+              medium_tasks_per_player: 3,
+              hard_tasks_per_player: 0,
+              role_counts: {},
               task_phase_seconds: 900,
               discussion_seconds: 90,
               review_seconds: 60,
@@ -345,7 +380,7 @@ export class RoomService {
             requestScope,
             key,
             operation,
-            normalized,
+            replayInput,
             safeResponse,
             sessionId,
           );
@@ -409,7 +444,8 @@ export class RoomService {
           .where("room_id", "=", room.id)
           .where("membership_status", "=", "joined")
           .executeTakeFirstOrThrow();
-        if (count.count >= 12) throw new ApplicationError(409, "ROOM_FULL", "The room is full.");
+        if (count.count >= room.max_players)
+          throw new ApplicationError(409, "ROOM_FULL", "The room is full.");
         const participantId = randomUUID();
         const sessionId = randomUUID();
         const now = new Date();
@@ -533,6 +569,52 @@ export class RoomService {
             "The selected task pack is not published.",
           );
       }
+      const joined = await trx
+        .selectFrom("app.participants")
+        .select(sql<number>`count(*)::int`.as("count"))
+        .where("room_id", "=", room.id)
+        .where("membership_status", "=", "joined")
+        .executeTakeFirstOrThrow();
+      if (
+        input.imposterCount !== undefined &&
+        input.imposterCount > maximumImposterCount(Math.max(3, joined.count))
+      )
+        throw new ApplicationError(
+          422,
+          "VALIDATION_FAILED",
+          "That many impostors would leave too few crewmates for the current player count.",
+          { maximum: maximumImposterCount(Math.max(3, joined.count)) },
+        );
+      if (input.roleCounts !== undefined) {
+        const packId =
+          input.selectedTaskPackId === undefined
+            ? room.selected_task_pack_id
+            : input.selectedTaskPackId;
+        const pack = packId
+          ? await trx
+              .selectFrom("app.task_packs")
+              .select("roles")
+              .where("id", "=", packId)
+              .executeTakeFirst()
+          : null;
+        const names = new Set((pack?.roles ?? []).map((role) => role.name));
+        if (Object.keys(input.roleCounts).some((name) => !names.has(name)))
+          throw new ApplicationError(
+            422,
+            "VALIDATION_FAILED",
+            "Role counts contain a role that is not part of the selected map.",
+          );
+        const imposters = input.imposterCount ?? room.imposter_count;
+        if (
+          Object.values(input.roleCounts).reduce((sum, count) => sum + count, 0) >
+          Math.max(0, joined.count - imposters)
+        )
+          throw new ApplicationError(
+            422,
+            "VALIDATION_FAILED",
+            "Assigned crew roles exceed the available crewmates.",
+          );
+      }
       await trx
         .updateTable("app.rooms")
         .set({
@@ -542,11 +624,18 @@ export class RoomService {
           ...(input.taskPhaseSeconds !== undefined
             ? { task_phase_seconds: input.taskPhaseSeconds }
             : {}),
-          ...(input.discussionSeconds !== undefined
-            ? { discussion_seconds: input.discussionSeconds }
+          ...(input.imposterCount !== undefined ? { imposter_count: input.imposterCount } : {}),
+          ...(input.taskCounts !== undefined
+            ? {
+                easy_tasks_per_player: input.taskCounts.easy,
+                medium_tasks_per_player: input.taskCounts.medium,
+                hard_tasks_per_player: input.taskCounts.hard,
+                tasks_per_crew:
+                  input.taskCounts.easy + input.taskCounts.medium + input.taskCounts.hard,
+              }
             : {}),
-          ...(input.reviewSeconds !== undefined ? { review_seconds: input.reviewSeconds } : {}),
-          ...(input.votingSeconds !== undefined ? { voting_seconds: input.votingSeconds } : {}),
+          ...(input.roleCounts !== undefined ? { role_counts: input.roleCounts } : {}),
+          ...(input.selectedTaskPackId !== undefined ? { role_counts: {} } : {}),
           last_activity_at: new Date(),
           expires_at: new Date(Date.now() + this.config.roomLobbyTtlSeconds * 1000),
         })

@@ -9,11 +9,11 @@ import { ApplicationError } from "../../shared/errors/application-error.js";
 import {
   capabilitiesFor,
   determineWinner,
-  playerBand,
+  maximumImposterCount,
   resolveEjection,
   resolveReview,
 } from "./domain.js";
-import { createAssignmentPlan } from "./random.js";
+import { createAssignmentPlan, sampleDistinct, secureShuffle } from "./random.js";
 import type { EjectionVoteInput, KillInput, ReviewVoteInput } from "./schemas.js";
 import type { GameSnapshotDto, MeetingDto } from "./types.js";
 
@@ -285,6 +285,9 @@ export class GameService {
         "rooms.host_participant_id",
         "self.role",
         "self.life_status",
+        "self.crew_role_name",
+        "self.crew_role_specialization",
+        "self.crew_role_ability",
       ])
       .where("games.room_id", "=", principal.roomId)
       .executeTakeFirst();
@@ -308,6 +311,7 @@ export class GameService {
           "assignments.completed_at",
           "tasks.description_snapshot",
           "tasks.position",
+          "tasks.difficulty_snapshot",
         ])
         .where("assignments.game_id", "=", game.id)
         .where("assignments.participant_id", "=", principal.participantId)
@@ -351,12 +355,21 @@ export class GameService {
           isHost: principal.participantId === game.host_participant_id,
           winner: game.winner,
         }),
+        crewRole:
+          game.crew_role_name && game.crew_role_specialization && game.crew_role_ability
+            ? {
+                name: game.crew_role_name,
+                specialization: game.crew_role_specialization,
+                ability: game.crew_role_ability,
+              }
+            : null,
       },
       assignments: assignments.map((assignment) => ({
         id: assignment.id,
         description: assignment.description_snapshot,
         status: assignment.status,
         completedAt: assignment.completed_at ? iso(assignment.completed_at) : null,
+        difficulty: assignment.difficulty_snapshot,
       })),
       progress: { completed: progress.completed, total: progress.total },
       meeting,
@@ -399,13 +412,19 @@ export class GameService {
         .orderBy("id")
         .execute();
       const reasons: Record<string, string> = {};
-      if (participants.length < 4 || participants.length > 12)
-        reasons.playerCount = "Between 4 and 12 joined players are required.";
+      if (participants.length < room.min_players || participants.length > room.max_players)
+        reasons.playerCount = `Between ${room.min_players} and ${room.max_players} joined players are required.`;
+      const maxImposters =
+        participants.length >= 3 && participants.length <= 15
+          ? maximumImposterCount(participants.length)
+          : 0;
+      if (room.imposter_count > maxImposters)
+        reasons.imposterCount = `Choose between 1 and ${maxImposters} impostor${maxImposters === 1 ? "" : "s"} for this player count.`;
       if (!room.selected_task_pack_id) reasons.selectedTaskPack = "Select a published task pack.";
       const pack = room.selected_task_pack_id
         ? await trx
             .selectFrom("app.task_packs")
-            .select(["id", "name", "status"])
+            .select(["id", "name", "status", "roles"])
             .where("id", "=", room.selected_task_pack_id)
             .executeTakeFirst()
         : null;
@@ -414,19 +433,30 @@ export class GameService {
       const items = pack
         ? await trx
             .selectFrom("app.task_pack_items")
-            .select(["id", "position", "description"])
+            .select(["id", "position", "description", "difficulty"])
             .where("task_pack_id", "=", pack.id)
             .where("is_active", "=", true)
             .orderBy("position")
             .execute()
         : [];
-      const band =
-        participants.length >= 4 && participants.length <= 12
-          ? playerBand(participants.length)
-          : null;
-      if (band && items.length < band.tasksPerPlayer)
-        reasons.selectedTaskPack = `The selected task pack needs at least ${band.tasksPerPlayer} active tasks.`;
-      if (Object.keys(reasons).length || !pack || !band)
+      const requestedTasks = {
+        easy: room.easy_tasks_per_player,
+        medium: room.medium_tasks_per_player,
+        hard: room.hard_tasks_per_player,
+      } as const;
+      for (const difficulty of ["easy", "medium", "hard"] as const) {
+        const available = items.filter((item) => item.difficulty === difficulty).length;
+        if (available < requestedTasks[difficulty])
+          reasons[`tasks.${difficulty}`] =
+            `The map needs ${requestedTasks[difficulty]} active ${difficulty} task${requestedTasks[difficulty] === 1 ? "" : "s"}.`;
+      }
+      const roleByName = new Map((pack?.roles ?? []).map((role) => [role.name, role]));
+      const roleTotal = Object.values(room.role_counts).reduce((sum, count) => sum + count, 0);
+      if (Object.keys(room.role_counts).some((name) => !roleByName.has(name)))
+        reasons.roleCounts = "A selected crew role is no longer available on this map.";
+      if (roleTotal > participants.length - room.imposter_count)
+        reasons.roleCounts = "Selected crew roles exceed the available crewmates.";
+      if (Object.keys(reasons).length || !pack)
         throw new ApplicationError(422, "ROOM_NOT_READY", "The room is not ready to start.", {
           reasons,
         });
@@ -459,6 +489,9 @@ export class GameService {
             role: "crew" as const,
             life_status: "alive" as const,
             kill_available_at: null,
+            crew_role_name: null,
+            crew_role_specialization: null,
+            crew_role_ability: null,
           })),
         )
         .execute();
@@ -468,13 +501,32 @@ export class GameService {
         source_pack_item_id: item.id,
         description_snapshot: item.description,
         position: item.position,
+        difficulty_snapshot: item.difficulty,
       }));
-      const plan = createAssignmentPlan(
-        participantIds,
-        snapshots,
-        band.imposters,
-        band.tasksPerPlayer,
+      const plan = createAssignmentPlan(participantIds, snapshots, room.imposter_count, 0);
+      for (const participantId of participantIds) {
+        const chosen = (["easy", "medium", "hard"] as const).flatMap((difficulty) =>
+          sampleDistinct(
+            snapshots.filter((task) => task.difficulty_snapshot === difficulty),
+            requestedTasks[difficulty],
+          ),
+        );
+        plan.tasks.set(participantId, chosen);
+      }
+      const shuffledCrew = secureShuffle(
+        participantIds.filter((id) => plan.roles.get(id) === "crew"),
       );
+      const crewRoles = new Map<
+        string,
+        { name: string; specialization: string; ability: string }
+      >();
+      let roleCursor = 0;
+      for (const [name, count] of Object.entries(room.role_counts)) {
+        const definition = roleByName.get(name);
+        if (!definition) continue;
+        for (let index = 0; index < count; index += 1)
+          crewRoles.set(shuffledCrew[roleCursor++], definition);
+      }
       await Promise.all(
         participantIds.map((participantId) =>
           trx
@@ -482,6 +534,17 @@ export class GameService {
             .set({
               role: plan.roles.get(participantId)!,
               kill_available_at: plan.roles.get(participantId) === "imposter" ? now : null,
+              crew_role_name:
+                crewRoles.get(participantId)?.name ??
+                (plan.roles.get(participantId) === "crew" ? "Crewmate" : null),
+              crew_role_specialization:
+                crewRoles.get(participantId)?.specialization ??
+                (plan.roles.get(participantId) === "crew" ? "General operations" : null),
+              crew_role_ability:
+                crewRoles.get(participantId)?.ability ??
+                (plan.roles.get(participantId) === "crew"
+                  ? "Complete assigned tasks and identify impostors."
+                  : null),
             })
             .where("game_id", "=", gameId)
             .where("participant_id", "=", participantId)
@@ -520,8 +583,8 @@ export class GameService {
         .updateTable("app.rooms")
         .set({
           status: "active",
-          imposter_count: band.imposters,
-          tasks_per_crew: band.tasksPerPlayer,
+          imposter_count: room.imposter_count,
+          tasks_per_crew: requestedTasks.easy + requestedTasks.medium + requestedTasks.hard,
           last_activity_at: now,
           expires_at: new Date(now.getTime() + 12 * 60 * 60 * 1000),
         })

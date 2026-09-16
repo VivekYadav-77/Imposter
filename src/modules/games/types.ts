@@ -5,6 +5,7 @@ export interface GameAssignmentDto {
   description: string;
   status: "assigned" | "completed";
   completedAt: string | null;
+  difficulty: "easy" | "medium" | "hard";
 }
 
 export interface GameSnapshotDto {
@@ -27,6 +28,7 @@ export interface GameSnapshotDto {
     role: GameRole;
     lifeStatus: LifeStatus;
     capabilities: string[];
+    crewRole: null | { name: string; specialization: string; ability: string };
   };
   assignments: GameAssignmentDto[];
   progress: { completed: number; total: number };

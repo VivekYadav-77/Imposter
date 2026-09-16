@@ -109,13 +109,13 @@ describeWithDatabase("authoritative game start and progress", () => {
       reason: { code: "GAME_ALREADY_STARTED" },
     });
     const snapshot = await games.snapshot(ready.host);
-    expect(snapshot.assignments).toHaveLength(4);
+    expect(snapshot.assignments).toHaveLength(3);
     const persistedRoles = await dependencies.db
       .selectFrom("app.game_participants")
       .select(["role"])
       .where("game_id", "=", snapshot.id)
       .execute();
-    expect(persistedRoles.filter((entry) => entry.role === "imposter")).toHaveLength(2);
+    expect(persistedRoles.filter((entry) => entry.role === "imposter")).toHaveLength(1);
   });
 
   it("rejects a lobby that is missing players and a selected pack", async () => {

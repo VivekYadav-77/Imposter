@@ -27,13 +27,15 @@ export interface RoomSnapshot {
   id: string;
   code: string;
   status: "lobby" | "active" | "completed" | "abandoned" | "expired";
-  maxPlayers: 12;
+  minPlayers: number;
+  maxPlayers: number;
   settings: {
-    selectedTaskPack: null | { id: string; name: string; revision: number };
+    selectedTaskPack: null | { id: string; name: string; revision: number; roles: MapRole[] };
     taskPhaseSeconds: number;
-    discussionSeconds: number;
-    reviewSeconds: number;
-    votingSeconds: number;
+    imposterCount: number;
+    allowedImposterCounts: number[];
+    taskCounts: { easy: number; medium: number; hard: number };
+    roleCounts: Record<string, number>;
   };
   participants: Array<{
     id: string;
@@ -59,6 +61,14 @@ export interface PublicPackSummary {
   description: string | null;
   activeTaskCount: number;
   revision: number;
+  roles: MapRole[];
+}
+
+export type TaskDifficulty = "easy" | "medium" | "hard";
+export interface MapRole {
+  name: string;
+  specialization: string;
+  ability: string;
 }
 
 export type LifeStatus = "alive" | "killed" | "ejected";
@@ -119,12 +129,14 @@ export interface GameSnapshot {
     role: "crew" | "imposter";
     lifeStatus: LifeStatus;
     capabilities: string[];
+    crewRole: MapRole | null;
   };
   assignments: Array<{
     id: string;
     description: string;
     status: "assigned" | "completed";
     completedAt: string | null;
+    difficulty: TaskDifficulty;
   }>;
   progress: { completed: number; total: number };
   meeting: Meeting | null;
@@ -160,6 +172,7 @@ export interface Submission {
 export interface PackItemInput {
   description: string;
   isActive?: boolean;
+  difficulty: TaskDifficulty;
 }
 export interface PackItem extends PackItemInput {
   id: string;
@@ -179,6 +192,7 @@ export interface AdminPackSummary {
   updatedAt: string;
   itemCount: number;
   activeItemCount: number;
+  roles: MapRole[];
 }
 export interface AdminPack extends Omit<AdminPackSummary, "itemCount" | "activeItemCount"> {
   items: PackItem[];

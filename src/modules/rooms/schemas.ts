@@ -19,18 +19,43 @@ const nickname = z
   .refine((value) => !/[\p{Cc}\p{Cf}]/u.test(value), "Nickname cannot contain control characters.");
 
 export const roomMembershipSchema = z.object({ nickname }).strict();
+export const roomCreationSchema = z
+  .object({
+    nickname,
+    minPlayers: z.number().int().min(3).max(15).default(3),
+    maxPlayers: z.number().int().min(3).max(15).default(12),
+  })
+  .strict()
+  .refine((value) => value.minPlayers <= value.maxPlayers, {
+    message: "Minimum players cannot exceed maximum players.",
+    path: ["minPlayers"],
+  });
 
 export const roomSettingsSchema = z
   .object({
     selectedTaskPackId: z.uuid().nullable().optional(),
     taskPhaseSeconds: z.number().int().min(300).max(3600).optional(),
-    discussionSeconds: z.number().int().min(30).max(300).optional(),
-    reviewSeconds: z.number().int().min(30).max(180).optional(),
-    votingSeconds: z.number().int().min(30).max(180).optional(),
+    imposterCount: z.number().int().min(1).max(7).optional(),
+    taskCounts: z
+      .object({
+        easy: z.number().int().min(0).max(15),
+        medium: z.number().int().min(0).max(15),
+        hard: z.number().int().min(0).max(15),
+      })
+      .strict()
+      .refine(
+        (value) =>
+          value.easy + value.medium + value.hard >= 1 &&
+          value.easy + value.medium + value.hard <= 15,
+        "Choose between 1 and 15 tasks per player.",
+      )
+      .optional(),
+    roleCounts: z.record(z.string().min(1).max(50), z.number().int().min(0).max(15)).optional(),
   })
   .strict()
   .refine((value) => Object.keys(value).length > 0, "At least one setting is required.");
 
 export const emptyBodySchema = z.object({}).strict();
 export type RoomMembershipInput = z.infer<typeof roomMembershipSchema>;
+export type RoomCreationInput = z.infer<typeof roomCreationSchema>;
 export type RoomSettingsInput = z.infer<typeof roomSettingsSchema>;

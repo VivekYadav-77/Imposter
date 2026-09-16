@@ -18,13 +18,23 @@ export interface RoomSnapshotDto {
   id: string;
   code: string;
   status: RoomStatus;
-  maxPlayers: 12;
+  minPlayers?: number;
+  maxPlayers: number;
   settings: {
-    selectedTaskPack: { id: string; name: string; revision: number } | null;
+    selectedTaskPack: {
+      id: string;
+      name: string;
+      revision: number;
+      roles: Array<{ name: string; specialization: string; ability: string }>;
+    } | null;
     taskPhaseSeconds: number;
-    discussionSeconds: number;
-    reviewSeconds: number;
-    votingSeconds: number;
+    imposterCount?: number;
+    allowedImposterCounts?: number[];
+    taskCounts?: { easy: number; medium: number; hard: number };
+    roleCounts?: Record<string, number>;
+    discussionSeconds?: number;
+    reviewSeconds?: number;
+    votingSeconds?: number;
   };
   participants: ParticipantDto[];
   self: { participantId: string; nickname: string; isHost: boolean; capabilities: string[] };
