@@ -256,6 +256,32 @@ export const openApiDocument: OpenAPIObject = {
         },
       },
     },
+    "/api/v1/games/current/meetings": {
+      post: {
+        operationId: "callMeeting",
+        security: participantSecurity,
+        parameters: [idempotency],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                additionalProperties: false,
+                required: ["expectedStateVersion"],
+                properties: { expectedStateVersion: { type: "integer", minimum: 1 } },
+              },
+            },
+          },
+        },
+        responses: {
+          "201": envelope({ $ref: "#/components/schemas/GameSnapshot" }),
+          "403": error,
+          "409": error,
+          "422": error,
+        },
+      },
+    },
     "/api/v1/meetings/current": {
       get: {
         operationId: "getCurrentMeeting",
@@ -639,6 +665,31 @@ export const openApiDocument: OpenAPIObject = {
           "422": error,
         },
       },
+      delete: {
+        operationId: "deleteTaskPack",
+        security: adminSecurity,
+        parameters: [packId, idempotency],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: { $ref: "#/components/schemas/ExpectedRevision" } },
+          },
+        },
+        responses: {
+          "200": envelope({
+            type: "object",
+            required: ["deleted", "id"],
+            properties: {
+              deleted: { type: "boolean", const: true },
+              id: { type: "string", format: "uuid" },
+            },
+          }),
+          "401": error,
+          "403": error,
+          "404": error,
+          "409": error,
+        },
+      },
     },
     "/api/v1/admin/task-packs/{packId}/publish": {
       post: {
@@ -712,6 +763,8 @@ export const openApiDocument: OpenAPIObject = {
         properties: {
           selectedTaskPackId: { type: ["string", "null"], format: "uuid" },
           taskPhaseSeconds: { type: "integer", minimum: 300, maximum: 3600 },
+          meetingsPerPlayer: { type: "integer", minimum: 0, maximum: 10 },
+          meetingDurationSeconds: { type: "integer", minimum: 30, maximum: 300 },
           imposterCount: { type: "integer", minimum: 1, maximum: 7 },
           taskCounts: {
             type: "object",
@@ -768,6 +821,9 @@ export const openApiDocument: OpenAPIObject = {
             required: [
               "selectedTaskPack",
               "taskPhaseSeconds",
+              "meetingsPerPlayer",
+              "meetingDurationSeconds",
+              "estimatedMeetingCooldownSeconds",
               "imposterCount",
               "allowedImposterCounts",
               "taskCounts",
@@ -779,17 +835,29 @@ export const openApiDocument: OpenAPIObject = {
                   { type: "null" },
                   {
                     type: "object",
-                    required: ["id", "name", "revision", "roles"],
+                    required: ["id", "name", "revision", "roles", "difficultyTaskCounts"],
                     properties: {
                       id: { type: "string", format: "uuid" },
                       name: { type: "string" },
                       revision: { type: "integer" },
                       roles: { type: "array", items: { $ref: "#/components/schemas/MapRole" } },
+                      difficultyTaskCounts: {
+                        type: "object",
+                        required: ["easy", "medium", "hard"],
+                        properties: {
+                          easy: { type: "integer", minimum: 0 },
+                          medium: { type: "integer", minimum: 0 },
+                          hard: { type: "integer", minimum: 0 },
+                        },
+                      },
                     },
                   },
                 ],
               },
               taskPhaseSeconds: { type: "integer" },
+              meetingsPerPlayer: { type: "integer" },
+              meetingDurationSeconds: { type: "integer" },
+              estimatedMeetingCooldownSeconds: { type: "integer" },
               imposterCount: { type: "integer" },
               allowedImposterCounts: { type: "array", items: { type: "integer" } },
               taskCounts: { type: "object", additionalProperties: { type: "integer" } },
@@ -901,11 +969,8 @@ export const openApiDocument: OpenAPIObject = {
           assignmentStatus: { type: "string", const: "completed" },
           progress: {
             type: "object",
-            required: ["completed", "total"],
-            properties: {
-              completed: { type: "integer", minimum: 0 },
-              total: { type: "integer", minimum: 1 },
-            },
+            required: ["percent"],
+            properties: { percent: { type: "integer", minimum: 0, maximum: 100 } },
           },
           stateVersion: { type: "integer", minimum: 1 },
         },
@@ -926,6 +991,8 @@ export const openApiDocument: OpenAPIObject = {
           "self",
           "assignments",
           "progress",
+          "cooldowns",
+          "meetingRules",
           "meeting",
         ],
         properties: {
@@ -962,12 +1029,23 @@ export const openApiDocument: OpenAPIObject = {
           self: {
             type: "object",
             additionalProperties: false,
-            required: ["participantId", "role", "lifeStatus", "capabilities", "crewRole"],
+            required: [
+              "participantId",
+              "role",
+              "lifeStatus",
+              "capabilities",
+              "killableParticipantIds",
+              "crewRole",
+            ],
             properties: {
               participantId: { type: "string", format: "uuid" },
               role: { type: "string", enum: ["crew", "imposter"] },
               lifeStatus: { type: "string", enum: ["alive", "killed", "ejected"] },
               capabilities: { type: "array", items: { type: "string" } },
+              killableParticipantIds: {
+                type: "array",
+                items: { type: "string", format: "uuid" },
+              },
               crewRole: { oneOf: [{ type: "null" }, { $ref: "#/components/schemas/MapRole" }] },
             },
           },
@@ -989,10 +1067,41 @@ export const openApiDocument: OpenAPIObject = {
           progress: {
             type: "object",
             additionalProperties: false,
-            required: ["completed", "total"],
+            required: ["percent"],
+            properties: { percent: { type: "integer", minimum: 0, maximum: 100 } },
+          },
+          cooldowns: {
+            type: "object",
+            additionalProperties: false,
+            required: [
+              "killAvailableAt",
+              "meetingAvailableAt",
+              "meetingCooldownSeconds",
+              "killCooldownSeconds",
+            ],
             properties: {
-              completed: { type: "integer", minimum: 0 },
-              total: { type: "integer", minimum: 1 },
+              killAvailableAt: { type: ["string", "null"], format: "date-time" },
+              meetingAvailableAt: { type: ["string", "null"], format: "date-time" },
+              meetingCooldownSeconds: { type: "integer", minimum: 0 },
+              killCooldownSeconds: { type: "integer", minimum: 0 },
+            },
+          },
+          meetingRules: {
+            type: "object",
+            additionalProperties: false,
+            required: [
+              "durationSeconds",
+              "maxPerPlayer",
+              "calledBySelf",
+              "remainingForSelf",
+              "hasCompletedTask",
+            ],
+            properties: {
+              durationSeconds: { type: "integer" },
+              maxPerPlayer: { type: "integer" },
+              calledBySelf: { type: "integer" },
+              remainingForSelf: { type: "integer" },
+              hasCompletedTask: { type: "boolean" },
             },
           },
           meeting: { oneOf: [{ type: "null" }, { $ref: "#/components/schemas/Meeting" }] },
@@ -1019,7 +1128,7 @@ export const openApiDocument: OpenAPIObject = {
         properties: {
           id: { type: "string", format: "uuid" },
           sequenceNumber: { type: "integer", minimum: 1 },
-          triggerType: { type: "string", enum: ["kill", "task_deadline"] },
+          triggerType: { type: "string", enum: ["kill", "task_deadline", "user_called"] },
           reportedParticipantId: { type: ["string", "null"], format: "uuid" },
           phase: { type: "string", enum: ["discussion", "review", "voting", "resolved"] },
           deadlineAt: { type: ["string", "null"], format: "date-time" },
@@ -1184,12 +1293,29 @@ export const openApiDocument: OpenAPIObject = {
       PublicPackSummary: {
         type: "object",
         additionalProperties: false,
-        required: ["id", "name", "description", "activeTaskCount", "revision", "roles"],
+        required: [
+          "id",
+          "name",
+          "description",
+          "activeTaskCount",
+          "difficultyTaskCounts",
+          "revision",
+          "roles",
+        ],
         properties: {
           id: { type: "string", format: "uuid" },
           name: { type: "string" },
           description: { type: ["string", "null"] },
           activeTaskCount: { type: "integer" },
+          difficultyTaskCounts: {
+            type: "object",
+            required: ["easy", "medium", "hard"],
+            properties: {
+              easy: { type: "integer", minimum: 0 },
+              medium: { type: "integer", minimum: 0 },
+              hard: { type: "integer", minimum: 0 },
+            },
+          },
           revision: { type: "integer" },
           roles: { type: "array", items: { $ref: "#/components/schemas/MapRole" } },
         },

@@ -74,7 +74,7 @@ describeWithDatabase("meetings and terminal outcomes", () => {
     await closeDatabase(dependencies);
   });
 
-  it("runs an anonymous kill meeting through a crew ejection victory", async () => {
+  it("keeps a kill private until an eligible player manually calls a meeting", async () => {
     const issued = [
       await rooms.createRoom({ nickname: "Host" }, randomUUID(), `meeting:${randomUUID()}`),
     ];
@@ -107,10 +107,18 @@ describeWithDatabase("meetings and terminal outcomes", () => {
       },
       key,
     );
-    expect(killed).toMatchObject({ phase: "discussion", meeting: { triggerType: "kill" } });
-    expect(JSON.stringify(await games.snapshot(principals[(imposterIndex + 1) % 4]))).not.toContain(
-      '"triggerActorParticipantId"',
-    );
+    expect(killed).toMatchObject({ phase: "task", meeting: null });
+    const observer = principals.find(
+      (principal) =>
+        principal.participantId !== imposter.participantId &&
+        principal.participantId !== target.participantId,
+    )!;
+    expect(
+      (await games.snapshot(observer)).participants.find(
+        (participant) => participant.id === target.participantId,
+      )?.lifeStatus,
+    ).toBe("alive");
+    expect((await games.snapshot(target)).self.lifeStatus).toBe("killed");
     expect(
       await games.kill(
         imposter,
@@ -123,13 +131,26 @@ describeWithDatabase("meetings and terminal outcomes", () => {
     ).toEqual(killed);
 
     await dependencies.db
-      .updateTable("app.games")
-      .set({ phase_deadline_at: new Date(0) })
-      .where("id", "=", killed.id)
+      .updateTable("app.task_assignments")
+      .set({ status: "completed", completed_at: new Date() })
+      .where("game_id", "=", killed.id)
+      .where("participant_id", "=", observer.participantId)
+      .where("id", "=", (query) =>
+        query
+          .selectFrom("app.task_assignments")
+          .select("id")
+          .where("game_id", "=", killed.id)
+          .where("participant_id", "=", observer.participantId)
+          .limit(1),
+      )
       .execute();
-    expect(await games.runDueTransitions()).toBe(1);
-    const voting = await games.snapshot(imposter);
-    expect(voting.phase).toBe("voting");
+    const beforeMeeting = await games.snapshot(observer);
+    const voting = await games.callMeeting(
+      observer,
+      { expectedStateVersion: beforeMeeting.stateVersion },
+      randomUUID(),
+    );
+    expect(voting).toMatchObject({ phase: "voting", meeting: { triggerType: "user_called" } });
     await expect(
       games.ejectionVote(
         target,
@@ -192,12 +213,20 @@ describeWithDatabase("meetings and terminal outcomes", () => {
       },
       randomUUID(),
     );
+    const caller = crew[1];
+    const assignment = await dependencies.db
+      .selectFrom("app.task_assignments")
+      .select("id")
+      .where("game_id", "=", first.id)
+      .where("participant_id", "=", caller.participantId)
+      .executeTakeFirstOrThrow();
     await dependencies.db
-      .updateTable("app.games")
-      .set({ phase_deadline_at: new Date(0) })
-      .where("id", "=", first.id)
+      .updateTable("app.task_assignments")
+      .set({ status: "completed", completed_at: new Date() })
+      .where("id", "=", assignment.id)
       .execute();
-    await games.runDueTransitions();
+    const ready = await games.snapshot(caller);
+    await games.callMeeting(caller, { expectedStateVersion: ready.stateVersion }, randomUUID());
     const living = principals.filter(
       (principal) => principal.participantId !== crew[0].participantId,
     );

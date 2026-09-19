@@ -28,17 +28,31 @@ export interface GameSnapshotDto {
     role: GameRole;
     lifeStatus: LifeStatus;
     capabilities: string[];
+    killableParticipantIds: string[];
     crewRole: null | { name: string; specialization: string; ability: string };
   };
   assignments: GameAssignmentDto[];
-  progress: { completed: number; total: number };
+  progress: { percent: number };
+  cooldowns: {
+    killAvailableAt: string | null;
+    meetingAvailableAt: string | null;
+    meetingCooldownSeconds: number;
+    killCooldownSeconds: number;
+  };
+  meetingRules: {
+    durationSeconds: number;
+    maxPerPlayer: number;
+    calledBySelf: number;
+    remainingForSelf: number;
+    hasCompletedTask: boolean;
+  };
   meeting: MeetingDto | null;
 }
 
 export interface MeetingDto {
   id: string;
   sequenceNumber: number;
-  triggerType: "kill" | "task_deadline";
+  triggerType: "kill" | "task_deadline" | "user_called";
   reportedParticipantId: string | null;
   phase: "discussion" | "review" | "voting" | "resolved";
   deadlineAt: string | null;

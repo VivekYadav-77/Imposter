@@ -35,6 +35,8 @@ export const roomSettingsSchema = z
   .object({
     selectedTaskPackId: z.uuid().nullable().optional(),
     taskPhaseSeconds: z.number().int().min(300).max(3600).optional(),
+    meetingsPerPlayer: z.number().int().min(0).max(10).optional(),
+    meetingDurationSeconds: z.number().int().min(30).max(300).optional(),
     imposterCount: z.number().int().min(1).max(7).optional(),
     taskCounts: z
       .object({

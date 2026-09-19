@@ -4,8 +4,10 @@ import {
   canTransition,
   capabilitiesFor,
   determineWinner,
-  playerBand,
+  killCooldownSeconds,
   maximumImposterCount,
+  meetingCooldownSeconds,
+  playerBand,
   recommendedImposterCount,
   resolveEjection,
   resolveReview,
@@ -139,6 +141,20 @@ describe("game domain policies", () => {
             }
             if (role === "crew") expect(capabilities).not.toContain("kill");
           }
+  });
+});
+
+describe("adaptive cooldowns", () => {
+  it("uses meeting duration as the base and shortens cooldowns as the game advances", () => {
+    expect(meetingCooldownSeconds(90, 0, 0)).toBe(180);
+    expect(meetingCooldownSeconds(90, 0.5, 0.5)).toBe(124);
+    expect(meetingCooldownSeconds(90, 1, 1)).toBe(68);
+  });
+
+  it("keeps kill cooldowns bounded and reduces them with task and time progress", () => {
+    expect(killCooldownSeconds(0, 0)).toBe(60);
+    expect(killCooldownSeconds(0.5, 0.5)).toBe(33);
+    expect(killCooldownSeconds(1, 1)).toBe(15);
   });
 });
 

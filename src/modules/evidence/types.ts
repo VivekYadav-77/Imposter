@@ -29,6 +29,6 @@ export interface SubmissionDto {
 export interface ConfirmationDto {
   submission: Omit<SubmissionDto, "uploader" | "image" | "flaggedBySelf">;
   assignmentStatus: "completed";
-  progress: { completed: number; total: number };
+  progress: { percent: number };
   stateVersion: number;
 }

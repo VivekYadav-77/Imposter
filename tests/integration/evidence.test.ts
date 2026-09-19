@@ -364,7 +364,7 @@ describeWithDatabase("private evidence lifecycle", () => {
       { expectedStateVersion: snapshot.stateVersion, uploadId: intent.uploadId },
       randomUUID(),
     );
-    expect(confirmation.progress.completed).toBe(confirmation.progress.total);
+    expect(confirmation.progress.percent).toBe(100);
     expect(await games.snapshot(owner)).toMatchObject({ phase: "game_over", winner: "crew" });
   });
 });

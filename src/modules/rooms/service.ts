@@ -7,7 +7,7 @@ import type { Database, DatabaseSchema } from "../../infrastructure/database/dat
 import { inTransaction } from "../../infrastructure/database/transaction.js";
 import { ApplicationError } from "../../shared/errors/application-error.js";
 import { hashSecret } from "../../shared/security/tokens.js";
-import { maximumImposterCount } from "../games/domain.js";
+import { maximumImposterCount, meetingCooldownSeconds } from "../games/domain.js";
 import {
   normalizeNickname,
   type RoomCreationInput,
@@ -165,6 +165,8 @@ export class RoomService {
         "rooms.hard_tasks_per_player",
         "rooms.role_counts",
         "rooms.task_phase_seconds",
+        "rooms.meetings_per_player",
+        "rooms.meeting_duration_seconds",
         "rooms.discussion_seconds",
         "rooms.review_seconds",
         "rooms.voting_seconds",
@@ -178,6 +180,19 @@ export class RoomService {
       .where("rooms.id", "=", principal.roomId)
       .executeTakeFirst();
     if (!room) throw new ApplicationError(404, "NOT_FOUND", "The room was not found.");
+    const packTaskCounts = room.pack_id
+      ? await executor
+          .selectFrom("app.task_pack_items")
+          .select([
+            sql<number>`count(*) filter (where difficulty = 'easy' and is_active)::int`.as("easy"),
+            sql<number>`count(*) filter (where difficulty = 'medium' and is_active)::int`.as(
+              "medium",
+            ),
+            sql<number>`count(*) filter (where difficulty = 'hard' and is_active)::int`.as("hard"),
+          ])
+          .where("task_pack_id", "=", room.pack_id)
+          .executeTakeFirstOrThrow()
+      : { easy: 0, medium: 0, hard: 0 };
     const participants = await executor
       .selectFrom("app.participants")
       .select(["id", "nickname", "joined_at", "disconnected_at"])
@@ -208,9 +223,17 @@ export class RoomService {
                 name: room.pack_name,
                 revision: room.pack_revision,
                 roles: room.pack_roles ?? [],
+                difficultyTaskCounts: packTaskCounts,
               }
             : null,
         taskPhaseSeconds: room.task_phase_seconds,
+        meetingsPerPlayer: room.meetings_per_player,
+        meetingDurationSeconds: room.meeting_duration_seconds,
+        estimatedMeetingCooldownSeconds: meetingCooldownSeconds(
+          room.meeting_duration_seconds,
+          0,
+          0,
+        ),
         imposterCount: room.imposter_count,
         allowedImposterCounts: Array.from(
           { length: maximumImposterCount(Math.max(3, participants.length)) },
@@ -346,6 +369,8 @@ export class RoomService {
               discussion_seconds: 90,
               review_seconds: 60,
               voting_seconds: 60,
+              meetings_per_player: 2,
+              meeting_duration_seconds: 90,
               last_activity_at: now,
               expires_at: expiresAt,
             })
@@ -585,6 +610,40 @@ export class RoomService {
           "That many impostors would leave too few crewmates for the current player count.",
           { maximum: maximumImposterCount(Math.max(3, joined.count)) },
         );
+      if (input.taskCounts !== undefined) {
+        const requested = input.taskCounts;
+        const packId =
+          input.selectedTaskPackId === undefined
+            ? room.selected_task_pack_id
+            : input.selectedTaskPackId;
+        if (!packId)
+          throw new ApplicationError(
+            422,
+            "VALIDATION_FAILED",
+            "Choose a map before configuring task quantities.",
+          );
+        const available = await trx
+          .selectFrom("app.task_pack_items")
+          .select([
+            sql<number>`count(*) filter (where difficulty = 'easy' and is_active)::int`.as("easy"),
+            sql<number>`count(*) filter (where difficulty = 'medium' and is_active)::int`.as(
+              "medium",
+            ),
+            sql<number>`count(*) filter (where difficulty = 'hard' and is_active)::int`.as("hard"),
+          ])
+          .where("task_pack_id", "=", packId)
+          .executeTakeFirstOrThrow();
+        const unavailable = (["easy", "medium", "hard"] as const).find(
+          (difficulty) => requested[difficulty] > available[difficulty],
+        );
+        if (unavailable)
+          throw new ApplicationError(
+            422,
+            "VALIDATION_FAILED",
+            `This map only has ${available[unavailable]} active ${unavailable} task${available[unavailable] === 1 ? "" : "s"}.`,
+            { difficulty: unavailable, available: available[unavailable] },
+          );
+      }
       if (input.roleCounts !== undefined) {
         const packId =
           input.selectedTaskPackId === undefined
@@ -623,6 +682,12 @@ export class RoomService {
             : {}),
           ...(input.taskPhaseSeconds !== undefined
             ? { task_phase_seconds: input.taskPhaseSeconds }
+            : {}),
+          ...(input.meetingsPerPlayer !== undefined
+            ? { meetings_per_player: input.meetingsPerPlayer }
+            : {}),
+          ...(input.meetingDurationSeconds !== undefined
+            ? { meeting_duration_seconds: input.meetingDurationSeconds }
             : {}),
           ...(input.imposterCount !== undefined ? { imposter_count: input.imposterCount } : {}),
           ...(input.taskCounts !== undefined

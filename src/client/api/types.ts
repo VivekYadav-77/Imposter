@@ -30,8 +30,17 @@ export interface RoomSnapshot {
   minPlayers: number;
   maxPlayers: number;
   settings: {
-    selectedTaskPack: null | { id: string; name: string; revision: number; roles: MapRole[] };
+    selectedTaskPack: null | {
+      id: string;
+      name: string;
+      revision: number;
+      roles: MapRole[];
+      difficultyTaskCounts: Record<TaskDifficulty, number>;
+    };
     taskPhaseSeconds: number;
+    meetingsPerPlayer: number;
+    meetingDurationSeconds: number;
+    estimatedMeetingCooldownSeconds: number;
     imposterCount: number;
     allowedImposterCounts: number[];
     taskCounts: { easy: number; medium: number; hard: number };
@@ -60,6 +69,7 @@ export interface PublicPackSummary {
   name: string;
   description: string | null;
   activeTaskCount: number;
+  difficultyTaskCounts: Record<TaskDifficulty, number>;
   revision: number;
   roles: MapRole[];
 }
@@ -101,7 +111,7 @@ export interface MeetingResult {
 export interface Meeting {
   id: string;
   sequenceNumber: number;
-  triggerType: "kill" | "task_deadline";
+  triggerType: "kill" | "task_deadline" | "user_called";
   reportedParticipantId: string | null;
   phase: "discussion" | "review" | "voting" | "resolved";
   deadlineAt: string | null;
@@ -129,6 +139,7 @@ export interface GameSnapshot {
     role: "crew" | "imposter";
     lifeStatus: LifeStatus;
     capabilities: string[];
+    killableParticipantIds: string[];
     crewRole: MapRole | null;
   };
   assignments: Array<{
@@ -138,7 +149,20 @@ export interface GameSnapshot {
     completedAt: string | null;
     difficulty: TaskDifficulty;
   }>;
-  progress: { completed: number; total: number };
+  progress: { percent: number };
+  cooldowns: {
+    killAvailableAt: string | null;
+    meetingAvailableAt: string | null;
+    meetingCooldownSeconds: number;
+    killCooldownSeconds: number;
+  };
+  meetingRules: {
+    durationSeconds: number;
+    maxPerPlayer: number;
+    calledBySelf: number;
+    remainingForSelf: number;
+    hasCompletedTask: boolean;
+  };
   meeting: Meeting | null;
 }
 

@@ -67,6 +67,16 @@ class NativeContractClient {
       .expect(201);
   }
 
+  async callMeeting(expectedStateVersion: number): Promise<GameSnapshot> {
+    const response = await request(this.server)
+      .post("/api/v1/games/current/meetings")
+      .set(this.authorization())
+      .set("Idempotency-Key", randomUUID())
+      .send({ expectedStateVersion })
+      .expect(201);
+    return (response.body as unknown as { data: GameSnapshot }).data;
+  }
+
   async vote(
     meetingId: string,
     expectedStateVersion: number,
@@ -192,13 +202,20 @@ describeWithDatabase("non-React client against the frozen public contract", () =
     const imposter = clients[imposterIndex];
     const target = clients[targetIndex];
     await imposter.kill(snapshots[imposterIndex].stateVersion, target.participantId);
-
+    const caller = clients.find((client) => client !== imposter && client !== target)!;
+    const game = await caller.snapshot();
+    const assignment = await database.db
+      .selectFrom("app.task_assignments")
+      .select("id")
+      .where("game_id", "=", game.id)
+      .where("participant_id", "=", caller.participantId)
+      .executeTakeFirstOrThrow();
     await database.db
-      .updateTable("app.games")
-      .set({ phase_deadline_at: new Date(0) })
-      .where("room_id", "=", roomId)
+      .updateTable("app.task_assignments")
+      .set({ status: "completed", completed_at: new Date() })
+      .where("id", "=", assignment.id)
       .execute();
-    expect(await games.runDueTransitions()).toBe(1);
+    await caller.callMeeting(game.stateVersion);
 
     let terminal: VoteAcknowledgement | null = null;
     for (const client of clients.filter((candidate) => candidate !== target)) {

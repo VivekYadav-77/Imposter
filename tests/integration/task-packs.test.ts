@@ -68,7 +68,7 @@ describeWithDatabase("task-pack lifecycle persistence", () => {
       ),
     ).rejects.toMatchObject({ code: "PACK_NOT_PUBLISHABLE" });
 
-    const items = Array.from({ length: 10 }, (_, index) => ({
+    const items = Array.from({ length: 3 }, (_, index) => ({
       description: `Task ${index + 1}`,
       isActive: true,
     }));
@@ -79,7 +79,7 @@ describeWithDatabase("task-pack lifecycle persistence", () => {
       "req-update",
       "update-key-1",
     );
-    expect(updated.items.map((item) => item.position)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(updated.items.map((item) => item.position)).toEqual([1, 2, 3]);
     await expect(
       repository.update(
         created.id,
@@ -100,7 +100,12 @@ describeWithDatabase("task-pack lifecycle persistence", () => {
     );
     expect(published.status).toBe("published");
     const projection = await repository.getPublic(created.id);
-    expect(projection).toMatchObject({ id: created.id, activeTaskCount: 10, revision: 3 });
+    expect(projection).toMatchObject({
+      id: created.id,
+      activeTaskCount: 3,
+      difficultyTaskCounts: { easy: 0, medium: 3, hard: 0 },
+      revision: 3,
+    });
     expect(projection).not.toHaveProperty("slug");
     expect(projection).not.toHaveProperty("status");
 
@@ -114,5 +119,40 @@ describeWithDatabase("task-pack lifecycle persistence", () => {
     );
     expect(archived.status).toBe("archived");
     expect(await repository.getPublic(created.id)).toBeNull();
+  });
+
+  it("creates and deletes a draft with difficulty tasks and crew roles", async () => {
+    const suffix = randomUUID();
+    const created = await repository.create(
+      {
+        name: `Configured map ${suffix}`,
+        description: "Admin editor payload",
+        items: [
+          { description: "Lobby", isActive: true, difficulty: "easy" },
+          { description: "Spider-Man", isActive: true, difficulty: "medium" },
+          { description: "Iron Man", isActive: true, difficulty: "hard" },
+        ],
+        roles: [
+          { name: "Doctor Strange", specialization: "Magic", ability: "Time control" },
+          { name: "Captain America", specialization: "Combat", ability: "Leadership" },
+        ],
+      },
+      adminId,
+      `req-configured-${suffix}`,
+      `create-configured-${suffix}`,
+    );
+    expect(created.items.map((item) => item.difficulty)).toEqual(["easy", "medium", "hard"]);
+    expect(created.roles).toHaveLength(2);
+
+    await expect(
+      repository.delete(
+        created.id,
+        created.revision,
+        adminId,
+        `req-delete-${suffix}`,
+        `delete-configured-${suffix}`,
+      ),
+    ).resolves.toEqual({ deleted: true, id: created.id });
+    await expect(repository.getAdmin(created.id)).resolves.toBeNull();
   });
 });

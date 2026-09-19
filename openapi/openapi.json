@@ -998,6 +998,118 @@
         }
       }
     },
+    "/api/v1/games/current/meetings": {
+      "post": {
+        "operationId": "callMeeting",
+        "security": [
+          {
+            "participantBearer": []
+          },
+          {
+            "participantCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "expectedStateVersion"
+                ],
+                "properties": {
+                  "expectedStateVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/GameSnapshot"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "requestId",
+                        "serverTime"
+                      ],
+                      "properties": {
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "serverTime": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/meetings/current": {
       "get": {
         "operationId": "getCurrentMeeting",
@@ -2732,6 +2844,136 @@
             }
           }
         }
+      },
+      "delete": {
+        "operationId": "deleteTaskPack",
+        "security": [
+          {
+            "adminCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "packId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExpectedRevision"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "deleted",
+                        "id"
+                      ],
+                      "properties": {
+                        "deleted": {
+                          "type": "boolean",
+                          "const": true
+                        },
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "requestId",
+                        "serverTime"
+                      ],
+                      "properties": {
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "serverTime": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/admin/task-packs/{packId}/publish": {
@@ -3008,6 +3250,16 @@
             "minimum": 300,
             "maximum": 3600
           },
+          "meetingsPerPlayer": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10
+          },
+          "meetingDurationSeconds": {
+            "type": "integer",
+            "minimum": 30,
+            "maximum": 300
+          },
           "imposterCount": {
             "type": "integer",
             "minimum": 1,
@@ -3124,6 +3376,9 @@
             "required": [
               "selectedTaskPack",
               "taskPhaseSeconds",
+              "meetingsPerPlayer",
+              "meetingDurationSeconds",
+              "estimatedMeetingCooldownSeconds",
               "imposterCount",
               "allowedImposterCounts",
               "taskCounts",
@@ -3141,7 +3396,8 @@
                       "id",
                       "name",
                       "revision",
-                      "roles"
+                      "roles",
+                      "difficultyTaskCounts"
                     ],
                     "properties": {
                       "id": {
@@ -3159,12 +3415,43 @@
                         "items": {
                           "$ref": "#/components/schemas/MapRole"
                         }
+                      },
+                      "difficultyTaskCounts": {
+                        "type": "object",
+                        "required": [
+                          "easy",
+                          "medium",
+                          "hard"
+                        ],
+                        "properties": {
+                          "easy": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "medium": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "hard": {
+                            "type": "integer",
+                            "minimum": 0
+                          }
+                        }
                       }
                     }
                   }
                 ]
               },
               "taskPhaseSeconds": {
+                "type": "integer"
+              },
+              "meetingsPerPlayer": {
+                "type": "integer"
+              },
+              "meetingDurationSeconds": {
+                "type": "integer"
+              },
+              "estimatedMeetingCooldownSeconds": {
                 "type": "integer"
               },
               "imposterCount": {
@@ -3447,17 +3734,13 @@
           "progress": {
             "type": "object",
             "required": [
-              "completed",
-              "total"
+              "percent"
             ],
             "properties": {
-              "completed": {
+              "percent": {
                 "type": "integer",
-                "minimum": 0
-              },
-              "total": {
-                "type": "integer",
-                "minimum": 1
+                "minimum": 0,
+                "maximum": 100
               }
             }
           },
@@ -3483,6 +3766,8 @@
           "self",
           "assignments",
           "progress",
+          "cooldowns",
+          "meetingRules",
           "meeting"
         ],
         "properties": {
@@ -3585,6 +3870,7 @@
               "role",
               "lifeStatus",
               "capabilities",
+              "killableParticipantIds",
               "crewRole"
             ],
             "properties": {
@@ -3611,6 +3897,13 @@
                 "type": "array",
                 "items": {
                   "type": "string"
+                }
+              },
+              "killableParticipantIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
                 }
               },
               "crewRole": {
@@ -3674,17 +3967,75 @@
             "type": "object",
             "additionalProperties": false,
             "required": [
-              "completed",
-              "total"
+              "percent"
             ],
             "properties": {
-              "completed": {
+              "percent": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100
+              }
+            }
+          },
+          "cooldowns": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "killAvailableAt",
+              "meetingAvailableAt",
+              "meetingCooldownSeconds",
+              "killCooldownSeconds"
+            ],
+            "properties": {
+              "killAvailableAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              },
+              "meetingAvailableAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              },
+              "meetingCooldownSeconds": {
                 "type": "integer",
                 "minimum": 0
               },
-              "total": {
+              "killCooldownSeconds": {
                 "type": "integer",
-                "minimum": 1
+                "minimum": 0
+              }
+            }
+          },
+          "meetingRules": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "durationSeconds",
+              "maxPerPlayer",
+              "calledBySelf",
+              "remainingForSelf",
+              "hasCompletedTask"
+            ],
+            "properties": {
+              "durationSeconds": {
+                "type": "integer"
+              },
+              "maxPerPlayer": {
+                "type": "integer"
+              },
+              "calledBySelf": {
+                "type": "integer"
+              },
+              "remainingForSelf": {
+                "type": "integer"
+              },
+              "hasCompletedTask": {
+                "type": "boolean"
               }
             }
           },
@@ -3731,7 +4082,8 @@
             "type": "string",
             "enum": [
               "kill",
-              "task_deadline"
+              "task_deadline",
+              "user_called"
             ]
           },
           "reportedParticipantId": {
@@ -4153,6 +4505,7 @@
           "name",
           "description",
           "activeTaskCount",
+          "difficultyTaskCounts",
           "revision",
           "roles"
         ],
@@ -4172,6 +4525,28 @@
           },
           "activeTaskCount": {
             "type": "integer"
+          },
+          "difficultyTaskCounts": {
+            "type": "object",
+            "required": [
+              "easy",
+              "medium",
+              "hard"
+            ],
+            "properties": {
+              "easy": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "medium": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "hard": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
           },
           "revision": {
             "type": "integer"

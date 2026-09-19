@@ -9,18 +9,19 @@ import { ApplicationError } from "../../shared/errors/application-error.js";
 import {
   capabilitiesFor,
   determineWinner,
+  killCooldownSeconds,
   maximumImposterCount,
+  meetingCooldownSeconds,
   resolveEjection,
   resolveReview,
 } from "./domain.js";
 import { createAssignmentPlan, sampleDistinct, secureShuffle } from "./random.js";
-import type { EjectionVoteInput, KillInput, ReviewVoteInput } from "./schemas.js";
+import type { CallMeetingInput, EjectionVoteInput, KillInput, ReviewVoteInput } from "./schemas.js";
 import type { GameSnapshotDto, MeetingDto } from "./types.js";
 
 type Executor = Database | Transaction<DatabaseSchema>;
 
 const RESULT_SECONDS = 10;
-const KILL_COOLDOWN_SECONDS = 30;
 
 function iso(value: Date | string): string {
   return new Date(value).toISOString();
@@ -282,9 +283,15 @@ export class GameService {
         "games.task_pack_name_snapshot",
         "games.phase_started_at",
         "games.phase_deadline_at",
+        "games.started_at",
+        "games.meeting_available_at",
         "rooms.host_participant_id",
+        "rooms.task_phase_seconds",
+        "rooms.meeting_duration_seconds",
+        "rooms.meetings_per_player",
         "self.role",
         "self.life_status",
+        "self.kill_available_at",
         "self.crew_role_name",
         "self.crew_role_specialization",
         "self.crew_role_ability",
@@ -293,41 +300,79 @@ export class GameService {
       .executeTakeFirst();
     if (!game) throw new ApplicationError(404, "GAME_NOT_FOUND", "No current game was found.");
 
-    const [participants, assignments, progress, meeting] = await Promise.all([
-      executor
-        .selectFrom("app.game_participants as gp")
-        .innerJoin("app.participants as participants", "participants.id", "gp.participant_id")
-        .select(["participants.id", "participants.nickname", "gp.life_status"])
-        .where("gp.game_id", "=", game.id)
-        .orderBy("participants.joined_at")
-        .orderBy("participants.id")
-        .execute(),
-      executor
-        .selectFrom("app.task_assignments as assignments")
-        .innerJoin("app.game_tasks as tasks", "tasks.id", "assignments.game_task_id")
-        .select([
-          "assignments.id",
-          "assignments.status",
-          "assignments.completed_at",
-          "tasks.description_snapshot",
-          "tasks.position",
-          "tasks.difficulty_snapshot",
-        ])
-        .where("assignments.game_id", "=", game.id)
-        .where("assignments.participant_id", "=", principal.participantId)
-        .orderBy("tasks.position")
-        .execute(),
-      executor
-        .selectFrom("app.task_assignments")
-        .select([
-          sql<number>`count(*)::int`.as("total"),
-          sql<number>`count(*) filter (where status = 'completed')::int`.as("completed"),
-        ])
-        .where("game_id", "=", game.id)
-        .where("counts_toward_progress", "=", true)
-        .executeTakeFirstOrThrow(),
-      this.meetingWith(executor, game.id, principal.participantId, game.phase),
-    ]);
+    const [participants, assignments, progress, meeting, meetingsCalled, completedBySelf] =
+      await Promise.all([
+        executor
+          .selectFrom("app.game_participants as gp")
+          .innerJoin("app.participants as participants", "participants.id", "gp.participant_id")
+          .select(["participants.id", "participants.nickname", "gp.life_status", "gp.role"])
+          .where("gp.game_id", "=", game.id)
+          .orderBy("participants.joined_at")
+          .orderBy("participants.id")
+          .execute(),
+        executor
+          .selectFrom("app.task_assignments as assignments")
+          .innerJoin("app.game_tasks as tasks", "tasks.id", "assignments.game_task_id")
+          .select([
+            "assignments.id",
+            "assignments.status",
+            "assignments.completed_at",
+            "tasks.description_snapshot",
+            "tasks.position",
+            "tasks.difficulty_snapshot",
+          ])
+          .where("assignments.game_id", "=", game.id)
+          .where("assignments.participant_id", "=", principal.participantId)
+          .orderBy("tasks.position")
+          .execute(),
+        executor
+          .selectFrom("app.task_assignments")
+          .select([
+            sql<number>`count(*)::int`.as("total"),
+            sql<number>`count(*) filter (where status = 'completed')::int`.as("completed"),
+          ])
+          .where("game_id", "=", game.id)
+          .where("counts_toward_progress", "=", true)
+          .executeTakeFirstOrThrow(),
+        this.meetingWith(executor, game.id, principal.participantId, game.phase),
+        executor
+          .selectFrom("app.meetings")
+          .select(sql<number>`count(*)::int`.as("count"))
+          .where("game_id", "=", game.id)
+          .where("trigger_type", "=", "user_called")
+          .where("trigger_actor_participant_id", "=", principal.participantId)
+          .executeTakeFirstOrThrow(),
+        executor
+          .selectFrom("app.task_assignments")
+          .select(sql<number>`count(*) filter (where status = 'completed')::int`.as("count"))
+          .where("game_id", "=", game.id)
+          .where("participant_id", "=", principal.participantId)
+          .executeTakeFirstOrThrow(),
+      ]);
+
+    const taskProgress = progress.total ? progress.completed / progress.total : 0;
+    const elapsedSeconds = Math.max(0, (Date.now() - new Date(game.started_at).getTime()) / 1000);
+    const timeProgress = Math.min(1, elapsedSeconds / game.task_phase_seconds);
+    const dynamicMeetingCooldown = meetingCooldownSeconds(
+      game.meeting_duration_seconds,
+      taskProgress,
+      timeProgress,
+    );
+    const dynamicKillCooldown = killCooldownSeconds(taskProgress, timeProgress);
+    const capabilities = capabilitiesFor({
+      phase: game.phase,
+      role: game.role,
+      lifeStatus: game.life_status,
+      isHost: principal.participantId === game.host_participant_id,
+      winner: game.winner,
+    }).filter((capability) => {
+      if (capability !== "call_meeting") return true;
+      return (
+        completedBySelf.count > 0 &&
+        meetingsCalled.count < game.meetings_per_player &&
+        (!game.meeting_available_at || new Date(game.meeting_available_at).getTime() <= Date.now())
+      );
+    });
 
     return {
       id: game.id,
@@ -342,19 +387,25 @@ export class GameService {
         id: participant.id,
         nickname: participant.nickname,
         isHost: participant.id === game.host_participant_id,
-        lifeStatus: participant.life_status,
+        lifeStatus:
+          participant.id === principal.participantId || participant.life_status !== "killed"
+            ? participant.life_status
+            : "alive",
       })),
       self: {
         participantId: principal.participantId,
         role: game.role,
         lifeStatus: game.life_status,
-        capabilities: capabilitiesFor({
-          phase: game.phase,
-          role: game.role,
-          lifeStatus: game.life_status,
-          isHost: principal.participantId === game.host_participant_id,
-          winner: game.winner,
-        }),
+        capabilities,
+        killableParticipantIds:
+          game.role === "imposter"
+            ? participants
+                .filter(
+                  (participant) =>
+                    participant.role === "crew" && participant.life_status === "alive",
+                )
+                .map((participant) => participant.id)
+            : [],
         crewRole:
           game.crew_role_name && game.crew_role_specialization && game.crew_role_ability
             ? {
@@ -371,7 +422,20 @@ export class GameService {
         completedAt: assignment.completed_at ? iso(assignment.completed_at) : null,
         difficulty: assignment.difficulty_snapshot,
       })),
-      progress: { completed: progress.completed, total: progress.total },
+      progress: { percent: Math.round(taskProgress * 100) },
+      cooldowns: {
+        killAvailableAt: game.kill_available_at ? iso(game.kill_available_at) : null,
+        meetingAvailableAt: game.meeting_available_at ? iso(game.meeting_available_at) : null,
+        meetingCooldownSeconds: dynamicMeetingCooldown,
+        killCooldownSeconds: dynamicKillCooldown,
+      },
+      meetingRules: {
+        durationSeconds: game.meeting_duration_seconds,
+        maxPerPlayer: game.meetings_per_player,
+        calledBySelf: meetingsCalled.count,
+        remainingForSelf: Math.max(0, game.meetings_per_player - meetingsCalled.count),
+        hasCompletedTask: completedBySelf.count > 0,
+      },
       meeting,
     };
   }
@@ -476,6 +540,8 @@ export class GameService {
           winner: null,
           phase_started_at: now,
           phase_deadline_at: new Date(now.getTime() + room.task_phase_seconds * 1000),
+          game_ends_at: new Date(now.getTime() + room.task_phase_seconds * 1000),
+          meeting_available_at: null,
           started_at: now,
           ended_at: null,
         })
@@ -602,14 +668,15 @@ export class GameService {
   private async createMeeting(
     trx: Transaction<DatabaseSchema>,
     game: { id: string; room_id: string },
-    triggerType: "kill" | "task_deadline",
+    triggerType: "kill" | "task_deadline" | "user_called",
     actorParticipantId: string | null,
     reportedParticipantId: string | null,
     now: Date,
+    startInVoting = false,
   ) {
     const room = await trx
       .selectFrom("app.rooms")
-      .select(["discussion_seconds"])
+      .select(["discussion_seconds", "meeting_duration_seconds"])
       .where("id", "=", game.room_id)
       .executeTakeFirstOrThrow();
     const previous = await trx
@@ -618,7 +685,10 @@ export class GameService {
       .where("game_id", "=", game.id)
       .executeTakeFirstOrThrow();
     const meetingId = randomUUID();
-    const deadline = new Date(now.getTime() + room.discussion_seconds * 1000);
+    const deadline = new Date(
+      now.getTime() +
+        (startInVoting ? room.meeting_duration_seconds : room.discussion_seconds) * 1000,
+    );
     await trx
       .insertInto("app.meetings")
       .values({
@@ -628,7 +698,7 @@ export class GameService {
         trigger_type: triggerType,
         trigger_actor_participant_id: actorParticipantId,
         reported_participant_id: reportedParticipantId,
-        phase: "discussion",
+        phase: startInVoting ? "voting" : "discussion",
         deadline_at: deadline,
         ejected_participant_id: null,
         resolved_at: null,
@@ -647,18 +717,24 @@ export class GameService {
           voters.map((voter) => ({ meeting_id: meetingId, participant_id: voter.participant_id })),
         )
         .execute();
-    const flagged = await trx
-      .selectFrom("app.task_submissions as submission")
-      .innerJoin("app.task_assignments as assignment", "assignment.id", "submission.assignment_id")
-      .innerJoin("app.submission_flags as flag", "flag.submission_id", "submission.id")
-      .select("submission.id")
-      .distinct()
-      .where("assignment.game_id", "=", game.id)
-      .where("submission.processing_status", "=", "accepted")
-      .where("submission.review_status", "=", "flagged")
-      .where("flag.resolved_at", "is", null)
-      .orderBy("submission.id")
-      .execute();
+    const flagged = startInVoting
+      ? []
+      : await trx
+          .selectFrom("app.task_submissions as submission")
+          .innerJoin(
+            "app.task_assignments as assignment",
+            "assignment.id",
+            "submission.assignment_id",
+          )
+          .innerJoin("app.submission_flags as flag", "flag.submission_id", "submission.id")
+          .select("submission.id")
+          .distinct()
+          .where("assignment.game_id", "=", game.id)
+          .where("submission.processing_status", "=", "accepted")
+          .where("submission.review_status", "=", "flagged")
+          .where("flag.resolved_at", "is", null)
+          .orderBy("submission.id")
+          .execute();
     if (flagged.length)
       await trx
         .insertInto("app.evidence_review_items")
@@ -760,12 +836,12 @@ export class GameService {
         throw new ApplicationError(409, "TARGET_NOT_ELIGIBLE", "The target is not eligible.");
       const target = await trx
         .selectFrom("app.game_participants")
-        .select(["participant_id", "life_status"])
+        .select(["participant_id", "life_status", "role"])
         .where("game_id", "=", game.id)
         .where("participant_id", "=", input.targetParticipantId)
         .forUpdate()
         .executeTakeFirst();
-      if (!target || target.life_status !== "alive")
+      if (!target || target.life_status !== "alive" || target.role !== "crew")
         throw new ApplicationError(409, "TARGET_NOT_ELIGIBLE", "The target is not eligible.");
       await trx
         .updateTable("app.game_participants")
@@ -773,20 +849,42 @@ export class GameService {
         .where("game_id", "=", game.id)
         .where("participant_id", "=", target.participant_id)
         .execute();
-      const meeting = await this.createMeeting(
-        trx,
-        game,
-        "kill",
-        principal.participantId,
-        target.participant_id,
-        now,
+      const [progress, settings] = await Promise.all([
+        trx
+          .selectFrom("app.task_assignments")
+          .select([
+            sql<number>`count(*)::int`.as("total"),
+            sql<number>`count(*) filter (where status = 'completed')::int`.as("completed"),
+          ])
+          .where("game_id", "=", game.id)
+          .where("counts_toward_progress", "=", true)
+          .executeTakeFirstOrThrow(),
+        trx
+          .selectFrom("app.rooms")
+          .select("task_phase_seconds")
+          .where("id", "=", game.room_id)
+          .executeTakeFirstOrThrow(),
+      ]);
+      const taskProgress = progress.total ? progress.completed / progress.total : 0;
+      const timeProgress = Math.min(
+        1,
+        Math.max(0, (now.getTime() - new Date(game.started_at).getTime()) / 1000) /
+          settings.task_phase_seconds,
       );
+      const cooldownSeconds = killCooldownSeconds(taskProgress, timeProgress);
+      const killAvailableAt = new Date(now.getTime() + cooldownSeconds * 1000);
+      await trx
+        .updateTable("app.game_participants")
+        .set({ kill_available_at: killAvailableAt })
+        .where("game_id", "=", game.id)
+        .where("participant_id", "=", principal.participantId)
+        .execute();
       await trx
         .insertInto("app.eliminations")
         .values({
           id: randomUUID(),
           game_id: game.id,
-          meeting_id: meeting.id,
+          meeting_id: null,
           target_participant_id: target.participant_id,
           actor_participant_id: principal.participantId,
           type: "killed",
@@ -795,15 +893,12 @@ export class GameService {
         .execute();
       const nextVersion = Number(game.state_version) + 1;
       const winner = await this.winnerWith(trx, game.id);
-      if (winner) await this.finishGame(trx, game, winner, nextVersion, now, meeting.id);
+      if (winner) await this.finishGame(trx, game, winner, nextVersion, now);
       else
         await trx
           .updateTable("app.games")
           .set({
-            phase: "discussion",
             state_version: nextVersion,
-            phase_started_at: now,
-            phase_deadline_at: meeting.deadline,
           })
           .where("id", "=", game.id)
           .execute();
@@ -812,16 +907,160 @@ export class GameService {
         .values({
           game_id: game.id,
           state_version: nextVersion,
-          type: winner ? "game.ended" : "meeting.started",
-          actor_participant_id: null,
-          visibility: "public",
+          type: winner ? "game.ended" : "player.killed",
+          actor_participant_id: principal.participantId,
+          visibility: winner ? "public" : "internal",
           payload: winner
             ? { schemaVersion: 1, winner, eliminatedParticipantId: target.participant_id }
-            : {
-                schemaVersion: 1,
-                meetingId: meeting.id,
-                eliminatedParticipantId: target.participant_id,
-              },
+            : { schemaVersion: 1, cooldownSeconds },
+        })
+        .execute();
+      const snapshot = await this.snapshotWith(trx, principal);
+      await this.remember(trx, principal.participantId, key, operation, input, snapshot);
+      return { snapshot, changed: true };
+    });
+    if (result.changed)
+      this.events.gameChanged(principal.roomId, result.snapshot.id, result.snapshot.stateVersion);
+    return result.snapshot;
+  }
+
+  async callMeeting(
+    principal: ParticipantPrincipal,
+    input: CallMeetingInput,
+    key: string,
+  ): Promise<GameSnapshotDto> {
+    const result = await inTransaction(this.database, async (trx) => {
+      const operation = "game.call-meeting";
+      const replayed = await this.replay<GameSnapshotDto>(
+        trx,
+        principal.participantId,
+        key,
+        operation,
+        input,
+      );
+      if (replayed) return { snapshot: replayed, changed: false };
+      const game = await trx
+        .selectFrom("app.games")
+        .selectAll()
+        .where("room_id", "=", principal.roomId)
+        .forUpdate()
+        .executeTakeFirst();
+      if (!game) throw new ApplicationError(404, "GAME_NOT_FOUND", "No current game was found.");
+      this.assertVersion(game, input.expectedStateVersion);
+      if (game.phase !== "task")
+        throw new ApplicationError(
+          409,
+          "ACTION_NOT_ALLOWED_IN_PHASE",
+          "A meeting is already active.",
+        );
+
+      const now = new Date();
+      const [actor, settings, completed, called, progress] = await Promise.all([
+        trx
+          .selectFrom("app.game_participants")
+          .select(["life_status"])
+          .where("game_id", "=", game.id)
+          .where("participant_id", "=", principal.participantId)
+          .executeTakeFirst(),
+        trx
+          .selectFrom("app.rooms")
+          .select(["meeting_duration_seconds", "meetings_per_player", "task_phase_seconds"])
+          .where("id", "=", game.room_id)
+          .executeTakeFirstOrThrow(),
+        trx
+          .selectFrom("app.task_assignments")
+          .select(sql<number>`count(*) filter (where status = 'completed')::int`.as("count"))
+          .where("game_id", "=", game.id)
+          .where("participant_id", "=", principal.participantId)
+          .executeTakeFirstOrThrow(),
+        trx
+          .selectFrom("app.meetings")
+          .select(sql<number>`count(*)::int`.as("count"))
+          .where("game_id", "=", game.id)
+          .where("trigger_type", "=", "user_called")
+          .where("trigger_actor_participant_id", "=", principal.participantId)
+          .executeTakeFirstOrThrow(),
+        trx
+          .selectFrom("app.task_assignments")
+          .select([
+            sql<number>`count(*)::int`.as("total"),
+            sql<number>`count(*) filter (where status = 'completed')::int`.as("completed"),
+          ])
+          .where("game_id", "=", game.id)
+          .where("counts_toward_progress", "=", true)
+          .executeTakeFirstOrThrow(),
+      ]);
+      if (!actor || actor.life_status !== "alive")
+        throw new ApplicationError(
+          403,
+          "PLAYER_NOT_ELIGIBLE",
+          "Dead or ejected players cannot call meetings.",
+        );
+      if (completed.count < 1)
+        throw new ApplicationError(
+          403,
+          "TASK_REQUIRED",
+          "Complete at least one task before calling a meeting.",
+        );
+      if (called.count >= settings.meetings_per_player)
+        throw new ApplicationError(
+          409,
+          "MEETING_LIMIT_REACHED",
+          "You have used all of your meetings.",
+        );
+      if (game.meeting_available_at && new Date(game.meeting_available_at) > now)
+        throw new ApplicationError(
+          409,
+          "MEETING_COOLDOWN",
+          "The meeting cooldown has not elapsed.",
+          {
+            availableAt: iso(game.meeting_available_at),
+          },
+        );
+
+      const taskProgress = progress.total ? progress.completed / progress.total : 0;
+      const timeProgress = Math.min(
+        1,
+        Math.max(0, (now.getTime() - new Date(game.started_at).getTime()) / 1000) /
+          settings.task_phase_seconds,
+      );
+      const cooldownSeconds = meetingCooldownSeconds(
+        settings.meeting_duration_seconds,
+        taskProgress,
+        timeProgress,
+      );
+      const meeting = await this.createMeeting(
+        trx,
+        game,
+        "user_called",
+        principal.participantId,
+        null,
+        now,
+        true,
+      );
+      const nextVersion = Number(game.state_version) + 1;
+      await trx
+        .updateTable("app.games")
+        .set({
+          phase: "voting",
+          state_version: nextVersion,
+          phase_started_at: now,
+          phase_deadline_at: meeting.deadline,
+          meeting_available_at: new Date(
+            now.getTime() + (settings.meeting_duration_seconds + cooldownSeconds) * 1000,
+          ),
+        })
+        .where("id", "=", game.id)
+        .execute();
+      await trx
+        .insertInto("app.game_events")
+        .values({
+          game_id: game.id,
+          state_version: nextVersion,
+          type: "meeting.started",
+          actor_participant_id: principal.participantId,
+          visibility: "public",
+          payload: { schemaVersion: 1, meetingId: meeting.id, triggerType: "user_called" },
         })
         .execute();
       const snapshot = await this.snapshotWith(trx, principal);
@@ -1325,19 +1564,10 @@ export class GameService {
       let eventType = "meeting.phase_changed";
       let payload: Record<string, unknown> = { schemaVersion: 1 };
       if (game.phase === "task") {
-        const meeting = await this.createMeeting(trx, game, "task_deadline", null, null, now);
-        await trx
-          .updateTable("app.games")
-          .set({
-            phase: "discussion",
-            state_version: nextVersion,
-            phase_started_at: now,
-            phase_deadline_at: meeting.deadline,
-          })
-          .where("id", "=", game.id)
-          .execute();
-        eventType = "meeting.started";
-        payload = { schemaVersion: 1, meetingId: meeting.id, triggerType: "task_deadline" };
+        const winner = (await this.winnerWith(trx, game.id)) ?? "imposters";
+        await this.finishGame(trx, game, winner, nextVersion, now);
+        eventType = "game.ended";
+        payload = { schemaVersion: 1, winner, reason: "time_expired" };
       } else if (game.phase === "discussion") {
         const meeting = await trx
           .selectFrom("app.meetings")
@@ -1421,30 +1651,24 @@ export class GameService {
         eventType = resolved.winner ? "game.ended" : "meeting.resolved";
         payload = { schemaVersion: 1, meetingId: meeting.id, ...resolved };
       } else if (game.phase === "result") {
-        const room = await trx
-          .selectFrom("app.rooms")
-          .select("task_phase_seconds")
-          .where("id", "=", game.room_id)
-          .executeTakeFirstOrThrow();
-        const deadline = new Date(now.getTime() + room.task_phase_seconds * 1000);
-        await trx
-          .updateTable("app.game_participants")
-          .set({ kill_available_at: new Date(now.getTime() + KILL_COOLDOWN_SECONDS * 1000) })
-          .where("game_id", "=", game.id)
-          .where("role", "=", "imposter")
-          .where("life_status", "=", "alive")
-          .execute();
-        await trx
-          .updateTable("app.games")
-          .set({
-            phase: "task",
-            state_version: nextVersion,
-            phase_started_at: now,
-            phase_deadline_at: deadline,
-          })
-          .where("id", "=", game.id)
-          .execute();
-        eventType = "task_phase.started";
+        const deadline = game.game_ends_at ? new Date(game.game_ends_at) : now;
+        if (deadline <= now) {
+          await this.finishGame(trx, game, "imposters", nextVersion, now);
+          eventType = "game.ended";
+          payload = { schemaVersion: 1, winner: "imposters", reason: "time_expired" };
+        } else {
+          await trx
+            .updateTable("app.games")
+            .set({
+              phase: "task",
+              state_version: nextVersion,
+              phase_started_at: now,
+              phase_deadline_at: deadline,
+            })
+            .where("id", "=", game.id)
+            .execute();
+          eventType = "task_phase.started";
+        }
       } else return null;
       await trx
         .insertInto("app.game_events")

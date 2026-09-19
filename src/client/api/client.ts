@@ -165,6 +165,12 @@ export const participantApi = {
       body: json({ targetParticipantId, expectedStateVersion }),
       idempotencyKey: key,
     }),
+  callMeeting: (expectedStateVersion: number, key = createIdempotencyKey()) =>
+    apiRequest<GameSnapshot>("/api/v1/games/current/meetings", {
+      method: "POST",
+      body: json({ expectedStateVersion }),
+      idempotencyKey: key,
+    }),
   reviewVote: (
     id: string,
     decision: "valid" | "invalid",
@@ -286,6 +292,13 @@ export const adminApi = {
       method: "POST",
       body: json({ expectedRevision }),
       idempotencyKey: key,
+    }),
+  delete: (id: string, expectedRevision: number, key = createIdempotencyKey()) =>
+    apiRequest<{ deleted: true; id: string }>(`/api/v1/admin/task-packs/${id}`, {
+      method: "DELETE",
+      body: json({ expectedRevision }),
+      idempotencyKey: key,
+      retry: false,
     }),
 };
 

@@ -98,13 +98,13 @@ function requestHash(operation: string, input: unknown): string {
   return createHash("sha256").update(JSON.stringify({ operation, input })).digest("base64url");
 }
 
-async function replay(
+async function replay<T = AdminPackDto>(
   transaction: Transaction<DatabaseSchema>,
   adminId: string,
   key: string,
   operation: string,
   input: unknown,
-): Promise<AdminPackDto | null> {
+): Promise<T | null> {
   await sql`select pg_advisory_xact_lock(hashtextextended(${`${adminId}:${key}`}, 0))`.execute(
     transaction,
   );
@@ -132,16 +132,16 @@ async function replay(
       "IDEMPOTENCY_CONFLICT",
       "The Idempotency-Key was already used for a different request.",
     );
-  return existing.response_body as unknown as AdminPackDto;
+  return existing.response_body as unknown as T;
 }
 
-async function remember(
+async function remember<T>(
   transaction: Transaction<DatabaseSchema>,
   adminId: string,
   key: string,
   operation: string,
   input: unknown,
-  response: AdminPackDto,
+  response: T,
 ): Promise<void> {
   await transaction
     .insertInto("app.admin_idempotency_records")
@@ -189,7 +189,9 @@ export class TaskPackRepository {
             description: input.description ?? null,
             status: "draft",
             published_at: null,
-            roles: input.roles ?? [],
+            roles: sql<
+              Array<{ name: string; specialization: string; ability: string }>
+            >`${JSON.stringify(input.roles ?? [])}::jsonb`,
           })
           .execute();
         if (inputItems.length)
@@ -268,12 +270,20 @@ export class TaskPackRepository {
         description?: string | null;
         revision: number;
         updated_at: Date;
-        roles?: Array<{ name: string; specialization: string; ability: string }>;
       } = { revision: current.revision + 1, updated_at: new Date() };
       if (input.name !== undefined) values.name = input.name;
       if (input.description !== undefined) values.description = input.description ?? null;
-      if (input.roles !== undefined) values.roles = input.roles;
       await trx.updateTable("app.task_packs").set(values).where("id", "=", id).execute();
+      if (input.roles !== undefined)
+        await trx
+          .updateTable("app.task_packs")
+          .set({
+            roles: sql<
+              Array<{ name: string; specialization: string; ability: string }>
+            >`${JSON.stringify(input.roles)}::jsonb`,
+          })
+          .where("id", "=", id)
+          .execute();
       if (input.items !== undefined) {
         const inputItems = input.items.map((item) =>
           typeof item === "string"
@@ -353,11 +363,11 @@ export class TaskPackRepository {
           .where("task_pack_id", "=", id)
           .where("is_active", "=", true)
           .executeTakeFirstOrThrow();
-        if (count.count < 10 || count.count > 15)
+        if (count.count < 3 || count.count > 15)
           throw new ApplicationError(
             422,
             "PACK_NOT_PUBLISHABLE",
-            "A published pack must contain 10 to 15 active tasks.",
+            "A published map must contain 3 to 15 active tasks.",
             { activeItemCount: count.count },
           );
       } else if (current.status !== "published") {
@@ -387,6 +397,72 @@ export class TaskPackRepository {
       });
       const response = (await loadPack(trx, id))!;
       await remember(trx, adminId, idempotencyKey, operation, idempotencyInput, response);
+      return response;
+    });
+  }
+
+  async delete(
+    id: string,
+    expectedRevision: number,
+    adminId: string,
+    requestId: string,
+    idempotencyKey: string,
+  ): Promise<{ deleted: true; id: string }> {
+    return inTransaction(this.database, async (trx) => {
+      const operation = `task_pack.delete:${id}`;
+      const input = { expectedRevision };
+      const previous = await replay<{ deleted: true; id: string }>(
+        trx,
+        adminId,
+        idempotencyKey,
+        operation,
+        input,
+      );
+      if (previous) return previous;
+      const current = await trx
+        .selectFrom("app.task_packs")
+        .select(["id", "revision", "name"])
+        .where("id", "=", id)
+        .forUpdate()
+        .executeTakeFirst();
+      if (!current) throw new ApplicationError(404, "NOT_FOUND", "The map was not found.");
+      if (current.revision !== expectedRevision)
+        throw new ApplicationError(
+          409,
+          "PACK_REVISION_CONFLICT",
+          "The map changed before it could be deleted.",
+          { currentRevision: current.revision },
+        );
+      const [games, rooms] = await Promise.all([
+        trx
+          .selectFrom("app.games")
+          .select(sql<number>`count(*)::int`.as("count"))
+          .where("source_task_pack_id", "=", id)
+          .executeTakeFirstOrThrow(),
+        trx
+          .selectFrom("app.rooms")
+          .select(sql<number>`count(*)::int`.as("count"))
+          .where("selected_task_pack_id", "=", id)
+          .where("status", "in", ["lobby", "active"])
+          .executeTakeFirstOrThrow(),
+      ]);
+      if (games.count > 0 || rooms.count > 0)
+        throw new ApplicationError(
+          409,
+          "MAP_IN_USE",
+          "This map is used by a room or game and cannot be deleted. Archive it instead.",
+          { gameCount: games.count, activeRoomCount: rooms.count },
+        );
+      await audit(trx, {
+        adminId,
+        action: "task_pack.deleted",
+        packId: id,
+        requestId,
+        metadata: { name: current.name, revision: current.revision },
+      });
+      await trx.deleteFrom("app.task_packs").where("id", "=", id).execute();
+      const response = { deleted: true as const, id };
+      await remember(trx, adminId, idempotencyKey, operation, input, response);
       return response;
     });
   }
@@ -457,6 +533,15 @@ export class TaskPackRepository {
         "packs.revision",
         "packs.roles",
         sql<number>`count(items.id)::int`.as("activeTaskCount"),
+        sql<number>`count(items.id) filter (where items.difficulty = 'easy')::int`.as(
+          "easyTaskCount",
+        ),
+        sql<number>`count(items.id) filter (where items.difficulty = 'medium')::int`.as(
+          "mediumTaskCount",
+        ),
+        sql<number>`count(items.id) filter (where items.difficulty = 'hard')::int`.as(
+          "hardTaskCount",
+        ),
       ])
       .where("packs.status", "=", "published")
       .where("items.is_active", "=", true)
@@ -477,6 +562,11 @@ export class TaskPackRepository {
       description: row.description,
       revision: row.revision,
       activeTaskCount: row.activeTaskCount,
+      difficultyTaskCounts: {
+        easy: row.easyTaskCount,
+        medium: row.mediumTaskCount,
+        hard: row.hardTaskCount,
+      },
       roles: row.roles,
     }));
   }
@@ -496,6 +586,15 @@ export class TaskPackRepository {
       .where("is_active", "=", true)
       .orderBy("position")
       .execute();
-    return { ...pack, activeTaskCount: items.length, items };
+    return {
+      ...pack,
+      activeTaskCount: items.length,
+      difficultyTaskCounts: {
+        easy: items.filter((item) => item.difficulty === "easy").length,
+        medium: items.filter((item) => item.difficulty === "medium").length,
+        hard: items.filter((item) => item.difficulty === "hard").length,
+      },
+      items,
+    };
   }
 }

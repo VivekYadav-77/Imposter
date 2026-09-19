@@ -97,6 +97,8 @@ export interface RoomsTable {
   discussion_seconds: number;
   review_seconds: number;
   voting_seconds: number;
+  meetings_per_player: number;
+  meeting_duration_seconds: number;
   created_at: Timestamp;
   last_activity_at: Timestamp;
   expires_at: Timestamp;
@@ -146,6 +148,8 @@ export interface GamesTable {
   phase_deadline_at: NullableTimestamp;
   started_at: Timestamp;
   ended_at: NullableTimestamp;
+  meeting_available_at: NullableTimestamp;
+  game_ends_at: NullableTimestamp;
 }
 
 export interface GameParticipantsTable {
@@ -243,7 +247,7 @@ export interface MeetingsTable {
   id: string;
   game_id: string;
   sequence_number: number;
-  trigger_type: "kill" | "task_deadline";
+  trigger_type: "kill" | "task_deadline" | "user_called";
   trigger_actor_participant_id: string | null;
   reported_participant_id: string | null;
   phase: "discussion" | "review" | "voting" | "resolved";

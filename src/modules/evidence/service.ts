@@ -542,7 +542,9 @@ export class EvidenceService {
           createdAt: now.toISOString(),
         },
         assignmentStatus: "completed",
-        progress,
+        progress: {
+          percent: progress.total ? Math.round((progress.completed / progress.total) * 100) : 0,
+        },
         stateVersion: nextVersion,
       };
       await this.remember(trx, principal.participantId, key, operation, input, response);

@@ -72,10 +72,20 @@ export function AdminList() {
   const router = useRouter();
   const [packs, setPacks] = useState<AdminPackSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<PackStatus | "">("");
   const [sort, setSort] = useState("updated_desc");
+  const [deleteTarget, setDeleteTarget] = useState<AdminPackSummary | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [notice, setNotice] = useState<{
+    message: string;
+    tone: "success" | "danger" | "info";
+  } | null>(null);
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(null), 4200);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
   useEffect(() => {
     const timer = setTimeout(() => {
       const query = new URLSearchParams({ limit: "50", sort });
@@ -86,11 +96,13 @@ export function AdminList() {
         .list(query.toString())
         .then((r) => {
           setPacks(r.data);
-          setError("");
         })
         .catch((e: unknown) => {
           if (e instanceof ApiError && e.status === 401) router.replace("/admin/login");
-          else setError(errorMessage(e));
+          else {
+            const message = errorMessage(e);
+            setNotice({ message, tone: "danger" });
+          }
         })
         .finally(() => setLoading(false));
     }, 250);
@@ -99,6 +111,21 @@ export function AdminList() {
   const logout = async () => {
     await adminApi.logout();
     router.replace("/admin/login");
+  };
+  const deleteMap = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await adminApi.delete(deleteTarget.id, deleteTarget.revision);
+      setPacks((current) => current.filter((pack) => pack.id !== deleteTarget.id));
+      setNotice({ message: `“${deleteTarget.name}” was deleted.`, tone: "success" });
+      setDeleteTarget(null);
+    } catch (cause) {
+      setNotice({ message: errorMessage(cause), tone: "danger" });
+      setDeleteTarget(null);
+    } finally {
+      setDeleting(false);
+    }
   };
   const totals = useMemo(
     () => ({
@@ -172,7 +199,11 @@ export function AdminList() {
           </select>
         </label>
       </section>
-      {error && <Banner tone="danger">{error}</Banner>}
+      {notice && (
+        <div className="toast-stack">
+          <Toast tone={notice.tone}>{notice.message}</Toast>
+        </div>
+      )}
       {loading ? (
         <SkeletonList />
       ) : packs.length === 0 ? (
@@ -230,7 +261,18 @@ export function AdminList() {
                     )}
                   </td>
                   <td>
-                    <Link href={`/admin/task-packs/${pack.id}`}>Open</Link>
+                    <div className="admin-row-actions">
+                      <Link href={`/admin/task-packs/${pack.id}`}>Open</Link>
+                      <button
+                        type="button"
+                        className="trash-button"
+                        aria-label={`Delete ${pack.name}`}
+                        title={`Delete ${pack.name}`}
+                        onClick={() => setDeleteTarget(pack)}
+                      >
+                        <span aria-hidden="true">🗑</span>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -238,6 +280,20 @@ export function AdminList() {
           </table>
         </div>
       )}
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => void deleteMap()}
+        title="Delete this map?"
+        description={
+          deleteTarget
+            ? `“${deleteTarget.name}” and all of its tasks and roles will be permanently deleted. Maps used by a room or completed game are protected and must be archived instead.`
+            : ""
+        }
+        confirmLabel="Delete map"
+        dangerous
+        loading={deleting}
+      />
     </>
   );
 }
@@ -259,11 +315,9 @@ export function AdminEditor({ packId }: { packId?: string }) {
   const [loading, setLoading] = useState(Boolean(packId));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [saved, setSaved] = useState("");
   const [confirm, setConfirm] = useState<"publish" | "archive" | null>(null);
   const [baseline, setBaseline] = useState("");
   const [importMode, setImportMode] = useState<"replace" | "append">("replace");
-  const [importNotice, setImportNotice] = useState("");
   const [toast, setToast] = useState("");
   const serialized = useMemo(
     () => JSON.stringify({ name, description, items, roles }),
@@ -320,10 +374,16 @@ export function AdminEditor({ packId }: { packId?: string }) {
     return () => window.removeEventListener("beforeunload", before);
   }, [dirty]);
   useEffect(() => {
-    if (!toast) return;
-    const timer = window.setTimeout(() => setToast(""), 2400);
+    if (!toast && !error) return;
+    const timer = window.setTimeout(
+      () => {
+        setToast("");
+        setError("");
+      },
+      error ? 5200 : 3200,
+    );
     return () => window.clearTimeout(timer);
-  }, [toast]);
+  }, [error, toast]);
   const rolesValid = roles.every(
     (role) => role.name.trim() && role.specialization.trim() && role.ability.trim(),
   );
@@ -377,7 +437,6 @@ export function AdminEditor({ packId }: { packId?: string }) {
           roles: next.roles,
         }),
       );
-      setSaved("Changes saved.");
       setToast("Map changes saved.");
       if (!pack) router.replace(`/admin/task-packs/${next.id}`);
     } catch (e) {
@@ -411,8 +470,6 @@ export function AdminEditor({ packId }: { packId?: string }) {
   };
   const updateItem = (index: number, change: Partial<DraftItem>) => {
     setItems((current) => current.map((item, i) => (i === index ? { ...item, ...change } : item)));
-    setSaved("");
-    setToast("Task updated.");
   };
   const move = (index: number, delta: -1 | 1) => {
     setItems((current) => {
@@ -422,7 +479,6 @@ export function AdminEditor({ packId }: { packId?: string }) {
       [next[index], next[target]] = [next[target], next[index]];
       return next;
     });
-    setSaved("");
     setToast("Task order updated.");
   };
   const importCsv = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -430,7 +486,6 @@ export function AdminEditor({ packId }: { packId?: string }) {
     event.target.value = "";
     if (!file) return;
     setError("");
-    setImportNotice("");
     try {
       const parsed = parseTaskCsv(await file.text());
       if (parsed.tasks.length === 0) {
@@ -442,7 +497,6 @@ export function AdminEditor({ packId }: { packId?: string }) {
         const imported = parsed.tasks.map((item) => ({ ...item, difficulty: "medium" as const }));
         return (importMode === "append" ? [...existing, ...imported] : imported).slice(0, 15);
       });
-      setSaved("");
       const notes = [
         `${parsed.tasks.length} task${parsed.tasks.length === 1 ? "" : "s"} imported automatically.`,
         parsed.ignoredRows ? `${parsed.ignoredRows} empty row(s) ignored.` : "",
@@ -452,8 +506,7 @@ export function AdminEditor({ packId }: { packId?: string }) {
           ? "Only the first 15 tasks were kept."
           : "",
       ].filter(Boolean);
-      setImportNotice(notes.join(" "));
-      setToast("CSV tasks imported.");
+      setToast(notes.join(" "));
     } catch {
       setError("The CSV file could not be read. Check its format and try again.");
     }
@@ -492,24 +545,9 @@ export function AdminEditor({ packId }: { packId?: string }) {
           </Badge>
         )}
       </div>
-      {error && (
-        <Banner
-          tone="danger"
-          action={
-            error.includes("elsewhere") ? (
-              <Button variant="secondary" onClick={() => location.reload()}>
-                Reload
-              </Button>
-            ) : undefined
-          }
-        >
-          {error}
-        </Banner>
-      )}
-      {saved && <Banner tone="success">{saved}</Banner>}
-      {toast && (
+      {(error || toast) && (
         <div className="toast-stack">
-          <Toast>{toast}</Toast>
+          <Toast tone={error ? "danger" : "success"}>{error || toast}</Toast>
         </div>
       )}
       <form
@@ -527,7 +565,7 @@ export function AdminEditor({ packId }: { packId?: string }) {
             value={name}
             onChange={(e) => {
               setName(e.target.value);
-              setSaved("");
+              setToast("");
             }}
             hint={`${name.length}/80 characters`}
             disabled={pack?.status === "archived"}
@@ -539,7 +577,7 @@ export function AdminEditor({ packId }: { packId?: string }) {
             value={description}
             onChange={(e) => {
               setDescription(e.target.value);
-              setSaved("");
+              setToast("");
             }}
             hint={`${description.length}/1000 characters`}
             disabled={pack?.status === "archived"}
@@ -582,15 +620,13 @@ export function AdminEditor({ packId }: { packId?: string }) {
               Download sample
             </Button>
           </div>
-          {importNotice && <Banner tone="success">{importNotice}</Banner>}
         </section>
         <section className="card item-editor">
           <div className="section-heading">
             <div>
               <h2>Map task table</h2>
               <p className="muted">
-                Up to 15 descriptions. Published packs require enough active items for supported
-                games.
+                Add up to 15 descriptions. A map can be published with at least 3 active tasks.
               </p>
             </div>
             <Badge>
@@ -676,7 +712,6 @@ export function AdminEditor({ packId }: { packId?: string }) {
                           type="button"
                           className="remove-row"
                           onClick={() => {
-                            setSaved("");
                             setItems((current) => current.filter((_, i) => i !== index));
                             setToast("Task removed.");
                           }}
@@ -697,7 +732,6 @@ export function AdminEditor({ packId }: { packId?: string }) {
               type="button"
               variant="secondary"
               onClick={() => {
-                setSaved("");
                 setItems((current) => [
                   ...current,
                   { description: "", isActive: true, difficulty: "medium" },
@@ -733,7 +767,6 @@ export function AdminEditor({ packId }: { packId?: string }) {
                         i === index ? { ...entry, name: event.target.value } : entry,
                       ),
                     );
-                    setToast("Role updated.");
                   }}
                 />
                 <Field
@@ -747,7 +780,6 @@ export function AdminEditor({ packId }: { packId?: string }) {
                         i === index ? { ...entry, specialization: event.target.value } : entry,
                       ),
                     );
-                    setToast("Role updated.");
                   }}
                 />
                 <Field
@@ -761,7 +793,6 @@ export function AdminEditor({ packId }: { packId?: string }) {
                         i === index ? { ...entry, ability: event.target.value } : entry,
                       ),
                     );
-                    setToast("Role updated.");
                   }}
                 />
                 <Button
@@ -827,7 +858,7 @@ export function AdminEditor({ packId }: { packId?: string }) {
         title={confirm === "publish" ? "Publish this map?" : "Archive this map?"}
         description={
           confirm === "publish"
-            ? "The server will validate its active item count before making it available to rooms."
+            ? "The map needs 3 to 15 active tasks. Room task options will match the available difficulties."
             : "Archiving is terminal. The pack will no longer be available for new rooms."
         }
         confirmLabel={confirm === "publish" ? "Publish map" : "Archive map"}

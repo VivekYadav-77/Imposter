@@ -976,6 +976,240 @@ select {
   background: var(--success);
   transition: width 0.2s ease;
 }
+
+.header-game-status {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  min-width: min(430px, 48vw);
+}
+
+.header-game-status .progress-block {
+  flex: 1;
+  min-width: 150px;
+}
+
+.header-game-status .progress-label {
+  font-size: 0.72rem;
+}
+
+.live-identity-card {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 1rem;
+  margin-bottom: 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
+}
+
+.live-identity-card > div {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.live-identity-card span,
+.live-identity-card small {
+  color: var(--muted);
+}
+
+.info-button,
+.role-info-trigger > span:last-child {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--brass);
+  border-radius: 999px;
+  background: var(--elevated);
+  color: var(--amber);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.role-info-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.role-info-trigger > span:last-child {
+  width: 1.6rem;
+  height: 1.6rem;
+  font-size: 0.78rem;
+}
+
+.role-detail-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.role-detail-grid > div {
+  display: grid;
+  gap: 0.35rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--elevated);
+}
+
+.role-detail-grid span {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.meeting-action-rail {
+  position: fixed;
+  z-index: 20;
+  right: 1.25rem;
+  top: 50%;
+  display: grid;
+  gap: 0.45rem;
+  width: 176px;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: 0 18px 48px rgb(0 0 0 / 34%);
+  backdrop-filter: blur(14px);
+  transform: translateY(-50%);
+}
+
+.meeting-action-rail small {
+  color: var(--muted);
+  text-align: center;
+}
+
+.selected-file-preview {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.image-preview-overlay {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background: rgb(3 7 18 / 72%);
+  backdrop-filter: blur(16px);
+  animation: preview-fade 180ms ease-out;
+}
+
+.image-preview-modal {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: min(960px, 94vw);
+  max-height: 90vh;
+  padding: 0.75rem;
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: 1.25rem;
+  background: rgb(13 18 28 / 94%);
+  box-shadow: 0 30px 90px rgb(0 0 0 / 55%);
+  animation: preview-rise 220ms ease-out;
+}
+
+.image-preview-modal img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(90vh - 1.5rem);
+  border-radius: 0.75rem;
+  object-fit: contain;
+}
+
+.image-preview-close {
+  position: absolute;
+  z-index: 1;
+  top: 1rem;
+  right: 1rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 1px solid rgb(255 255 255 / 30%);
+  border-radius: 999px;
+  background: rgb(0 0 0 / 62%);
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+.elimination-reveal {
+  animation: elimination-impact 700ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.elimination-reveal h2 {
+  animation: elimination-name 900ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes preview-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes preview-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.97);
+  }
+}
+@keyframes elimination-impact {
+  0% {
+    opacity: 0;
+    transform: scale(0.86);
+    filter: blur(8px);
+  }
+  65% {
+    transform: scale(1.03);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+}
+@keyframes elimination-name {
+  0%,
+  25% {
+    opacity: 0;
+    letter-spacing: 0.3em;
+  }
+  100% {
+    opacity: 1;
+    letter-spacing: normal;
+  }
+}
+
+@media (max-width: 980px) {
+  .meeting-action-rail {
+    top: auto;
+    right: 1rem;
+    bottom: 1rem;
+    width: min(220px, calc(100vw - 2rem));
+    transform: none;
+  }
+
+  .header-game-status {
+    min-width: 0;
+    width: 100%;
+  }
+}
 .task-list {
   display: grid;
   gap: 10px;
@@ -1490,12 +1724,20 @@ select {
   position: fixed;
   z-index: 1000;
   right: 24px;
-  top: 24px;
+  bottom: 96px;
+  width: min(420px, calc(100vw - 32px));
 }
 .admin-page .toast {
   color: #fffaf0;
   background: #292722;
   box-shadow: 0 10px 30px rgb(0 0 0 / 25%);
+}
+.admin-page .toast-success {
+  border-color: #6ca66d;
+}
+.admin-page .toast-danger {
+  background: #481c16;
+  border-color: #dd6b53;
 }
 .role-list {
   display: grid;
@@ -1624,6 +1866,27 @@ select {
 .admin-table a {
   font-weight: 750;
   color: #874819;
+}
+.admin-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.trash-button {
+  width: 38px;
+  height: 38px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid #bd705e;
+  border-radius: 6px;
+  background: #fff4ef;
+  color: #9f3324;
+  cursor: pointer;
+}
+.trash-button:hover {
+  background: #bf4934;
+  color: #fff;
 }
 .editor-heading {
   display: flex;
@@ -1821,6 +2084,21 @@ select {
   margin-right: auto;
   color: var(--muted);
   font-size: 0.8rem;
+}
+.admin-page .save-bar .button-secondary {
+  background: #fff4df;
+  border-color: #e4a455;
+  color: #47250f;
+}
+.admin-page .save-bar .button-secondary:hover:not(:disabled) {
+  background: #f1a34c;
+  color: #17120c;
+}
+.admin-page .save-bar .button:disabled {
+  color: #d8c9ad;
+  background: #5a452a;
+  border-color: #7c6540;
+  opacity: 0.85;
 }
 .tabs {
   display: flex;

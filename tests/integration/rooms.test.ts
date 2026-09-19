@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { loadConfig } from "../../src/infrastructure/configuration/config.js";
@@ -15,6 +16,8 @@ describeWithDatabase("room and participant lifecycle persistence", () => {
   let dependencies: DatabaseDependencies;
   let rooms: RoomService;
   const createdRoomIds: string[] = [];
+  const runId = randomUUID();
+  const unique = (value: string) => `${value}:${runId}`;
 
   beforeAll(() => {
     const config = loadConfig({
@@ -36,13 +39,23 @@ describeWithDatabase("room and participant lifecycle persistence", () => {
   it("serializes nickname races and joins at fixed capacity", async () => {
     const created = await rooms.createRoom(
       { nickname: "Host" },
-      "create-capacity",
-      "test:capacity",
+      unique("create-capacity"),
+      unique("test:capacity"),
     );
     createdRoomIds.push(created.room.id);
     const race = await Promise.allSettled([
-      rooms.joinRoom(created.room.code, { nickname: "  ALICE " }, "race-alice-1", "test:race-1"),
-      rooms.joinRoom(created.room.code, { nickname: "alice" }, "race-alice-2", "test:race-2"),
+      rooms.joinRoom(
+        created.room.code,
+        { nickname: "  ALICE " },
+        unique("race-alice-1"),
+        unique("test:race-1"),
+      ),
+      rooms.joinRoom(
+        created.room.code,
+        { nickname: "alice" },
+        unique("race-alice-2"),
+        unique("test:race-2"),
+      ),
     ]);
     expect(race.filter((result) => result.status === "fulfilled")).toHaveLength(1);
     expect(race.find((result) => result.status === "rejected")).toMatchObject({
@@ -54,8 +67,8 @@ describeWithDatabase("room and participant lifecycle persistence", () => {
         rooms.joinRoom(
           created.room.code,
           { nickname: `Player ${index}` },
-          `capacity-${index}`,
-          `test:capacity-${index}`,
+          unique(`capacity-${index}`),
+          unique(`test:capacity-${index}`),
         ),
       ),
     );
@@ -73,23 +86,23 @@ describeWithDatabase("room and participant lifecycle persistence", () => {
   it("rotates, revokes, transfers host deterministically, and expires from persisted deadlines", async () => {
     const created = await rooms.createRoom(
       { nickname: "Host" },
-      "create-lifecycle",
-      "test:lifecycle",
+      unique("create-lifecycle"),
+      unique("test:lifecycle"),
     );
     createdRoomIds.push(created.room.id);
     const second = await rooms.joinRoom(
       created.room.code,
       { nickname: "Second" },
-      "join-second",
-      "test:lifecycle-second",
+      unique("join-second"),
+      unique("test:lifecycle-second"),
     );
     const host = (await rooms.authenticate(created.sessionToken))!;
-    const rotated = await rooms.rotate(host, "rotate-host");
+    const rotated = await rooms.rotate(host, unique("rotate-host"));
     expect(await rooms.authenticate(rotated.sessionToken)).toMatchObject({
       participantId: host.participantId,
       roomId: host.roomId,
     });
-    await rooms.leave(host, "leave-host");
+    await rooms.leave(host, unique("leave-host"));
     const secondPrincipal = (await rooms.authenticate(second.sessionToken))!;
     expect((await rooms.snapshot(secondPrincipal)).self.isHost).toBe(true);
     expect(await rooms.authenticate(rotated.sessionToken)).toBeNull();
@@ -110,8 +123,16 @@ describeWithDatabase("room and participant lifecycle persistence", () => {
   });
 
   it("denies a principal projected into another room", async () => {
-    const first = await rooms.createRoom({ nickname: "One" }, "create-cross-1", "test:cross-1");
-    const second = await rooms.createRoom({ nickname: "Two" }, "create-cross-2", "test:cross-2");
+    const first = await rooms.createRoom(
+      { nickname: "One" },
+      unique("create-cross-1"),
+      unique("test:cross-1"),
+    );
+    const second = await rooms.createRoom(
+      { nickname: "Two" },
+      unique("create-cross-2"),
+      unique("test:cross-2"),
+    );
     createdRoomIds.push(first.room.id, second.room.id);
     const principal = (await rooms.authenticate(first.sessionToken))!;
     await expect(rooms.snapshot({ ...principal, roomId: second.room.id })).rejects.toMatchObject({

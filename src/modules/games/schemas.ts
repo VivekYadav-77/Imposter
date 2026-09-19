@@ -9,6 +9,10 @@ export const killSchema = z
   })
   .strict();
 
+export const callMeetingSchema = z
+  .object({ expectedStateVersion: z.number().int().positive() })
+  .strict();
+
 export const reviewVoteSchema = z
   .object({
     expectedStateVersion: z.number().int().positive(),
@@ -24,5 +28,6 @@ export const ejectionVoteSchema = z
   .strict();
 
 export type KillInput = z.infer<typeof killSchema>;
+export type CallMeetingInput = z.infer<typeof callMeetingSchema>;
 export type ReviewVoteInput = z.infer<typeof reviewVoteSchema>;
 export type EjectionVoteInput = z.infer<typeof ejectionVoteSchema>;

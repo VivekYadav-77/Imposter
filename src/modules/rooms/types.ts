@@ -26,8 +26,12 @@ export interface RoomSnapshotDto {
       name: string;
       revision: number;
       roles: Array<{ name: string; specialization: string; ability: string }>;
+      difficultyTaskCounts: { easy: number; medium: number; hard: number };
     } | null;
     taskPhaseSeconds: number;
+    meetingsPerPlayer?: number;
+    meetingDurationSeconds?: number;
+    estimatedMeetingCooldownSeconds?: number;
     imposterCount?: number;
     allowedImposterCounts?: number[];
     taskCounts?: { easy: number; medium: number; hard: number };

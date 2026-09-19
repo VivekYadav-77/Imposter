@@ -89,6 +89,35 @@ export function resolveEjection(votes: readonly (string | null)[]): {
   return { targetParticipantId, totals, skip };
 }
 
+function unit(value: number): number {
+  return Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
+}
+
+/**
+ * Manual meetings become available more slowly early in a round and when little
+ * task progress has been made. The selected meeting duration is the base unit.
+ */
+export function meetingCooldownSeconds(
+  meetingDurationSeconds: number,
+  taskProgress: number,
+  timeProgress: number,
+): number {
+  const taskRemaining = 1 - unit(taskProgress);
+  const timeRemaining = 1 - unit(timeProgress);
+  const multiplier = 0.75 + 0.75 * taskRemaining + 0.5 * timeRemaining;
+  return Math.max(30, Math.round(meetingDurationSeconds * multiplier));
+}
+
+/** Kill cooldown ranges from 15–60 seconds and falls as the round advances. */
+export function killCooldownSeconds(taskProgress: number, timeProgress: number): number {
+  const taskRemaining = 1 - unit(taskProgress);
+  const timeRemaining = 1 - unit(timeProgress);
+  return Math.max(
+    15,
+    Math.min(60, Math.round(15 + 45 * taskRemaining * (0.6 + 0.4 * timeRemaining))),
+  );
+}
+
 export interface CapabilityState {
   phase: GamePhase;
   role: GameRole;
@@ -104,6 +133,7 @@ export function capabilitiesFor(state: CapabilityState): string[] {
   if (state.phase === "task") {
     if (state.lifeStatus === "alive" || state.role === "crew") capabilities.push("submit_evidence");
     if (state.role === "imposter" && state.lifeStatus === "alive") capabilities.push("kill");
+    if (state.lifeStatus === "alive") capabilities.push("call_meeting");
   }
   if (state.lifeStatus === "alive") capabilities.push("flag_evidence");
   if (["discussion", "review", "voting"].includes(state.phase) && state.lifeStatus === "alive")

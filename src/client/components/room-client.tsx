@@ -26,6 +26,21 @@ import {
   Timer,
 } from "./ui";
 
+function initialTaskDistribution(counts: { easy: number; medium: number; hard: number }) {
+  const result = { easy: 0, medium: 0, hard: 0 };
+  const difficulties = ["easy", "medium", "hard"] as const;
+  const target = Math.min(3, counts.easy + counts.medium + counts.hard);
+  while (result.easy + result.medium + result.hard < target) {
+    const before = result.easy + result.medium + result.hard;
+    for (const difficulty of difficulties) {
+      if (result[difficulty] < counts[difficulty]) result[difficulty] += 1;
+      if (result.easy + result.medium + result.hard === target) break;
+    }
+    if (result.easy + result.medium + result.hard === before) break;
+  }
+  return result;
+}
+
 export function RoomClient() {
   const router = useRouter();
   const [room, setRoom] = useState<RoomSnapshot | null>(null);
@@ -158,8 +173,14 @@ function LobbyView({
   const [packs, setPacks] = useState<PublicPackSummary[]>([]);
   const [busy, setBusy] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  const [roleInfo, setRoleInfo] = useState<PublicPackSummary["roles"][number] | null>(null);
   const canSettings = room.self.capabilities.includes("change_settings");
   const canStart = room.self.capabilities.includes("start_game");
+  const selectedPack = packs.find((pack) => pack.id === room.settings.selectedTaskPack?.id);
+  const availableTaskCounts =
+    selectedPack?.difficultyTaskCounts ??
+    room.settings.selectedTaskPack?.difficultyTaskCounts ??
+    room.settings.taskCounts;
   useEffect(() => {
     if (canSettings)
       participantApi
@@ -245,7 +266,18 @@ function LobbyView({
               <span className="field-label">Map</span>
               <select
                 value={room.settings.selectedTaskPack?.id ?? ""}
-                onChange={(e) => void update({ selectedTaskPackId: e.target.value || null })}
+                onChange={(event) => {
+                  const id = event.target.value;
+                  const selected = packs.find((pack) => pack.id === id);
+                  void update(
+                    selected
+                      ? {
+                          selectedTaskPackId: selected.id,
+                          taskCounts: initialTaskDistribution(selected.difficultyTaskCounts),
+                        }
+                      : { selectedTaskPackId: null },
+                  );
+                }}
                 disabled={busy}
               >
                 <option value="">Choose a published map</option>
@@ -262,6 +294,31 @@ function LobbyView({
               values={[300, 600, 900, 1200, 1800, 3600]}
               onChange={(value) => void update({ taskPhaseSeconds: value })}
             />
+            <TimerSelect
+              label="Meeting duration"
+              value={room.settings.meetingDurationSeconds}
+              values={[30, 45, 60, 90, 120, 180, 240, 300]}
+              onChange={(value) => void update({ meetingDurationSeconds: value })}
+            />
+            <label className="field">
+              <span className="field-label">Meetings per player</span>
+              <select
+                value={room.settings.meetingsPerPlayer}
+                disabled={busy}
+                onChange={(event) => void update({ meetingsPerPlayer: Number(event.target.value) })}
+              >
+                {Array.from({ length: 6 }, (_, count) => (
+                  <option key={count} value={count}>
+                    {count}
+                  </option>
+                ))}
+              </select>
+              <span className="field-hint">
+                Initial cooldown estimate:{" "}
+                {formatDuration(room.settings.estimatedMeetingCooldownSeconds)}. It adapts to
+                elapsed time and task progress.
+              </span>
+            </label>
             <label className="field">
               <span className="field-label">Impostors</span>
               <select
@@ -289,7 +346,11 @@ function LobbyView({
                   </span>
                   <select
                     value={room.settings.taskCounts[difficulty]}
-                    disabled={busy}
+                    disabled={
+                      busy ||
+                      !room.settings.selectedTaskPack ||
+                      availableTaskCounts[difficulty] === 0
+                    }
                     onChange={(event) =>
                       void update({
                         taskCounts: {
@@ -299,12 +360,27 @@ function LobbyView({
                       })
                     }
                   >
-                    {Array.from({ length: 6 }, (_, index) => (
-                      <option key={index} value={index}>
-                        {index}
-                      </option>
-                    ))}
+                    {Array.from(
+                      {
+                        length:
+                          Math.min(
+                            availableTaskCounts[difficulty],
+                            15 -
+                              Object.entries(room.settings.taskCounts)
+                                .filter(([name]) => name !== difficulty)
+                                .reduce((sum, [, count]) => sum + count, 0),
+                          ) + 1,
+                      },
+                      (_, index) => (
+                        <option key={index} value={index}>
+                          {index}
+                        </option>
+                      ),
+                    )}
                   </select>
+                  <span className="field-hint">
+                    {availableTaskCounts[difficulty]} active on this map
+                  </span>
                 </label>
               ))}
             </div>
@@ -313,7 +389,15 @@ function LobbyView({
                 <span className="field-label">Crew role allocation</span>
                 {room.settings.selectedTaskPack.roles.map((role) => (
                   <label className="field compact-field" key={role.name}>
-                    <span className="field-label">{role.name}</span>
+                    <button
+                      type="button"
+                      className="role-info-trigger"
+                      onClick={() => setRoleInfo(role)}
+                      aria-label={`About the ${role.name} role`}
+                    >
+                      <span>{role.name}</span>
+                      <span aria-hidden="true">i</span>
+                    </button>
                     <select
                       value={room.settings.roleCounts[role.name] ?? 0}
                       disabled={busy}
@@ -340,9 +424,7 @@ function LobbyView({
                         ),
                       )}
                     </select>
-                    <span className="field-hint">
-                      {role.specialization} · {role.ability}
-                    </span>
+                    <span className="field-hint">Select how many crewmates receive this role.</span>
                   </label>
                 ))}
               </div>
@@ -383,6 +465,22 @@ function LobbyView({
         dangerous
         loading={busy}
       />
+      <Dialog
+        open={Boolean(roleInfo)}
+        title={roleInfo?.name ?? "Crew role"}
+        onClose={() => setRoleInfo(null)}
+      >
+        <div className="role-detail-grid">
+          <div>
+            <span>Specialization</span>
+            <strong>{roleInfo?.specialization}</strong>
+          </div>
+          <div>
+            <span>Ability</span>
+            <strong>{roleInfo?.ability}</strong>
+          </div>
+        </div>
+      </Dialog>
     </>
   );
 }
@@ -410,6 +508,12 @@ function TimerSelect({
       </select>
     </label>
   );
+}
+
+function formatDuration(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return minutes ? `${minutes}m ${remainder ? `${remainder}s` : ""}`.trim() : `${seconds}s`;
 }
 
 function GameView({
@@ -537,8 +641,24 @@ function TaskView({
   const [assignmentId, setAssignmentId] = useState<string | null>(null);
   const [killTarget, setKillTarget] = useState<string | null>(null);
   const [gallery, setGallery] = useState(false);
+  const [roleInfo, setRoleInfo] = useState(false);
+  const [confirmMeeting, setConfirmMeeting] = useState(false);
+  const [meetingBusy, setMeetingBusy] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
   const selected = game.assignments.find((task) => task.id === assignmentId);
-  const canKill = game.self.capabilities.includes("kill");
+  const killReady =
+    !game.cooldowns.killAvailableAt || new Date(game.cooldowns.killAvailableAt).getTime() <= now;
+  const canKill = game.self.capabilities.includes("kill") && killReady;
+  const meetingReady =
+    (!game.cooldowns.meetingAvailableAt ||
+      new Date(game.cooldowns.meetingAvailableAt).getTime() <= now) &&
+    game.meetingRules.hasCompletedTask &&
+    game.meetingRules.remainingForSelf > 0 &&
+    game.self.lifeStatus === "alive";
   const kill = async () => {
     if (!killTarget) return;
     try {
@@ -549,12 +669,53 @@ function TaskView({
       setKillTarget(null);
     }
   };
+  const callMeeting = async () => {
+    setMeetingBusy(true);
+    try {
+      setGame((await participantApi.callMeeting(game.stateVersion)).data);
+      setConfirmMeeting(false);
+    } catch (e) {
+      onError(errorMessage(e));
+    } finally {
+      setMeetingBusy(false);
+    }
+  };
+  const roleDetails =
+    game.self.role === "imposter"
+      ? {
+          name: "Imposter",
+          specialization: "Deception",
+          ability: "Quietly eliminate living players while blending in with the crew.",
+        }
+      : (game.self.crewRole ?? {
+          name: "Crew",
+          specialization: "Task operations",
+          ability: "Complete assignments, call meetings, and identify every imposter.",
+        });
   return (
     <>
       <PhaseBar phase="tasks" identity={room.self.nickname}>
-        <Timer deadline={game.phaseDeadlineAt} label="Task time" />
+        <div className="header-game-status">
+          <Progress value={game.progress.percent} max={100} label="Crew progress" />
+          <Timer deadline={game.phaseDeadlineAt} label="Task time" />
+        </div>
       </PhaseBar>
       <div className="game-content narrow">
+        <section className="live-identity-card">
+          <IdentityToken name={room.self.nickname} status="connected" />
+          <div>
+            <span>Playing as</span>
+            <strong>{room.self.nickname}</strong>
+            <small>{roleDetails.name}</small>
+          </div>
+          <button
+            className="info-button"
+            onClick={() => setRoleInfo(true)}
+            aria-label="View role details"
+          >
+            i
+          </button>
+        </section>
         <div className="section-heading">
           <div>
             <p className="eyebrow">{game.taskPack.name}</p>
@@ -570,7 +731,6 @@ function TaskView({
             server allows it.
           </Banner>
         )}
-        <Progress value={game.progress.completed} max={game.progress.total} label="Task progress" />
         <div className="task-list">
           {game.assignments.map((task, index) => (
             <button
@@ -594,15 +754,23 @@ function TaskView({
             </button>
           ))}
         </div>
-        {canKill && (
+        {game.self.role === "imposter" && game.self.lifeStatus === "alive" && (
           <section className="danger-zone">
             <p className="eyebrow">Imposter action</p>
-            <h2>Choose carefully</h2>
+            <h2>{canKill ? "Choose carefully" : "Elimination cooling down"}</h2>
+            {!killReady && game.cooldowns.killAvailableAt && (
+              <Timer deadline={game.cooldowns.killAvailableAt} label="Kill available in" />
+            )}
             <div className="target-grid">
               {game.participants
-                .filter((p) => p.id !== game.self.participantId && p.lifeStatus === "alive")
+                .filter((p) => game.self.killableParticipantIds.includes(p.id))
                 .map((p) => (
-                  <Button key={p.id} variant="danger" onClick={() => setKillTarget(p.id)}>
+                  <Button
+                    key={p.id}
+                    variant="danger"
+                    disabled={!canKill}
+                    onClick={() => setKillTarget(p.id)}
+                  >
                     Eliminate {p.nickname}
                   </Button>
                 ))}
@@ -610,6 +778,28 @@ function TaskView({
           </section>
         )}
       </div>
+      <aside className="meeting-action-rail">
+        <Button
+          variant="secondary"
+          disabled={!meetingReady}
+          onClick={() => setConfirmMeeting(true)}
+          title={
+            !game.meetingRules.hasCompletedTask
+              ? "Complete one task first"
+              : game.meetingRules.remainingForSelf === 0
+                ? "No meetings remaining"
+                : !meetingReady
+                  ? "Meeting cooldown active"
+                  : "Call a meeting"
+          }
+        >
+          Call meeting
+        </Button>
+        <small>{game.meetingRules.remainingForSelf} remaining</small>
+        {!meetingReady && game.cooldowns.meetingAvailableAt && (
+          <Timer deadline={game.cooldowns.meetingAvailableAt} label="Available in" />
+        )}
+      </aside>
       <UploadDialog
         open={Boolean(selected)}
         assignment={selected ?? null}
@@ -629,10 +819,31 @@ function TaskView({
         onClose={() => setKillTarget(null)}
         onConfirm={() => void kill()}
         title="Eliminate this player?"
-        description="This immediately starts an anonymous meeting. The room will not be told who acted."
+        description={`Only the eliminated player will be notified. Your next elimination is available after the ${formatDuration(game.cooldowns.killCooldownSeconds)} adaptive cooldown.`}
         confirmLabel="Eliminate player"
         dangerous
       />
+      <ConfirmDialog
+        open={confirmMeeting}
+        onClose={() => setConfirmMeeting(false)}
+        onConfirm={() => void callMeeting()}
+        title="Call a meeting?"
+        description={`Voting will open for ${formatDuration(game.meetingRules.durationSeconds)}. You will have ${Math.max(0, game.meetingRules.remainingForSelf - 1)} meeting calls left.`}
+        confirmLabel="Open meeting"
+        loading={meetingBusy}
+      />
+      <Dialog open={roleInfo} title={roleDetails.name} onClose={() => setRoleInfo(false)}>
+        <div className="role-detail-grid">
+          <div>
+            <span>Specialization</span>
+            <strong>{roleDetails.specialization}</strong>
+          </div>
+          <div>
+            <span>Ability</span>
+            <strong>{roleDetails.ability}</strong>
+          </div>
+        </div>
+      </Dialog>
     </>
   );
 }
@@ -655,6 +866,17 @@ function UploadDialog({
   const [file, setFile] = useState<File | null>(null);
   const [state, setState] = useState<"idle" | "uploading" | "processing" | "done">("idle");
   const [policy, setPolicy] = useState("");
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!file) {
+      setPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
   useEffect(() => {
     if (!open) {
       setFile(null);
@@ -704,12 +926,13 @@ function UploadDialog({
         Get the whole task in frame. Confirmation completes it provisionally; processing can reject
         the image and reopen the task.
       </p>
-      {file && (
-        <img
-          className="upload-preview"
-          src={URL.createObjectURL(file)}
-          alt="Selected evidence preview"
-        />
+      {file && previewUrl && (
+        <div className="selected-file-preview">
+          <img className="upload-preview" src={previewUrl} alt="Selected evidence thumbnail" />
+          <Button variant="secondary" onClick={() => setPreviewOpen(true)}>
+            Preview image
+          </Button>
+        </div>
       )}
       {policy && <Banner tone="info">{policy}</Banner>}
       {state === "processing" || state === "done" ? (
@@ -749,6 +972,12 @@ function UploadDialog({
         </>
       )}
       {state === "done" && <Button onClick={onClose}>Back to tasks</Button>}
+      <ImagePreview
+        open={previewOpen}
+        src={previewUrl}
+        alt="Selected task evidence"
+        onClose={() => setPreviewOpen(false)}
+      />
     </Dialog>
   );
 }
@@ -767,6 +996,7 @@ function EvidenceGallery({
   const [items, setItems] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(false);
   const [flagId, setFlagId] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{ src: string; alt: string } | null>(null);
   useEffect(() => {
     if (!open) return;
     setLoading(true);
@@ -805,7 +1035,23 @@ function EvidenceGallery({
           {items.map((item) => (
             <article className="evidence-card" key={item.id}>
               {item.image ? (
-                <img src={item.image.url} alt={`Evidence submitted by ${item.uploader.nickname}`} />
+                <>
+                  <img
+                    src={item.image.url}
+                    alt={`Evidence submitted by ${item.uploader.nickname}`}
+                  />
+                  <Button
+                    variant="secondary"
+                    onClick={() =>
+                      setPreview({
+                        src: item.image!.url,
+                        alt: `Evidence submitted by ${item.uploader.nickname}`,
+                      })
+                    }
+                  >
+                    Preview image
+                  </Button>
+                </>
               ) : (
                 <div className="image-placeholder">{item.processingStatus}</div>
               )}
@@ -843,7 +1089,43 @@ function EvidenceGallery({
         confirmLabel="Flag photo"
         dangerous
       />
+      <ImagePreview
+        open={Boolean(preview)}
+        src={preview?.src ?? null}
+        alt={preview?.alt ?? "Evidence preview"}
+        onClose={() => setPreview(null)}
+      />
     </Dialog>
+  );
+}
+
+function ImagePreview({
+  open,
+  src,
+  alt,
+  onClose,
+}: {
+  open: boolean;
+  src: string | null;
+  alt: string;
+  onClose: () => void;
+}) {
+  if (!open || !src) return null;
+  return (
+    <div
+      className="image-preview-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Image preview"
+      onClick={onClose}
+    >
+      <div className="image-preview-modal" onClick={(event) => event.stopPropagation()}>
+        <button className="image-preview-close" onClick={onClose} aria-label="Close image preview">
+          ×
+        </button>
+        <img src={src} alt={alt} />
+      </div>
+    </div>
   );
 }
 
@@ -908,6 +1190,7 @@ function MeetingView({
     }
   };
   const reported = game.participants.find((p) => p.id === meeting.reportedParticipantId);
+  const canVote = meeting.capabilities.includes("vote_ejection");
   return (
     <>
       <PhaseBar
@@ -925,7 +1208,9 @@ function MeetingView({
           {game.phase === "discussion"
             ? meeting.triggerType === "kill"
               ? "A player was eliminated"
-              : "Time’s up"
+              : meeting.triggerType === "user_called"
+                ? "Meeting called"
+                : "Time’s up"
             : game.phase === "review"
               ? "Review the evidence"
               : game.phase === "voting"
@@ -974,14 +1259,16 @@ function MeetingView({
         {game.phase === "voting" && (
           <>
             <p className="lead">
-              Vote to eject, or skip if you’re not sure. You can replace your vote until the phase
-              locks.
+              {canVote
+                ? "Vote to eject, or skip if you’re not sure. You can replace your vote until voting locks."
+                : "You can observe this meeting, but dead and eliminated players cannot vote."}
             </p>
             <div className="voting-grid">
               {meeting.eligibleParticipants.map((player) => (
                 <button
                   key={player.id}
                   className={vote === player.id ? "voting-option selected" : "voting-option"}
+                  disabled={!canVote}
                   onClick={() => setVote(player.id)}
                 >
                   <IdentityToken name={player.nickname} />
@@ -990,6 +1277,7 @@ function MeetingView({
               ))}
               <button
                 className={vote === "skip" ? "voting-option selected" : "voting-option"}
+                disabled={!canVote}
                 onClick={() => setVote("skip")}
               >
                 <span className="skip-icon">—</span>
@@ -1010,7 +1298,7 @@ function MeetingView({
           </Button>
         </div>
       )}
-      {game.phase === "voting" && vote && (
+      {game.phase === "voting" && vote && canVote && (
         <div className="sticky-actions">
           <Button loading={busy} onClick={() => void submitVote()}>
             Confirm {vote === "skip" ? "skip" : "ejection vote"}
@@ -1025,7 +1313,7 @@ function ResultBlock({ game }: { game: GameSnapshot }) {
   const result = game.meeting?.result;
   const ejected = game.participants.find((p) => p.id === result?.ejectedParticipantId);
   return (
-    <section className="result-card">
+    <section className="result-card elimination-reveal" aria-live="assertive">
       <span className="stamp">DECISION</span>
       <h2>{ejected ? `${ejected.nickname} was ejected` : "No one was ejected"}</h2>
       <p>Roles remain private. The game will continue from the authoritative server state.</p>

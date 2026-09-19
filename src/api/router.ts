@@ -25,6 +25,7 @@ import type { RoomService } from "../modules/rooms/service.js";
 import type { ParticipantPrincipal } from "../modules/rooms/types.js";
 import type { GameService } from "../modules/games/service.js";
 import {
+  callMeetingSchema,
   ejectionVoteSchema,
   killSchema,
   reviewVoteSchema,
@@ -264,6 +265,7 @@ function isGameRoute(path: string): boolean {
     path === "/api/v1/games/current/snapshot" ||
     path === "/api/v1/games/current/submissions" ||
     path === "/api/v1/games/current/kills" ||
+    path === "/api/v1/games/current/meetings" ||
     path === "/api/v1/meetings/current" ||
     /^\/api\/v1\/task-assignments\/[0-9a-f-]+\/(upload-intents|submissions)$/i.test(path) ||
     /^\/api\/v1\/submissions\/[0-9a-f-]+\/flags$/i.test(path) ||
@@ -476,6 +478,17 @@ async function handleGameRoute(
       response,
       201,
       successEnvelope(await games.kill(principal, body, key), requestId),
+      requestId,
+    );
+    return;
+  }
+  if (method === "POST" && path === "/api/v1/games/current/meetings") {
+    const key = requireIdempotencyKey(request);
+    const body = await validatedBody(request, config.maxJsonBodyBytes, callMeetingSchema);
+    sendJson(
+      response,
+      201,
+      successEnvelope(await games.callMeeting(principal, body, key), requestId),
       requestId,
     );
     return;
@@ -808,6 +821,19 @@ async function handlePhaseTwoRoute(
       idempotencyKey,
     );
     sendJson(response, 200, successEnvelope(pack, requestId), requestId);
+    return;
+  }
+  if (method === "DELETE" && packMatch) {
+    const idempotencyKey = requireIdempotencyKey(request);
+    const body = await validatedBody(request, dependencies.config.maxJsonBodyBytes, revisionSchema);
+    const result = await dependencies.taskPacks.delete(
+      packMatch[1],
+      body.expectedRevision,
+      principal.adminUserId,
+      requestId,
+      idempotencyKey,
+    );
+    sendJson(response, 200, successEnvelope(result, requestId), requestId);
     return;
   }
   const actionMatch = path.match(

@@ -143,9 +143,7 @@ export function Progress({ value, max, label }: { value: number; max: number; la
     <div className="progress-block">
       <div className="progress-label">
         <span>{label}</span>
-        <strong>
-          {value}/{max}
-        </strong>
+        <strong>{percent}%</strong>
       </div>
       <div
         className="progress"
@@ -399,9 +397,19 @@ export function Drawer({
   );
 }
 
-export function Toast({ children }: { children: ReactNode }) {
+export function Toast({
+  children,
+  tone = "success",
+}: {
+  children: ReactNode;
+  tone?: "success" | "danger" | "info";
+}) {
   return (
-    <div className="toast" role="status" aria-live="polite">
+    <div
+      className={`toast toast-${tone}`}
+      role={tone === "danger" ? "alert" : "status"}
+      aria-live={tone === "danger" ? "assertive" : "polite"}
+    >
       {children}
     </div>
   );

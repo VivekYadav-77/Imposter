@@ -39,6 +39,7 @@ export interface PublicPackSummaryDto {
   name: string;
   description: string | null;
   activeTaskCount: number;
+  difficultyTaskCounts: Record<TaskDifficulty, number>;
   revision: number;
   roles: MapRoleDto[];
 }
