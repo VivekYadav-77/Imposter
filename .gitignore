@@ -7,3 +7,4 @@ coverage/
 .env.*.local
 *.log
 openapi/.generated-openapi.json
+.data/

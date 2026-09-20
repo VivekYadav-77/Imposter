@@ -29,6 +29,7 @@ export interface GameSnapshotDto {
     lifeStatus: LifeStatus;
     capabilities: string[];
     killableParticipantIds: string[];
+    knownEliminatedParticipantIds: string[];
     crewRole: null | { name: string; specialization: string; ability: string };
   };
   assignments: GameAssignmentDto[];
@@ -41,6 +42,7 @@ export interface GameSnapshotDto {
   };
   meetingRules: {
     durationSeconds: number;
+    votingMode: "timed" | "all_voted";
     maxPerPlayer: number;
     calledBySelf: number;
     remainingForSelf: number;

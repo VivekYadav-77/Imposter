@@ -19,3 +19,19 @@ export async function readJsonBody<T>(request: IncomingMessage, maximumBytes: nu
     throw new ApplicationError(400, "BAD_REQUEST", "The request body is not valid JSON.");
   }
 }
+
+export async function readBinaryBody(
+  request: IncomingMessage,
+  maximumBytes: number,
+): Promise<Uint8Array> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array);
+    size += buffer.byteLength;
+    if (size > maximumBytes)
+      throw new ApplicationError(413, "PAYLOAD_TOO_LARGE", "The uploaded file is too large.");
+    chunks.push(buffer);
+  }
+  return Buffer.concat(chunks);
+}

@@ -48,7 +48,7 @@ import {
   participantSessionCookie,
   readCookie,
 } from "../shared/security/cookies.js";
-import { readJsonBody } from "./body.js";
+import { readBinaryBody, readJsonBody } from "./body.js";
 import { sendError, sendJson } from "./http.js";
 import { openApiDocument } from "./openapi.js";
 import { resolveRequestId } from "./request-id.js";
@@ -118,8 +118,12 @@ export function createApiHandler(dependencies: ApiDependencies): ApiHandler {
       }
     }
 
+    const evidenceObjectMatch = path.match(/^\/api\/v1\/evidence-objects\/([A-Za-z0-9._-]+)$/);
     const contentLength = Number(request.headers["content-length"] ?? 0);
-    if (Number.isFinite(contentLength) && contentLength > dependencies.config.maxJsonBodyBytes) {
+    const maximumRequestBytes = evidenceObjectMatch
+      ? dependencies.config.evidenceMaxBytes
+      : dependencies.config.maxJsonBodyBytes;
+    if (Number.isFinite(contentLength) && contentLength > maximumRequestBytes) {
       sendError(
         response,
         new ApplicationError(413, "PAYLOAD_TOO_LARGE", "The request body is too large."),
@@ -167,6 +171,24 @@ export function createApiHandler(dependencies: ApiDependencies): ApiHandler {
         dependencies.config.exposeApiDocs
       ) {
         sendJson(response, 200, openApiDocument, requestId);
+      } else if (evidenceObjectMatch && dependencies.evidence) {
+        if (request.method === "PUT") {
+          const bytes = await readBinaryBody(request, dependencies.config.evidenceMaxBytes);
+          const contentType = String(request.headers["content-type"] ?? "").split(";")[0];
+          await dependencies.evidence.localCapability(evidenceObjectMatch[1], bytes, contentType);
+          response.statusCode = 204;
+          response.setHeader("X-Request-ID", requestId);
+          response.end();
+        } else if (request.method === "GET") {
+          const object = await dependencies.evidence.localCapability(evidenceObjectMatch[1]);
+          if (!object.bytes)
+            throw new ApplicationError(404, "NOT_FOUND", "The requested resource was not found.");
+          response.statusCode = 200;
+          response.setHeader("Content-Type", object.contentType ?? "application/octet-stream");
+          response.setHeader("Content-Length", object.bytes.byteLength);
+          response.setHeader("X-Request-ID", requestId);
+          response.end(Buffer.from(object.bytes));
+        } else throw new ApplicationError(405, "METHOD_NOT_ALLOWED", "That method is not allowed.");
       } else if (dependencies.rooms && isGameRoute(path)) {
         if (!dependencies.games)
           throw new ApplicationError(404, "NOT_FOUND", "The requested resource was not found.");
@@ -376,6 +398,17 @@ async function handleRoomRoute(
       response,
       201,
       successEnvelope(await games.start(principal, key), requestId),
+      requestId,
+    );
+    return;
+  }
+  if (method === "POST" && path === "/api/v1/rooms/current/replay") {
+    const key = requireIdempotencyKey(request);
+    await validatedBody(request, config.maxJsonBodyBytes, emptyBodySchema);
+    sendJson(
+      response,
+      200,
+      successEnvelope(await rooms.replayRoom(principal, key), requestId),
       requestId,
     );
     return;

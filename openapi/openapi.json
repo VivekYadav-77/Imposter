@@ -788,6 +788,99 @@
         }
       }
     },
+    "/api/v1/rooms/current/replay": {
+      "post": {
+        "operationId": "replayRoom",
+        "security": [
+          {
+            "participantBearer": []
+          },
+          {
+            "participantCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/RoomSnapshot"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "requestId",
+                        "serverTime"
+                      ],
+                      "properties": {
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "serverTime": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/games/current/snapshot": {
       "get": {
         "operationId": "getCurrentGameSnapshot",
@@ -3258,6 +3351,18 @@
           "meetingDurationSeconds": {
             "type": "integer",
             "minimum": 30,
+            "maximum": 1800
+          },
+          "meetingVotingMode": {
+            "type": "string",
+            "enum": [
+              "timed",
+              "all_voted"
+            ]
+          },
+          "imposterCooldownSeconds": {
+            "type": "integer",
+            "minimum": 10,
             "maximum": 300
           },
           "imposterCount": {
@@ -3378,6 +3483,8 @@
               "taskPhaseSeconds",
               "meetingsPerPlayer",
               "meetingDurationSeconds",
+              "meetingVotingMode",
+              "imposterCooldownSeconds",
               "estimatedMeetingCooldownSeconds",
               "imposterCount",
               "allowedImposterCounts",
@@ -3449,6 +3556,16 @@
                 "type": "integer"
               },
               "meetingDurationSeconds": {
+                "type": "integer"
+              },
+              "meetingVotingMode": {
+                "type": "string",
+                "enum": [
+                  "timed",
+                  "all_voted"
+                ]
+              },
+              "imposterCooldownSeconds": {
                 "type": "integer"
               },
               "estimatedMeetingCooldownSeconds": {
@@ -3871,6 +3988,7 @@
               "lifeStatus",
               "capabilities",
               "killableParticipantIds",
+              "knownEliminatedParticipantIds",
               "crewRole"
             ],
             "properties": {
@@ -3900,6 +4018,13 @@
                 }
               },
               "killableParticipantIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "knownEliminatedParticipantIds": {
                 "type": "array",
                 "items": {
                   "type": "string",
@@ -4016,6 +4141,7 @@
             "additionalProperties": false,
             "required": [
               "durationSeconds",
+              "votingMode",
               "maxPerPlayer",
               "calledBySelf",
               "remainingForSelf",
@@ -4024,6 +4150,13 @@
             "properties": {
               "durationSeconds": {
                 "type": "integer"
+              },
+              "votingMode": {
+                "type": "string",
+                "enum": [
+                  "timed",
+                  "all_voted"
+                ]
               },
               "maxPerPlayer": {
                 "type": "integer"

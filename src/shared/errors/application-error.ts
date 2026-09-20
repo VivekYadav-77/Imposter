@@ -50,7 +50,11 @@ export type SafeErrorCode =
   | "MEETING_NOT_FOUND"
   | "REVIEW_ITEM_NOT_FOUND"
   | "REVIEW_LOCKED"
-  | "VOTING_LOCKED";
+  | "VOTING_LOCKED"
+  | "METHOD_NOT_ALLOWED"
+  | "UPLOAD_CAPABILITY_INVALID"
+  | "UPLOAD_MISMATCH"
+  | "GAME_NOT_FINISHED";
 
 export class ApplicationError extends Error {
   constructor(

@@ -288,6 +288,8 @@ export class GameService {
         "rooms.host_participant_id",
         "rooms.task_phase_seconds",
         "rooms.meeting_duration_seconds",
+        "rooms.meeting_voting_mode",
+        "rooms.imposter_cooldown_seconds",
         "rooms.meetings_per_player",
         "self.role",
         "self.life_status",
@@ -297,58 +299,73 @@ export class GameService {
         "self.crew_role_ability",
       ])
       .where("games.room_id", "=", principal.roomId)
+      .orderBy("games.started_at", "desc")
       .executeTakeFirst();
     if (!game) throw new ApplicationError(404, "GAME_NOT_FOUND", "No current game was found.");
 
-    const [participants, assignments, progress, meeting, meetingsCalled, completedBySelf] =
-      await Promise.all([
-        executor
-          .selectFrom("app.game_participants as gp")
-          .innerJoin("app.participants as participants", "participants.id", "gp.participant_id")
-          .select(["participants.id", "participants.nickname", "gp.life_status", "gp.role"])
-          .where("gp.game_id", "=", game.id)
-          .orderBy("participants.joined_at")
-          .orderBy("participants.id")
-          .execute(),
-        executor
-          .selectFrom("app.task_assignments as assignments")
-          .innerJoin("app.game_tasks as tasks", "tasks.id", "assignments.game_task_id")
-          .select([
-            "assignments.id",
-            "assignments.status",
-            "assignments.completed_at",
-            "tasks.description_snapshot",
-            "tasks.position",
-            "tasks.difficulty_snapshot",
-          ])
-          .where("assignments.game_id", "=", game.id)
-          .where("assignments.participant_id", "=", principal.participantId)
-          .orderBy("tasks.position")
-          .execute(),
-        executor
-          .selectFrom("app.task_assignments")
-          .select([
-            sql<number>`count(*)::int`.as("total"),
-            sql<number>`count(*) filter (where status = 'completed')::int`.as("completed"),
-          ])
-          .where("game_id", "=", game.id)
-          .where("counts_toward_progress", "=", true)
-          .executeTakeFirstOrThrow(),
-        this.meetingWith(executor, game.id, principal.participantId, game.phase),
-        executor
-          .selectFrom("app.meetings")
-          .select(sql<number>`count(*)::int`.as("count"))
-          .where("game_id", "=", game.id)
-          .where("trigger_type", "=", "user_called")
-          .where("trigger_actor_participant_id", "=", principal.participantId)
-          .executeTakeFirstOrThrow(),
-        executor
-          .selectFrom("app.task_assignments")
-          .select(sql<number>`count(*) filter (where status = 'completed')::int`.as("count"))
-          .where("game_id", "=", game.id)
-          .where("participant_id", "=", principal.participantId)
-          .executeTakeFirstOrThrow(),
-      ]);
+    const [
+      participants,
+      assignments,
+      progress,
+      meeting,
+      meetingsCalled,
+      completedBySelf,
+      ownEliminations,
+    ] = await Promise.all([
+      executor
+        .selectFrom("app.game_participants as gp")
+        .innerJoin("app.participants as participants", "participants.id", "gp.participant_id")
+        .select(["participants.id", "participants.nickname", "gp.life_status", "gp.role"])
+        .where("gp.game_id", "=", game.id)
+        .orderBy("participants.joined_at")
+        .orderBy("participants.id")
+        .execute(),
+      executor
+        .selectFrom("app.task_assignments as assignments")
+        .innerJoin("app.game_tasks as tasks", "tasks.id", "assignments.game_task_id")
+        .select([
+          "assignments.id",
+          "assignments.status",
+          "assignments.completed_at",
+          "tasks.description_snapshot",
+          "tasks.position",
+          "tasks.difficulty_snapshot",
+        ])
+        .where("assignments.game_id", "=", game.id)
+        .where("assignments.participant_id", "=", principal.participantId)
+        .orderBy("tasks.position")
+        .execute(),
+      executor
+        .selectFrom("app.task_assignments")
+        .select([
+          sql<number>`count(*)::int`.as("total"),
+          sql<number>`count(*) filter (where status = 'completed')::int`.as("completed"),
+        ])
+        .where("game_id", "=", game.id)
+        .where("counts_toward_progress", "=", true)
+        .executeTakeFirstOrThrow(),
+      this.meetingWith(executor, game.id, principal.participantId, game.phase),
+      executor
+        .selectFrom("app.meetings")
+        .select(sql<number>`count(*)::int`.as("count"))
+        .where("game_id", "=", game.id)
+        .where("trigger_type", "=", "user_called")
+        .where("trigger_actor_participant_id", "=", principal.participantId)
+        .executeTakeFirstOrThrow(),
+      executor
+        .selectFrom("app.task_assignments")
+        .select(sql<number>`count(*) filter (where status = 'completed')::int`.as("count"))
+        .where("game_id", "=", game.id)
+        .where("participant_id", "=", principal.participantId)
+        .executeTakeFirstOrThrow(),
+      executor
+        .selectFrom("app.eliminations")
+        .select("target_participant_id")
+        .where("game_id", "=", game.id)
+        .where("actor_participant_id", "=", principal.participantId)
+        .where("type", "=", "killed")
+        .execute(),
+    ]);
 
     const taskProgress = progress.total ? progress.completed / progress.total : 0;
     const elapsedSeconds = Math.max(0, (Date.now() - new Date(game.started_at).getTime()) / 1000);
@@ -358,7 +375,11 @@ export class GameService {
       taskProgress,
       timeProgress,
     );
-    const dynamicKillCooldown = killCooldownSeconds(taskProgress, timeProgress);
+    const dynamicKillCooldown = killCooldownSeconds(
+      game.imposter_cooldown_seconds,
+      taskProgress,
+      timeProgress,
+    );
     const capabilities = capabilitiesFor({
       phase: game.phase,
       role: game.role,
@@ -406,6 +427,9 @@ export class GameService {
                 )
                 .map((participant) => participant.id)
             : [],
+        knownEliminatedParticipantIds: ownEliminations.map(
+          (elimination) => elimination.target_participant_id,
+        ),
         crewRole:
           game.crew_role_name && game.crew_role_specialization && game.crew_role_ability
             ? {
@@ -431,6 +455,7 @@ export class GameService {
       },
       meetingRules: {
         durationSeconds: game.meeting_duration_seconds,
+        votingMode: game.meeting_voting_mode,
         maxPerPlayer: game.meetings_per_player,
         calledBySelf: meetingsCalled.count,
         remainingForSelf: Math.max(0, game.meetings_per_player - meetingsCalled.count),
@@ -676,7 +701,7 @@ export class GameService {
   ) {
     const room = await trx
       .selectFrom("app.rooms")
-      .select(["discussion_seconds", "meeting_duration_seconds"])
+      .select(["discussion_seconds", "meeting_duration_seconds", "meeting_voting_mode"])
       .where("id", "=", game.room_id)
       .executeTakeFirstOrThrow();
     const previous = await trx
@@ -685,10 +710,13 @@ export class GameService {
       .where("game_id", "=", game.id)
       .executeTakeFirstOrThrow();
     const meetingId = randomUUID();
-    const deadline = new Date(
-      now.getTime() +
-        (startInVoting ? room.meeting_duration_seconds : room.discussion_seconds) * 1000,
-    );
+    const deadline =
+      startInVoting && room.meeting_voting_mode === "all_voted"
+        ? null
+        : new Date(
+            now.getTime() +
+              (startInVoting ? room.meeting_duration_seconds : room.discussion_seconds) * 1000,
+          );
     await trx
       .insertInto("app.meetings")
       .values({
@@ -805,6 +833,7 @@ export class GameService {
         .selectFrom("app.games")
         .selectAll()
         .where("room_id", "=", principal.roomId)
+        .orderBy("started_at", "desc")
         .forUpdate()
         .executeTakeFirst();
       if (!game) throw new ApplicationError(404, "GAME_NOT_FOUND", "No current game was found.");
@@ -861,7 +890,7 @@ export class GameService {
           .executeTakeFirstOrThrow(),
         trx
           .selectFrom("app.rooms")
-          .select("task_phase_seconds")
+          .select(["task_phase_seconds", "imposter_cooldown_seconds"])
           .where("id", "=", game.room_id)
           .executeTakeFirstOrThrow(),
       ]);
@@ -871,7 +900,11 @@ export class GameService {
         Math.max(0, (now.getTime() - new Date(game.started_at).getTime()) / 1000) /
           settings.task_phase_seconds,
       );
-      const cooldownSeconds = killCooldownSeconds(taskProgress, timeProgress);
+      const cooldownSeconds = killCooldownSeconds(
+        settings.imposter_cooldown_seconds,
+        taskProgress,
+        timeProgress,
+      );
       const killAvailableAt = new Date(now.getTime() + cooldownSeconds * 1000);
       await trx
         .updateTable("app.game_participants")
@@ -943,6 +976,7 @@ export class GameService {
         .selectFrom("app.games")
         .selectAll()
         .where("room_id", "=", principal.roomId)
+        .orderBy("started_at", "desc")
         .forUpdate()
         .executeTakeFirst();
       if (!game) throw new ApplicationError(404, "GAME_NOT_FOUND", "No current game was found.");
@@ -1085,14 +1119,17 @@ export class GameService {
     gameId: string,
     meetingId: string,
     now: Date,
-  ): Promise<Date> {
+  ): Promise<Date | null> {
     const settings = await trx
       .selectFrom("app.games as game")
       .innerJoin("app.rooms as room", "room.id", "game.room_id")
-      .select("room.voting_seconds")
+      .select(["room.voting_seconds", "room.meeting_voting_mode"])
       .where("game.id", "=", gameId)
       .executeTakeFirstOrThrow();
-    const deadline = new Date(now.getTime() + settings.voting_seconds * 1000);
+    const deadline =
+      settings.meeting_voting_mode === "all_voted"
+        ? null
+        : new Date(now.getTime() + settings.voting_seconds * 1000);
     await trx
       .updateTable("app.meetings")
       .set({ phase: "voting", deadline_at: deadline })

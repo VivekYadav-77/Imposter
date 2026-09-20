@@ -152,9 +152,10 @@ describe("adaptive cooldowns", () => {
   });
 
   it("keeps kill cooldowns bounded and reduces them with task and time progress", () => {
-    expect(killCooldownSeconds(0, 0)).toBe(60);
-    expect(killCooldownSeconds(0.5, 0.5)).toBe(33);
-    expect(killCooldownSeconds(1, 1)).toBe(15);
+    expect(killCooldownSeconds(60, 0, 0)).toBe(60);
+    expect(killCooldownSeconds(60, 0.5, 0.5)).toBe(30);
+    expect(killCooldownSeconds(60, 1, 1)).toBe(9);
+    expect(killCooldownSeconds(10, 1, 1)).toBe(5);
   });
 });
 

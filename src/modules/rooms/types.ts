@@ -31,6 +31,8 @@ export interface RoomSnapshotDto {
     taskPhaseSeconds: number;
     meetingsPerPlayer?: number;
     meetingDurationSeconds?: number;
+    meetingVotingMode?: "timed" | "all_voted";
+    imposterCooldownSeconds?: number;
     estimatedMeetingCooldownSeconds?: number;
     imposterCount?: number;
     allowedImposterCounts?: number[];

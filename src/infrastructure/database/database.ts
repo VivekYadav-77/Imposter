@@ -99,6 +99,8 @@ export interface RoomsTable {
   voting_seconds: number;
   meetings_per_player: number;
   meeting_duration_seconds: number;
+  meeting_voting_mode: "timed" | "all_voted";
+  imposter_cooldown_seconds: number;
   created_at: Timestamp;
   last_activity_at: Timestamp;
   expires_at: Timestamp;

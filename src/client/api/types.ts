@@ -40,6 +40,8 @@ export interface RoomSnapshot {
     taskPhaseSeconds: number;
     meetingsPerPlayer: number;
     meetingDurationSeconds: number;
+    meetingVotingMode: "timed" | "all_voted";
+    imposterCooldownSeconds: number;
     estimatedMeetingCooldownSeconds: number;
     imposterCount: number;
     allowedImposterCounts: number[];
@@ -140,6 +142,7 @@ export interface GameSnapshot {
     lifeStatus: LifeStatus;
     capabilities: string[];
     killableParticipantIds: string[];
+    knownEliminatedParticipantIds: string[];
     crewRole: MapRole | null;
   };
   assignments: Array<{
@@ -158,6 +161,7 @@ export interface GameSnapshot {
   };
   meetingRules: {
     durationSeconds: number;
+    votingMode: "timed" | "all_voted";
     maxPerPlayer: number;
     calledBySelf: number;
     remainingForSelf: number;

@@ -148,6 +148,12 @@ export const participantApi = {
       body: "{}",
       idempotencyKey: key,
     }),
+  replay: (key = createIdempotencyKey()) =>
+    apiRequest<RoomSnapshot>("/api/v1/rooms/current/replay", {
+      method: "POST",
+      body: "{}",
+      idempotencyKey: key,
+    }),
   leave: (key = createIdempotencyKey()) =>
     apiRequest<{ left: true }>("/api/v1/rooms/current/leave", {
       method: "POST",

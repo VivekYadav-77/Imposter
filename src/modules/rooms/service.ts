@@ -167,6 +167,8 @@ export class RoomService {
         "rooms.task_phase_seconds",
         "rooms.meetings_per_player",
         "rooms.meeting_duration_seconds",
+        "rooms.meeting_voting_mode",
+        "rooms.imposter_cooldown_seconds",
         "rooms.discussion_seconds",
         "rooms.review_seconds",
         "rooms.voting_seconds",
@@ -178,6 +180,7 @@ export class RoomService {
         "games.id as game_id",
       ])
       .where("rooms.id", "=", principal.roomId)
+      .orderBy("games.started_at", "desc")
       .executeTakeFirst();
     if (!room) throw new ApplicationError(404, "NOT_FOUND", "The room was not found.");
     const packTaskCounts = room.pack_id
@@ -229,6 +232,8 @@ export class RoomService {
         taskPhaseSeconds: room.task_phase_seconds,
         meetingsPerPlayer: room.meetings_per_player,
         meetingDurationSeconds: room.meeting_duration_seconds,
+        meetingVotingMode: room.meeting_voting_mode,
+        imposterCooldownSeconds: room.imposter_cooldown_seconds,
         estimatedMeetingCooldownSeconds: meetingCooldownSeconds(
           room.meeting_duration_seconds,
           0,
@@ -265,7 +270,7 @@ export class RoomService {
               : [],
       },
       expiresAt: iso(room.expires_at),
-      gameId: room.game_id,
+      gameId: room.status === "lobby" ? null : room.game_id,
     };
   }
 
@@ -371,6 +376,8 @@ export class RoomService {
               voting_seconds: 60,
               meetings_per_player: 2,
               meeting_duration_seconds: 90,
+              meeting_voting_mode: "timed",
+              imposter_cooldown_seconds: 60,
               last_activity_at: now,
               expires_at: expiresAt,
             })
@@ -689,6 +696,12 @@ export class RoomService {
           ...(input.meetingDurationSeconds !== undefined
             ? { meeting_duration_seconds: input.meetingDurationSeconds }
             : {}),
+          ...(input.meetingVotingMode !== undefined
+            ? { meeting_voting_mode: input.meetingVotingMode }
+            : {}),
+          ...(input.imposterCooldownSeconds !== undefined
+            ? { imposter_cooldown_seconds: input.imposterCooldownSeconds }
+            : {}),
           ...(input.imposterCount !== undefined ? { imposter_count: input.imposterCount } : {}),
           ...(input.taskCounts !== undefined
             ? {
@@ -708,6 +721,70 @@ export class RoomService {
         .execute();
       const response = await this.snapshotWith(trx, principal);
       await this.remember(trx, principal.participantId, key, operation, input, response);
+      return response;
+    });
+    this.events.roomChanged(principal.roomId);
+    return snapshot;
+  }
+
+  async replayRoom(principal: ParticipantPrincipal, key: string): Promise<RoomSnapshotDto> {
+    const snapshot = await inTransaction(this.database, async (trx) => {
+      const operation = "room.replay";
+      const replayed = await this.replay<RoomSnapshotDto>(
+        trx,
+        principal.participantId,
+        key,
+        operation,
+        {},
+      );
+      if (replayed) return replayed.response;
+      const room = await trx
+        .selectFrom("app.rooms")
+        .select(["id", "status"])
+        .where("id", "=", principal.roomId)
+        .forUpdate()
+        .executeTakeFirst();
+      if (!room) throw new ApplicationError(404, "NOT_FOUND", "The room was not found.");
+      const participant = await trx
+        .selectFrom("app.participants")
+        .select("id")
+        .where("id", "=", principal.participantId)
+        .where("room_id", "=", room.id)
+        .where("membership_status", "=", "joined")
+        .executeTakeFirst();
+      if (!participant)
+        throw new ApplicationError(
+          401,
+          "SESSION_INVALID",
+          "Your room session is no longer active.",
+        );
+      if (room.status === "active") {
+        const game = await trx
+          .selectFrom("app.games")
+          .select("phase")
+          .where("room_id", "=", room.id)
+          .orderBy("started_at", "desc")
+          .executeTakeFirst();
+        if (game && !["game_over", "abandoned"].includes(game.phase))
+          throw new ApplicationError(
+            409,
+            "GAME_NOT_FINISHED",
+            "The current game has not finished.",
+          );
+      }
+      if (room.status !== "lobby") {
+        await trx
+          .updateTable("app.rooms")
+          .set({
+            status: "lobby",
+            last_activity_at: new Date(),
+            expires_at: new Date(Date.now() + this.config.roomLobbyTtlSeconds * 1000),
+          })
+          .where("id", "=", room.id)
+          .execute();
+      }
+      const response = await this.snapshotWith(trx, principal);
+      await this.remember(trx, principal.participantId, key, operation, {}, response);
       return response;
     });
     this.events.roomChanged(principal.roomId);

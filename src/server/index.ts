@@ -20,7 +20,7 @@ import { TaskPackRepository } from "../modules/task-packs/repository.js";
 import { RoomService } from "../modules/rooms/service.js";
 import { GameService } from "../modules/games/service.js";
 import { EvidenceService } from "../modules/evidence/service.js";
-import { S3ObjectStorage } from "../infrastructure/object-storage/storage.js";
+import { LocalObjectStorage } from "../infrastructure/object-storage/storage.js";
 import { attachRealtimeServer } from "../realtime/server.js";
 import { PARTICIPANT_COOKIE_NAME, readCookie } from "../shared/security/cookies.js";
 import { ApplicationError } from "../shared/errors/application-error.js";
@@ -66,7 +66,7 @@ async function main(): Promise<void> {
   const evidence = new EvidenceService(
     database.db,
     config,
-    new S3ObjectStorage(config),
+    new LocalObjectStorage(config),
     games.events,
   );
   games.events.on("game.changed", ({ roomId }: { roomId: string }) => {

@@ -207,6 +207,24 @@ export const openApiDocument: OpenAPIObject = {
         },
       },
     },
+    "/api/v1/rooms/current/replay": {
+      post: {
+        operationId: "replayRoom",
+        security: participantSecurity,
+        parameters: [idempotency],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": { schema: { type: "object", additionalProperties: false } },
+          },
+        },
+        responses: {
+          "200": envelope({ $ref: "#/components/schemas/RoomSnapshot" }),
+          "401": error,
+          "409": error,
+        },
+      },
+    },
     "/api/v1/games/current/snapshot": {
       get: {
         operationId: "getCurrentGameSnapshot",
@@ -764,7 +782,9 @@ export const openApiDocument: OpenAPIObject = {
           selectedTaskPackId: { type: ["string", "null"], format: "uuid" },
           taskPhaseSeconds: { type: "integer", minimum: 300, maximum: 3600 },
           meetingsPerPlayer: { type: "integer", minimum: 0, maximum: 10 },
-          meetingDurationSeconds: { type: "integer", minimum: 30, maximum: 300 },
+          meetingDurationSeconds: { type: "integer", minimum: 30, maximum: 1800 },
+          meetingVotingMode: { type: "string", enum: ["timed", "all_voted"] },
+          imposterCooldownSeconds: { type: "integer", minimum: 10, maximum: 300 },
           imposterCount: { type: "integer", minimum: 1, maximum: 7 },
           taskCounts: {
             type: "object",
@@ -823,6 +843,8 @@ export const openApiDocument: OpenAPIObject = {
               "taskPhaseSeconds",
               "meetingsPerPlayer",
               "meetingDurationSeconds",
+              "meetingVotingMode",
+              "imposterCooldownSeconds",
               "estimatedMeetingCooldownSeconds",
               "imposterCount",
               "allowedImposterCounts",
@@ -857,6 +879,8 @@ export const openApiDocument: OpenAPIObject = {
               taskPhaseSeconds: { type: "integer" },
               meetingsPerPlayer: { type: "integer" },
               meetingDurationSeconds: { type: "integer" },
+              meetingVotingMode: { type: "string", enum: ["timed", "all_voted"] },
+              imposterCooldownSeconds: { type: "integer" },
               estimatedMeetingCooldownSeconds: { type: "integer" },
               imposterCount: { type: "integer" },
               allowedImposterCounts: { type: "array", items: { type: "integer" } },
@@ -1035,6 +1059,7 @@ export const openApiDocument: OpenAPIObject = {
               "lifeStatus",
               "capabilities",
               "killableParticipantIds",
+              "knownEliminatedParticipantIds",
               "crewRole",
             ],
             properties: {
@@ -1043,6 +1068,10 @@ export const openApiDocument: OpenAPIObject = {
               lifeStatus: { type: "string", enum: ["alive", "killed", "ejected"] },
               capabilities: { type: "array", items: { type: "string" } },
               killableParticipantIds: {
+                type: "array",
+                items: { type: "string", format: "uuid" },
+              },
+              knownEliminatedParticipantIds: {
                 type: "array",
                 items: { type: "string", format: "uuid" },
               },
@@ -1091,6 +1120,7 @@ export const openApiDocument: OpenAPIObject = {
             additionalProperties: false,
             required: [
               "durationSeconds",
+              "votingMode",
               "maxPerPlayer",
               "calledBySelf",
               "remainingForSelf",
@@ -1098,6 +1128,7 @@ export const openApiDocument: OpenAPIObject = {
             ],
             properties: {
               durationSeconds: { type: "integer" },
+              votingMode: { type: "string", enum: ["timed", "all_voted"] },
               maxPerPlayer: { type: "integer" },
               calledBySelf: { type: "integer" },
               remainingForSelf: { type: "integer" },

@@ -108,14 +108,18 @@ export function meetingCooldownSeconds(
   return Math.max(30, Math.round(meetingDurationSeconds * multiplier));
 }
 
-/** Kill cooldown ranges from 15–60 seconds and falls as the round advances. */
-export function killCooldownSeconds(taskProgress: number, timeProgress: number): number {
-  const taskRemaining = 1 - unit(taskProgress);
-  const timeRemaining = 1 - unit(timeProgress);
-  return Math.max(
-    15,
-    Math.min(60, Math.round(15 + 45 * taskRemaining * (0.6 + 0.4 * timeRemaining))),
-  );
+/**
+ * The host's duration is the starting cooldown. We subtract the average of game-time
+ * and crew-task completion from that base, capped at an 85% reduction. This keeps the
+ * formula predictable while preventing a zero-second elimination loop.
+ */
+export function killCooldownSeconds(
+  baseSeconds: number,
+  taskProgress: number,
+  timeProgress: number,
+): number {
+  const completed = Math.min(0.85, (unit(taskProgress) + unit(timeProgress)) / 2);
+  return Math.max(5, Math.round(baseSeconds * (1 - completed)));
 }
 
 export interface CapabilityState {

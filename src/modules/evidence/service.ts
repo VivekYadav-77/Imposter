@@ -39,6 +39,35 @@ export class EvidenceService {
     private readonly gameEvents?: GameEvents,
   ) {}
 
+  async localCapability(
+    token: string,
+    bytes?: Uint8Array,
+    contentType?: string,
+  ): Promise<{ bytes?: Uint8Array; contentType?: string }> {
+    if (!this.storage.acceptLocalCapability)
+      throw new ApplicationError(404, "NOT_FOUND", "The requested resource was not found.");
+    try {
+      return await this.storage.acceptLocalCapability(token, bytes, contentType);
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        ["INVALID_STORAGE_CAPABILITY", "EXPIRED_STORAGE_CAPABILITY"].includes(error.message)
+      )
+        throw new ApplicationError(
+          403,
+          "UPLOAD_CAPABILITY_INVALID",
+          "This upload link is invalid or expired.",
+        );
+      if (error instanceof Error && error.message === "STORAGE_OBJECT_MISMATCH")
+        throw new ApplicationError(
+          422,
+          "UPLOAD_MISMATCH",
+          "The selected file does not match the upload request.",
+        );
+      throw error;
+    }
+  }
+
   private async replay<T>(
     trx: Transaction<DatabaseSchema>,
     participantId: string,
@@ -565,6 +594,7 @@ export class EvidenceService {
       .selectFrom("app.games")
       .select("id")
       .where("room_id", "=", principal.roomId)
+      .orderBy("started_at", "desc")
       .executeTakeFirst();
     if (!game) throw new ApplicationError(404, "GAME_NOT_FOUND", "No current game was found.");
     const member = await this.database

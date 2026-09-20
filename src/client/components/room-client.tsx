@@ -142,6 +142,11 @@ export function RoomClient() {
             setGame(next);
           }}
           room={room}
+          onReplay={(nextRoom) => {
+            setRoom(nextRoom);
+            gameRef.current = null;
+            setGame(null);
+          }}
           onError={setError}
         />
       ) : (
@@ -297,8 +302,37 @@ function LobbyView({
             <TimerSelect
               label="Meeting duration"
               value={room.settings.meetingDurationSeconds}
-              values={[30, 45, 60, 90, 120, 180, 240, 300]}
+              values={[30, 45, 60, 90, 120, 180, 240, 300, 600, 900, 1800]}
               onChange={(value) => void update({ meetingDurationSeconds: value })}
+            />
+            <CustomDurationField
+              label="Custom meeting duration"
+              value={room.settings.meetingDurationSeconds}
+              min={30}
+              max={1800}
+              onApply={(value) => void update({ meetingDurationSeconds: value })}
+            />
+            <label className="field">
+              <span className="field-label">Meeting ends</span>
+              <select
+                value={room.settings.meetingVotingMode}
+                disabled={busy}
+                onChange={(event) => void update({ meetingVotingMode: event.target.value })}
+              >
+                <option value="timed">When the timer expires or everyone votes</option>
+                <option value="all_voted">Only after every living player votes</option>
+              </select>
+              <span className="field-hint">
+                All-voted mode has no voting deadline; the meeting waits for every eligible player.
+              </span>
+            </label>
+            <CustomDurationField
+              label="Impostor cooldown base"
+              value={room.settings.imposterCooldownSeconds}
+              min={10}
+              max={300}
+              onApply={(value) => void update({ imposterCooldownSeconds: value })}
+              hint="The live cooldown subtracts the average game-time and crew-task completion from this base."
             />
             <label className="field">
               <span className="field-label">Meetings per player</span>
@@ -437,12 +471,16 @@ function LobbyView({
           <>
             <span className="action-note">
               {room.settings.selectedTaskPack
-                ? "The server will verify player count and readiness."
+                ? room.participants.length >= room.minPlayers
+                  ? `${room.participants.length} players ready · minimum ${room.minPlayers}`
+                  : `${room.minPlayers - room.participants.length} more player${room.minPlayers - room.participants.length === 1 ? "" : "s"} needed`
                 : "Choose a map before starting."}
             </span>
             <Button
               loading={busy}
-              disabled={!room.settings.selectedTaskPack}
+              disabled={
+                !room.settings.selectedTaskPack || room.participants.length < room.minPlayers
+              }
               onClick={() => void start()}
             >
               Start game
@@ -510,6 +548,54 @@ function TimerSelect({
   );
 }
 
+function CustomDurationField({
+  label,
+  value,
+  min,
+  max,
+  onApply,
+  hint,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  onApply: (value: number) => void;
+  hint?: string;
+}) {
+  const [draft, setDraft] = useState(String(value));
+  useEffect(() => setDraft(String(value)), [value]);
+  const parsed = Number(draft);
+  const valid = Number.isInteger(parsed) && parsed >= min && parsed <= max;
+  return (
+    <label className="field custom-duration-field">
+      <span className="field-label">{label}</span>
+      <span className="duration-input-row">
+        <input
+          type="number"
+          min={min}
+          max={max}
+          step={5}
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          aria-invalid={!valid}
+        />
+        <span>seconds</span>
+        <Button
+          variant="secondary"
+          disabled={!valid || parsed === value}
+          onClick={() => onApply(parsed)}
+        >
+          Apply
+        </Button>
+      </span>
+      <span className="field-hint">
+        {hint ?? `Choose any whole number from ${min} to ${max} seconds.`}
+      </span>
+    </label>
+  );
+}
+
 function formatDuration(seconds: number): string {
   const minutes = Math.floor(seconds / 60);
   const remainder = seconds % 60;
@@ -520,11 +606,13 @@ function GameView({
   game,
   setGame,
   room,
+  onReplay,
   onError,
 }: {
   game: GameSnapshot;
   setGame: (game: GameSnapshot) => void;
   room: RoomSnapshot;
+  onReplay: (room: RoomSnapshot) => void;
   onError: (message: string) => void;
 }) {
   const [roleAcknowledged, setRoleAcknowledged] = useState(false);
@@ -559,7 +647,8 @@ function GameView({
         }}
       />
     );
-  if (game.phase === "game_over" || game.phase === "abandoned") return <TerminalView game={game} />;
+  if (game.phase === "game_over" || game.phase === "abandoned")
+    return <TerminalView game={game} room={room} onReplay={onReplay} onError={onError} />;
   if (game.phase === "task")
     return <TaskView game={game} setGame={setGame} room={room} onError={onError} />;
   return <MeetingView game={game} setGame={setGame} room={room} onError={onError} />;
@@ -644,6 +733,7 @@ function TaskView({
   const [roleInfo, setRoleInfo] = useState(false);
   const [confirmMeeting, setConfirmMeeting] = useState(false);
   const [meetingBusy, setMeetingBusy] = useState(false);
+  const [covertOpen, setCovertOpen] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -726,10 +816,22 @@ function TaskView({
           </Button>
         </div>
         {game.self.lifeStatus !== "alive" && (
-          <Banner tone="info">
-            You’re out of the social game, but crew ghosts can finish remaining tasks when the
-            server allows it.
-          </Banner>
+          <section className="eliminated-banner" role="status" aria-live="polite">
+            <span className="eliminated-mark" aria-hidden="true">
+              ✕
+            </span>
+            <div>
+              <p className="eyebrow">Status update</p>
+              <h2>
+                {game.self.lifeStatus === "killed" ? "You were eliminated" : "You were ejected"}
+              </h2>
+              <p>
+                Stay silent about what you saw. You can still finish ghost assignments, but you can
+                no longer vote or call meetings.
+              </p>
+            </div>
+            <Badge tone="danger">Ghost mode</Badge>
+          </section>
         )}
         <div className="task-list">
           {game.assignments.map((task, index) => (
@@ -755,26 +857,61 @@ function TaskView({
           ))}
         </div>
         {game.self.role === "imposter" && game.self.lifeStatus === "alive" && (
-          <section className="danger-zone">
-            <p className="eyebrow">Imposter action</p>
-            <h2>{canKill ? "Choose carefully" : "Elimination cooling down"}</h2>
-            {!killReady && game.cooldowns.killAvailableAt && (
-              <Timer deadline={game.cooldowns.killAvailableAt} label="Kill available in" />
-            )}
-            <div className="target-grid">
-              {game.participants
-                .filter((p) => game.self.killableParticipantIds.includes(p.id))
-                .map((p) => (
-                  <Button
-                    key={p.id}
-                    variant="danger"
+          <section className={`covert-console ${covertOpen ? "is-open" : ""}`}>
+            {!covertOpen ? (
+              <button className="covert-cover" onClick={() => setCovertOpen(true)}>
+                <span aria-hidden="true">◌</span>
+                <strong>Private utility</strong>
+                <small>Tap to unlock · shield this screen</small>
+              </button>
+            ) : (
+              <>
+                <div className="covert-console-heading">
+                  <div>
+                    <p className="eyebrow">Impostor console</p>
+                    <h2>{canKill ? "Target acquisition" : "Systems recharging"}</h2>
+                  </div>
+                  <button className="covert-lock" onClick={() => setCovertOpen(false)}>
+                    Lock
+                  </button>
+                </div>
+                {!killReady && game.cooldowns.killAvailableAt && (
+                  <Timer deadline={game.cooldowns.killAvailableAt} label="Available in" />
+                )}
+                <label className="field target-select-field">
+                  <span className="field-label">Living crew target</span>
+                  <select
+                    value={killTarget ?? ""}
                     disabled={!canKill}
-                    onClick={() => setKillTarget(p.id)}
+                    onChange={(event) => setKillTarget(event.target.value || null)}
                   >
-                    Eliminate {p.nickname}
-                  </Button>
-                ))}
-            </div>
+                    <option value="">Select one crew member…</option>
+                    {game.participants
+                      .filter((player) => game.self.killableParticipantIds.includes(player.id))
+                      .map((player) => (
+                        <option key={player.id} value={player.id}>
+                          {player.nickname}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <div className="elimination-ledger">
+                  <span>Your eliminations</span>
+                  {game.self.knownEliminatedParticipantIds.length ? (
+                    <div>
+                      {game.self.knownEliminatedParticipantIds.map((id) => (
+                        <Badge key={id} tone="danger">
+                          {game.participants.find((player) => player.id === id)?.nickname ??
+                            "Unknown"}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <small>No confirmed eliminations</small>
+                  )}
+                </div>
+              </>
+            )}
           </section>
         )}
       </div>
@@ -828,7 +965,7 @@ function TaskView({
         onClose={() => setConfirmMeeting(false)}
         onConfirm={() => void callMeeting()}
         title="Call a meeting?"
-        description={`Voting will open for ${formatDuration(game.meetingRules.durationSeconds)}. You will have ${Math.max(0, game.meetingRules.remainingForSelf - 1)} meeting calls left.`}
+        description={`${game.meetingRules.votingMode === "all_voted" ? "Voting stays open until every living player votes." : `Voting will open for ${formatDuration(game.meetingRules.durationSeconds)}.`} You will have ${Math.max(0, game.meetingRules.remainingForSelf - 1)} meeting calls left.`}
         confirmLabel="Open meeting"
         loading={meetingBusy}
       />
@@ -1197,10 +1334,14 @@ function MeetingView({
         phase={game.phase === "result" ? "results" : "meeting"}
         identity={room.self.nickname}
       >
-        <Timer
-          deadline={game.phaseDeadlineAt ?? meeting.deadlineAt}
-          label={game.phase === "result" ? "Returning soon" : "Meeting time"}
-        />
+        {game.phaseDeadlineAt || meeting.deadlineAt ? (
+          <Timer
+            deadline={game.phaseDeadlineAt ?? meeting.deadlineAt}
+            label={game.phase === "result" ? "Returning soon" : "Meeting time"}
+          />
+        ) : (
+          <Badge tone="info">Waiting for every vote</Badge>
+        )}
       </PhaseBar>
       <div className="game-content narrow meeting-view">
         <p className="eyebrow">Meeting {meeting.sequenceNumber}</p>
@@ -1258,6 +1399,11 @@ function MeetingView({
         )}
         {game.phase === "voting" && (
           <>
+            {game.meetingRules.votingMode === "all_voted" && (
+              <Banner tone="info">
+                No timer is running. This meeting resolves after every eligible living player votes.
+              </Banner>
+            )}
             <p className="lead">
               {canVote
                 ? "Vote to eject, or skip if you’re not sure. You can replace your vote until voting locks."
@@ -1321,7 +1467,19 @@ function ResultBlock({ game }: { game: GameSnapshot }) {
   );
 }
 
-function TerminalView({ game }: { game: GameSnapshot }) {
+function TerminalView({
+  game,
+  room,
+  onReplay,
+  onError,
+}: {
+  game: GameSnapshot;
+  room: RoomSnapshot;
+  onReplay: (room: RoomSnapshot) => void;
+  onError: (message: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [easterEgg, setEasterEgg] = useState(0);
   const won =
     game.winner === "crew"
       ? "Crew wins"
@@ -1346,9 +1504,58 @@ function TerminalView({ game }: { game: GameSnapshot }) {
           <p className="privacy-note">
             Other players’ roles and individual ballots remain private.
           </p>
-          <a className="button button-primary" href="/play">
-            Start a new room
-          </a>
+          <button
+            className={`orbit-crewmate ${easterEgg >= 3 ? "hatched" : ""}`}
+            aria-label="A suspicious tiny crewmate"
+            onClick={() => setEasterEgg((count) => Math.min(3, count + 1))}
+          >
+            {easterEgg >= 3 ? "ඞ" : "◒"}
+          </button>
+          {easterEgg >= 3 && (
+            <div className="easter-egg" role="status">
+              <span>✦</span> The smallest crewmate was suspicious all along. <span>✦</span>
+            </div>
+          )}
+          <div className="replay-panel">
+            <h2>{room.self.isHost ? "Play again with this room?" : "Rejoin this room?"}</h2>
+            <p>
+              {room.self.isHost
+                ? "Yes returns you to the lobby settings with the same room code and crew."
+                : "Yes keeps your place and waits in the lobby until the host starts."}
+            </p>
+            <div className="dialog-actions">
+              <Button
+                loading={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  try {
+                    onReplay((await participantApi.replay()).data);
+                  } catch (error) {
+                    onError(errorMessage(error));
+                    setBusy(false);
+                  }
+                }}
+              >
+                Yes, play again
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  try {
+                    await participantApi.leave();
+                    window.location.assign("/");
+                  } catch (error) {
+                    onError(errorMessage(error));
+                    setBusy(false);
+                  }
+                }}
+              >
+                No, go home
+              </Button>
+            </div>
+          </div>
         </section>
       </div>
     </>
