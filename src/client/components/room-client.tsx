@@ -12,6 +12,7 @@ import type {
   TransportState,
 } from "../api/types";
 import { RealtimeClient } from "../realtime/client";
+import { isSoundEnabled, playGameSound, setSoundEnabled } from "../audio/game-sounds";
 import {
   Badge,
   Banner,
@@ -128,6 +129,7 @@ export function RoomClient() {
     );
   return (
     <main className="game-page">
+      <SoundToggle />
       {transport !== "connected" && (
         <div className="connection-banner" role="status">
           {transport === "revoked" ? "Session ended" : "Reconnecting you to the room…"}
@@ -161,6 +163,29 @@ export function RoomClient() {
         />
       )}
     </main>
+  );
+}
+
+function SoundToggle() {
+  const [enabled, setEnabled] = useState(true);
+  useEffect(() => setEnabled(isSoundEnabled()), []);
+  return (
+    <button
+      className="sound-toggle"
+      type="button"
+      aria-pressed={enabled}
+      aria-label={enabled ? "Mute game sounds" : "Enable game sounds"}
+      title={enabled ? "Mute game sounds" : "Enable game sounds"}
+      onClick={() => {
+        const next = !enabled;
+        setEnabled(next);
+        setSoundEnabled(next);
+        if (next) playGameSound("ui");
+      }}
+    >
+      <span aria-hidden="true">{enabled ? "♪" : "×"}</span>
+      <small>{enabled ? "Sound on" : "Muted"}</small>
+    </button>
   );
 }
 
@@ -618,6 +643,9 @@ function GameView({
   const [roleAcknowledged, setRoleAcknowledged] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const previousPhase = useRef(game.phase);
+  const previousLifeStatus = useRef(game.self.lifeStatus);
+  const previousProgress = useRef(game.progress.percent);
+  const terminalSoundPlayed = useRef(false);
   useEffect(() => {
     const hide = () => {
       if (document.hidden) setRevealed(false);
@@ -630,10 +658,29 @@ function GameView({
     };
   }, []);
   useEffect(() => {
+    if (!roleAcknowledged) return;
+    if (previousLifeStatus.current === "alive" && game.self.lifeStatus !== "alive")
+      playGameSound("eliminated");
+    if (game.progress.percent > previousProgress.current) playGameSound("task-complete");
     if (previousPhase.current !== game.phase) {
-      previousPhase.current = game.phase;
+      if (["discussion", "review"].includes(game.phase)) playGameSound("meeting");
+      else if (game.phase === "voting") playGameSound("vote");
+      else if (game.phase === "result") playGameSound("result");
     }
-  }, [game.phase]);
+    if (
+      (game.phase === "game_over" || game.phase === "abandoned") &&
+      !terminalSoundPlayed.current
+    ) {
+      const selfWon =
+        (game.winner === "crew" && game.self.role === "crew") ||
+        (game.winner === "imposters" && game.self.role === "imposter");
+      window.setTimeout(() => playGameSound(selfWon ? "victory" : "defeat"), 480);
+      terminalSoundPlayed.current = true;
+    }
+    previousPhase.current = game.phase;
+    previousLifeStatus.current = game.self.lifeStatus;
+    previousProgress.current = game.progress.percent;
+  }, [game, roleAcknowledged]);
   if (!roleAcknowledged)
     return (
       <RoleReveal
@@ -642,6 +689,8 @@ function GameView({
         revealed={revealed}
         setRevealed={setRevealed}
         onContinue={() => {
+          if (game.phase !== "game_over" && game.phase !== "abandoned")
+            playGameSound(game.self.role === "crew" ? "role-crew" : "role-imposter");
           setRevealed(false);
           setRoleAcknowledged(true);
         }}
@@ -742,6 +791,12 @@ function TaskView({
   const selected = game.assignments.find((task) => task.id === assignmentId);
   const killReady =
     !game.cooldowns.killAvailableAt || new Date(game.cooldowns.killAvailableAt).getTime() <= now;
+  const killWasReady = useRef(killReady);
+  useEffect(() => {
+    if (!killWasReady.current && killReady && game.self.role === "imposter")
+      playGameSound("cooldown-ready");
+    killWasReady.current = killReady;
+  }, [game.self.role, killReady]);
   const canKill = game.self.capabilities.includes("kill") && killReady;
   const meetingReady =
     (!game.cooldowns.meetingAvailableAt ||
@@ -753,6 +808,7 @@ function TaskView({
     if (!killTarget) return;
     try {
       setGame((await participantApi.kill(killTarget, game.stateVersion)).data);
+      playGameSound("kill");
       setKillTarget(null);
     } catch (e) {
       onError(errorMessage(e));
@@ -1050,6 +1106,7 @@ function UploadDialog({
       );
       const latest = await participantApi.snapshot();
       setGame(latest.data);
+      playGameSound("upload");
       setState("done");
     } catch (e) {
       onError(errorMessage(e));
@@ -1304,6 +1361,7 @@ function MeetingView({
       );
       const latest = await participantApi.snapshot();
       setGame(latest.data);
+      playGameSound("vote");
       setVote(null);
     } catch (e) {
       onError(errorMessage(e));
@@ -1319,6 +1377,7 @@ function MeetingView({
       await participantApi.reviewVote(id, reviewVote, game.stateVersion);
       const latest = await participantApi.snapshot();
       setGame(latest.data);
+      playGameSound("vote");
       setReviewVote(null);
     } catch (e) {
       onError(errorMessage(e));
@@ -1507,7 +1566,13 @@ function TerminalView({
           <button
             className={`orbit-crewmate ${easterEgg >= 3 ? "hatched" : ""}`}
             aria-label="A suspicious tiny crewmate"
-            onClick={() => setEasterEgg((count) => Math.min(3, count + 1))}
+            onClick={() =>
+              setEasterEgg((count) => {
+                if (count === 2) playGameSound("easter-egg");
+                else playGameSound("ui");
+                return Math.min(3, count + 1);
+              })
+            }
           >
             {easterEgg >= 3 ? "ඞ" : "◒"}
           </button>

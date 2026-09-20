@@ -834,6 +834,47 @@ select {
   font-weight: 750;
   border-radius: 0 0 6px 6px;
 }
+.sound-toggle {
+  position: fixed;
+  z-index: 45;
+  top: calc(max(12px, env(safe-area-inset-top)) + 96px);
+  left: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 6px 10px 6px 7px;
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  color: var(--muted);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 24%);
+  backdrop-filter: blur(12px);
+}
+.sound-toggle > span {
+  width: 21px;
+  height: 21px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--amber);
+  color: var(--bg);
+  font-weight: 900;
+}
+.sound-toggle small {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.sound-toggle[aria-pressed="false"] > span {
+  background: var(--line);
+  color: var(--muted);
+}
+.sound-toggle:hover {
+  color: var(--ink);
+  border-color: var(--brass);
+}
 .section-heading {
   display: flex;
   align-items: center;
@@ -2504,6 +2545,9 @@ select {
   }
   .phase-bar {
     min-height: 82px;
+  }
+  .sound-toggle {
+    top: calc(max(8px, env(safe-area-inset-top)) + 82px);
   }
   .phase-bar > div {
     gap: 10px;
