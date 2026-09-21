@@ -13,7 +13,12 @@ import type {
   TransportState,
 } from "../api/types";
 import { RealtimeClient } from "../realtime/client";
-import { isSoundEnabled, playGameSound, setSoundEnabled } from "../audio/game-sounds";
+import {
+  isSoundEnabled,
+  playGameSound,
+  playMeetingAlert,
+  setSoundEnabled,
+} from "../audio/game-sounds";
 import {
   Badge,
   Banner,
@@ -380,8 +385,23 @@ function LobbyView({
               <div>
                 <p className="eyebrow">Host setup</p>
                 <h2>Game settings</h2>
+                <p className="settings-intro">
+                  Configure the round below. Every change saves automatically.
+                </p>
               </div>
-              <Badge tone={busy ? "warning" : "success"}>{busy ? "Saving" : "Saved"}</Badge>
+              <div className="settings-heading-actions">
+                <Badge tone={busy ? "warning" : "success"}>{busy ? "Saving" : "Saved"}</Badge>
+                <Button
+                  className="settings-start-button"
+                  loading={busy}
+                  disabled={
+                    !room.settings.selectedTaskPack || room.participants.length < room.minPlayers
+                  }
+                  onClick={() => void start()}
+                >
+                  Start game
+                </Button>
+              </div>
             </div>
             <section className="settings-section">
               <div className="settings-section-heading">
@@ -650,29 +670,16 @@ function LobbyView({
           </aside>
         )}
       </div>
-      <div className="sticky-actions">
-        {canStart ? (
-          <>
-            <span className="action-note">
-              {room.settings.selectedTaskPack
-                ? room.participants.length >= room.minPlayers
-                  ? `${room.participants.length} players ready · minimum ${room.minPlayers}`
-                  : `${room.minPlayers - room.participants.length} more player${room.minPlayers - room.participants.length === 1 ? "" : "s"} needed`
-                : "Choose a map before starting."}
-            </span>
-            <Button
-              loading={busy}
-              disabled={
-                !room.settings.selectedTaskPack || room.participants.length < room.minPlayers
-              }
-              onClick={() => void start()}
-            >
-              Start game
-            </Button>
-          </>
-        ) : (
-          <span className="waiting-copy">Waiting for the host to start…</span>
-        )}
+      <div className="sticky-actions lobby-actions">
+        <span className={canStart ? "action-note" : "waiting-copy"}>
+          {canStart
+            ? room.settings.selectedTaskPack
+              ? room.participants.length >= room.minPlayers
+                ? `${room.participants.length} players ready · minimum ${room.minPlayers}`
+                : `${room.minPlayers - room.participants.length} more player${room.minPlayers - room.participants.length === 1 ? "" : "s"} needed before the host can start.`
+              : "Choose a map before starting."
+            : "Waiting for the host to start…"}
+        </span>
         <Button variant="ghost" onClick={() => setLeaving(true)}>
           Leave room
         </Button>
@@ -920,13 +927,21 @@ function GameView({
     };
   }, []);
   useEffect(() => {
-    if (!roleAcknowledged) return;
+    const phaseChanged = previousPhase.current !== game.phase;
+
+    // Meeting alerts must not depend on the role card being acknowledged. A meeting can
+    // begin while a player is still looking at that card or while their tab is backgrounded.
+    if (phaseChanged && ["discussion", "review"].includes(game.phase)) playMeetingAlert();
+
+    if (!roleAcknowledged) {
+      previousPhase.current = game.phase;
+      return;
+    }
     if (previousLifeStatus.current === "alive" && game.self.lifeStatus !== "alive")
       playGameSound("eliminated");
     if (game.progress.percent > previousProgress.current) playGameSound("task-complete");
-    if (previousPhase.current !== game.phase) {
-      if (["discussion", "review"].includes(game.phase)) playGameSound("meeting");
-      else if (game.phase === "voting") playGameSound("vote");
+    if (phaseChanged) {
+      if (game.phase === "voting") playGameSound("vote");
       else if (game.phase === "result") playGameSound("result");
     }
     if (

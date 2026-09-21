@@ -24,6 +24,9 @@ describe("frontend design foundations", () => {
     expect(contrast("#ede7d8", "#4a6878")).toBeGreaterThanOrEqual(4.5);
     expect(contrast("#14130f", "#c9a227")).toBeGreaterThanOrEqual(4.5);
     expect(contrast("#ede7d8", "#a63f2b")).toBeGreaterThanOrEqual(4.5);
+    expect(contrast("#242119", "#f4f0e6")).toBeGreaterThanOrEqual(4.5);
+    expect(contrast("#fffaf1", "#3d6578")).toBeGreaterThanOrEqual(4.5);
+    expect(contrast("#fffaf1", "#a6530b")).toBeGreaterThanOrEqual(4.5);
   });
 
   it("ships focus, reduced-motion, safe-area, and small-phone rules", async () => {
@@ -41,5 +44,22 @@ describe("frontend design foundations", () => {
     );
     expect(development).toContain("script-src 'self' 'nonce-test-nonce' 'strict-dynamic'");
     expect(development).toContain("'unsafe-eval'");
+  });
+
+  it("ships a persisted, pre-paint light and dark theme system", async () => {
+    const [layout, css, initializer, toggle] = await Promise.all([
+      readFile("app/layout.tsx", "utf8"),
+      readFile("app/globals.css", "utf8"),
+      readFile("public/theme-init.js", "utf8"),
+      readFile("src/client/components/theme-toggle.tsx", "utf8"),
+    ]);
+    expect(layout).toContain('src="/theme-init.js"');
+    expect(layout).toContain("suppressHydrationWarning");
+    expect(layout).toContain("<ThemeToggle />");
+    expect(css).toContain('html[data-theme="light"]');
+    expect(css).toContain('html[data-theme="dark"] .admin-page');
+    expect(initializer).toContain('matchMedia("(prefers-color-scheme: light)")');
+    expect(toggle).toContain("aria-label={label}");
+    expect(toggle).toContain("localStorage.setItem(STORAGE_KEY, theme)");
   });
 });

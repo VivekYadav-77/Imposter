@@ -1,4 +1,6 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
+import { ThemeToggle } from "@/client/components/theme-toggle";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -17,13 +19,25 @@ export const metadata: Metadata = {
   robots: { index: true, follow: true },
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f4f0e6" },
+    { media: "(prefers-color-scheme: dark)", color: "#14130f" },
+  ],
+};
+
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script src="/theme-init.js" nonce={nonce} suppressHydrationWarning />
+      </head>
       <body>
         <a className="skip-link" href="#main-content">
           Skip to content
         </a>
+        <ThemeToggle />
         {children}
       </body>
     </html>

@@ -109,12 +109,24 @@ export function playGameSound(sound: GameSound): void {
       noise(0, 0.42, 0.07, 500);
       break;
     case "meeting":
-      for (let index = 0; index < 4; index += 1) {
-        tone(index % 2 ? 520 : 760, index * 0.18, 0.16, {
-          gain: 0.16,
-          type: "square",
+      // A short, unmistakable emergency klaxon without requiring a bundled audio asset.
+      // The overlapping tones give it more body than a sequence of UI beeps.
+      for (let index = 0; index < 3; index += 1) {
+        const startsAt = index * 0.34;
+        tone(740, startsAt, 0.28, {
+          endFrequency: 520,
+          gain: 0.19,
+          type: "sawtooth",
+          attack: 0.025,
+        });
+        tone(370, startsAt, 0.28, {
+          endFrequency: 260,
+          gain: 0.09,
+          type: "triangle",
+          attack: 0.025,
         });
       }
+      noise(0, 1.02, 0.035, 760);
       break;
     case "vote":
       tone(190, 0, 0.12, { endFrequency: 120, gain: 0.2, type: "triangle" });
@@ -163,4 +175,14 @@ export function playGameSound(sound: GameSound): void {
       );
       break;
   }
+}
+
+/** Play the meeting klaxon and request a matching haptic alert where supported. */
+export function playMeetingAlert(): void {
+  playGameSound("meeting");
+  if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function") return;
+
+  // Vibration is intentionally independent from the sound preference: it is a brief,
+  // accessibility-friendly meeting signal and unsupported browsers simply ignore it.
+  navigator.vibrate([180, 90, 180, 90, 320]);
 }
