@@ -22,7 +22,9 @@ import type {
 } from "./types.js";
 
 const ROOM_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-const TERMINAL_STATUSES = ["completed", "abandoned", "expired"] as const;
+// Completed rooms keep their sessions alive so players can inspect results,
+// replay, or leave. Only an expired room is no longer authenticatable.
+const TERMINAL_STATUSES = ["expired"] as const;
 
 function iso(value: Date | string): string {
   return new Date(value).toISOString();
@@ -168,6 +170,7 @@ export class RoomService {
         "rooms.meetings_per_player",
         "rooms.meeting_duration_seconds",
         "rooms.meeting_voting_mode",
+        "rooms.vote_visibility",
         "rooms.imposter_cooldown_seconds",
         "rooms.discussion_seconds",
         "rooms.review_seconds",
@@ -233,6 +236,7 @@ export class RoomService {
         meetingsPerPlayer: room.meetings_per_player,
         meetingDurationSeconds: room.meeting_duration_seconds,
         meetingVotingMode: room.meeting_voting_mode,
+        voteVisibility: room.vote_visibility,
         imposterCooldownSeconds: room.imposter_cooldown_seconds,
         estimatedMeetingCooldownSeconds: meetingCooldownSeconds(
           room.meeting_duration_seconds,
@@ -377,6 +381,7 @@ export class RoomService {
               meetings_per_player: 2,
               meeting_duration_seconds: 90,
               meeting_voting_mode: "timed",
+              vote_visibility: "private",
               imposter_cooldown_seconds: 60,
               last_activity_at: now,
               expires_at: expiresAt,
@@ -699,6 +704,7 @@ export class RoomService {
           ...(input.meetingVotingMode !== undefined
             ? { meeting_voting_mode: input.meetingVotingMode }
             : {}),
+          ...(input.voteVisibility !== undefined ? { vote_visibility: input.voteVisibility } : {}),
           ...(input.imposterCooldownSeconds !== undefined
             ? { imposter_cooldown_seconds: input.imposterCooldownSeconds }
             : {}),
@@ -815,7 +821,7 @@ export class RoomService {
         .forUpdate()
         .executeTakeFirst();
       if (!room) throw new ApplicationError(404, "NOT_FOUND", "The room was not found.");
-      if (room.status !== "lobby")
+      if (room.status === "active")
         throw new ApplicationError(
           409,
           "CANNOT_LEAVE_ACTIVE_GAME",

@@ -477,6 +477,7 @@ export class EvidenceService {
             ? {
                 state_version: nextVersion,
                 winner,
+                end_reason: "tasks_completed",
                 phase: "game_over",
                 phase_deadline_at: null,
                 ended_at: now,
@@ -620,7 +621,14 @@ export class EvidenceService {
         "p.nickname",
       ])
       .where("a.game_id", "=", game.id)
-      .where("s.processing_status", "=", "accepted")
+      // Every player can always see the state of their own task photo. Other
+      // players only see accepted evidence in the shared room gallery.
+      .where((eb) =>
+        eb.or([
+          eb("s.processing_status", "=", "accepted"),
+          eb("s.uploader_participant_id", "=", principal.participantId),
+        ]),
+      )
       .where("s.deleted_at", "is", null);
     if (flaggedOnly) query = query.where("s.review_status", "=", "flagged");
     const rows = await query
@@ -645,11 +653,13 @@ export class EvidenceService {
     return Promise.all(
       rows.map(async (row) => {
         const expiresAt = new Date(Date.now() + this.config.evidenceViewTtlSeconds * 1000);
-        let url: string;
-        try {
-          url = await this.storage.createReadUrl(row.object_key, expiresAt);
-        } catch {
-          throw storageUnavailable();
+        let url: string | null = null;
+        if (row.processing_status === "accepted") {
+          try {
+            url = await this.storage.createReadUrl(row.object_key, expiresAt);
+          } catch {
+            throw storageUnavailable();
+          }
         }
         return {
           id: row.id,
@@ -658,7 +668,7 @@ export class EvidenceService {
           processingStatus: row.processing_status,
           reviewStatus: row.review_status,
           createdAt: iso(row.created_at),
-          image: { url, expiresAt: expiresAt.toISOString() },
+          image: url ? { url, expiresAt: expiresAt.toISOString() } : null,
           flaggedBySelf: selfSet.has(row.id),
         };
       }),

@@ -3360,6 +3360,13 @@
               "all_voted"
             ]
           },
+          "voteVisibility": {
+            "type": "string",
+            "enum": [
+              "private",
+              "public"
+            ]
+          },
           "imposterCooldownSeconds": {
             "type": "integer",
             "minimum": 10,
@@ -3484,6 +3491,7 @@
               "meetingsPerPlayer",
               "meetingDurationSeconds",
               "meetingVotingMode",
+              "voteVisibility",
               "imposterCooldownSeconds",
               "estimatedMeetingCooldownSeconds",
               "imposterCount",
@@ -3563,6 +3571,13 @@
                 "enum": [
                   "timed",
                   "all_voted"
+                ]
+              },
+              "voteVisibility": {
+                "type": "string",
+                "enum": [
+                  "private",
+                  "public"
                 ]
               },
               "imposterCooldownSeconds": {
@@ -3876,6 +3891,7 @@
           "phase",
           "stateVersion",
           "winner",
+          "endReason",
           "taskPack",
           "phaseStartedAt",
           "phaseDeadlineAt",
@@ -3885,7 +3901,8 @@
           "progress",
           "cooldowns",
           "meetingRules",
-          "meeting"
+          "meeting",
+          "resultSummary"
         ],
         "properties": {
           "id": {
@@ -3920,6 +3937,20 @@
             "enum": [
               "crew",
               "imposters",
+              null
+            ]
+          },
+          "endReason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "tasks_completed",
+              "imposters_ejected",
+              "imposter_parity",
+              "time_expired",
+              "abandoned",
               null
             ]
           },
@@ -4142,6 +4173,7 @@
             "required": [
               "durationSeconds",
               "votingMode",
+              "voteVisibility",
               "maxPerPlayer",
               "calledBySelf",
               "remainingForSelf",
@@ -4156,6 +4188,13 @@
                 "enum": [
                   "timed",
                   "all_voted"
+                ]
+              },
+              "voteVisibility": {
+                "type": "string",
+                "enum": [
+                  "private",
+                  "public"
                 ]
               },
               "maxPerPlayer": {
@@ -4181,6 +4220,13 @@
                 "$ref": "#/components/schemas/Meeting"
               }
             ]
+          },
+          "resultSummary": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
           }
         }
       },
@@ -4199,6 +4245,7 @@
           "ownEjectionTargetParticipantId",
           "hasCastEjectionVote",
           "votesCast",
+          "publicVotes",
           "result",
           "capabilities"
         ],
@@ -4281,6 +4328,40 @@
           "votesCast": {
             "type": "integer",
             "minimum": 0
+          },
+          "publicVotes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "voterParticipantId",
+                "voterNickname",
+                "targetParticipantId",
+                "targetNickname"
+              ],
+              "properties": {
+                "voterParticipantId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "voterNickname": {
+                  "type": "string"
+                },
+                "targetParticipantId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "uuid"
+                },
+                "targetNickname": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            }
           },
           "result": {
             "type": [

@@ -14,6 +14,13 @@ export interface GameSnapshotDto {
   phase: GamePhase;
   stateVersion: number;
   winner: Winner | null;
+  endReason:
+    | "tasks_completed"
+    | "imposters_ejected"
+    | "imposter_parity"
+    | "time_expired"
+    | "abandoned"
+    | null;
   taskPack: { name: string };
   phaseStartedAt: string;
   phaseDeadlineAt: string | null;
@@ -43,12 +50,27 @@ export interface GameSnapshotDto {
   meetingRules: {
     durationSeconds: number;
     votingMode: "timed" | "all_voted";
+    voteVisibility: "private" | "public";
     maxPerPlayer: number;
     calledBySelf: number;
     remainingForSelf: number;
     hasCompletedTask: boolean;
   };
   meeting: MeetingDto | null;
+  resultSummary: null | {
+    durationSeconds: number;
+    completedTasks: number;
+    totalTasks: number;
+    players: Array<{
+      id: string;
+      nickname: string;
+      role: GameRole;
+      crewRole: null | { name: string; specialization: string; ability: string };
+      lifeStatus: LifeStatus;
+      completedTasks: number;
+      totalTasks: number;
+    }>;
+  };
 }
 
 export interface MeetingDto {
@@ -76,6 +98,18 @@ export interface MeetingDto {
     ejectedParticipantId: string | null;
     totals: Array<{ participantId: string; votes: number }>;
     skipVotes: number;
+    ballots?: Array<{
+      voterParticipantId: string;
+      voterNickname: string;
+      targetParticipantId: string | null;
+      targetNickname: string | null;
+    }>;
   };
+  publicVotes: Array<{
+    voterParticipantId: string;
+    voterNickname: string;
+    targetParticipantId: string | null;
+    targetNickname: string | null;
+  }>;
   capabilities: string[];
 }

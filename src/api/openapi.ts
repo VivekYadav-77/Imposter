@@ -784,6 +784,7 @@ export const openApiDocument: OpenAPIObject = {
           meetingsPerPlayer: { type: "integer", minimum: 0, maximum: 10 },
           meetingDurationSeconds: { type: "integer", minimum: 30, maximum: 1800 },
           meetingVotingMode: { type: "string", enum: ["timed", "all_voted"] },
+          voteVisibility: { type: "string", enum: ["private", "public"] },
           imposterCooldownSeconds: { type: "integer", minimum: 10, maximum: 300 },
           imposterCount: { type: "integer", minimum: 1, maximum: 7 },
           taskCounts: {
@@ -844,6 +845,7 @@ export const openApiDocument: OpenAPIObject = {
               "meetingsPerPlayer",
               "meetingDurationSeconds",
               "meetingVotingMode",
+              "voteVisibility",
               "imposterCooldownSeconds",
               "estimatedMeetingCooldownSeconds",
               "imposterCount",
@@ -880,6 +882,7 @@ export const openApiDocument: OpenAPIObject = {
               meetingsPerPlayer: { type: "integer" },
               meetingDurationSeconds: { type: "integer" },
               meetingVotingMode: { type: "string", enum: ["timed", "all_voted"] },
+              voteVisibility: { type: "string", enum: ["private", "public"] },
               imposterCooldownSeconds: { type: "integer" },
               estimatedMeetingCooldownSeconds: { type: "integer" },
               imposterCount: { type: "integer" },
@@ -1008,6 +1011,7 @@ export const openApiDocument: OpenAPIObject = {
           "phase",
           "stateVersion",
           "winner",
+          "endReason",
           "taskPack",
           "phaseStartedAt",
           "phaseDeadlineAt",
@@ -1018,6 +1022,7 @@ export const openApiDocument: OpenAPIObject = {
           "cooldowns",
           "meetingRules",
           "meeting",
+          "resultSummary",
         ],
         properties: {
           id: { type: "string", format: "uuid" },
@@ -1028,6 +1033,17 @@ export const openApiDocument: OpenAPIObject = {
           },
           stateVersion: { type: "integer", minimum: 1 },
           winner: { type: ["string", "null"], enum: ["crew", "imposters", null] },
+          endReason: {
+            type: ["string", "null"],
+            enum: [
+              "tasks_completed",
+              "imposters_ejected",
+              "imposter_parity",
+              "time_expired",
+              "abandoned",
+              null,
+            ],
+          },
           taskPack: {
             type: "object",
             additionalProperties: false,
@@ -1121,6 +1137,7 @@ export const openApiDocument: OpenAPIObject = {
             required: [
               "durationSeconds",
               "votingMode",
+              "voteVisibility",
               "maxPerPlayer",
               "calledBySelf",
               "remainingForSelf",
@@ -1129,6 +1146,7 @@ export const openApiDocument: OpenAPIObject = {
             properties: {
               durationSeconds: { type: "integer" },
               votingMode: { type: "string", enum: ["timed", "all_voted"] },
+              voteVisibility: { type: "string", enum: ["private", "public"] },
               maxPerPlayer: { type: "integer" },
               calledBySelf: { type: "integer" },
               remainingForSelf: { type: "integer" },
@@ -1136,6 +1154,7 @@ export const openApiDocument: OpenAPIObject = {
             },
           },
           meeting: { oneOf: [{ type: "null" }, { $ref: "#/components/schemas/Meeting" }] },
+          resultSummary: { type: ["object", "null"], additionalProperties: true },
         },
       },
       Meeting: {
@@ -1153,6 +1172,7 @@ export const openApiDocument: OpenAPIObject = {
           "ownEjectionTargetParticipantId",
           "hasCastEjectionVote",
           "votesCast",
+          "publicVotes",
           "result",
           "capabilities",
         ],
@@ -1175,6 +1195,24 @@ export const openApiDocument: OpenAPIObject = {
           ownEjectionTargetParticipantId: { type: ["string", "null"], format: "uuid" },
           hasCastEjectionVote: { type: "boolean" },
           votesCast: { type: "integer", minimum: 0 },
+          publicVotes: {
+            type: "array",
+            items: {
+              type: "object",
+              required: [
+                "voterParticipantId",
+                "voterNickname",
+                "targetParticipantId",
+                "targetNickname",
+              ],
+              properties: {
+                voterParticipantId: { type: "string", format: "uuid" },
+                voterNickname: { type: "string" },
+                targetParticipantId: { type: ["string", "null"], format: "uuid" },
+                targetNickname: { type: ["string", "null"] },
+              },
+            },
+          },
           result: { type: ["object", "null"], additionalProperties: true },
           capabilities: { type: "array", items: { type: "string" } },
         },

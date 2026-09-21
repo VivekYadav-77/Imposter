@@ -100,6 +100,7 @@ export interface RoomsTable {
   meetings_per_player: number;
   meeting_duration_seconds: number;
   meeting_voting_mode: "timed" | "all_voted";
+  vote_visibility: "private" | "public";
   imposter_cooldown_seconds: number;
   created_at: Timestamp;
   last_activity_at: Timestamp;
@@ -146,6 +147,13 @@ export interface GamesTable {
   phase: "task" | "discussion" | "review" | "voting" | "result" | "game_over" | "abandoned";
   state_version: ColumnType<string, string | number | undefined, string | number>;
   winner: "crew" | "imposters" | null;
+  end_reason:
+    | "tasks_completed"
+    | "imposters_ejected"
+    | "imposter_parity"
+    | "time_expired"
+    | "abandoned"
+    | null;
   phase_started_at: Timestamp;
   phase_deadline_at: NullableTimestamp;
   started_at: Timestamp;

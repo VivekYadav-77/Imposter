@@ -41,6 +41,7 @@ export interface RoomSnapshot {
     meetingsPerPlayer: number;
     meetingDurationSeconds: number;
     meetingVotingMode: "timed" | "all_voted";
+    voteVisibility: "private" | "public";
     imposterCooldownSeconds: number;
     estimatedMeetingCooldownSeconds: number;
     imposterCount: number;
@@ -107,7 +108,17 @@ export interface MeetingResult {
   ejectedParticipantId?: string | null;
   outcome?: string;
   votes?: Array<{ targetParticipantId: string | null; count: number }>;
+  totals?: Array<{ participantId: string; votes: number }>;
+  skipVotes?: number;
+  ballots?: PublicBallot[];
   [key: string]: unknown;
+}
+
+export interface PublicBallot {
+  voterParticipantId: string;
+  voterNickname: string;
+  targetParticipantId: string | null;
+  targetNickname: string | null;
 }
 
 export interface Meeting {
@@ -122,6 +133,7 @@ export interface Meeting {
   ownEjectionTargetParticipantId: string | null;
   hasCastEjectionVote: boolean;
   votesCast: number;
+  publicVotes: PublicBallot[];
   result: MeetingResult | null;
   capabilities: string[];
 }
@@ -132,6 +144,13 @@ export interface GameSnapshot {
   phase: GamePhase;
   stateVersion: number;
   winner: "crew" | "imposters" | null;
+  endReason:
+    | "tasks_completed"
+    | "imposters_ejected"
+    | "imposter_parity"
+    | "time_expired"
+    | "abandoned"
+    | null;
   taskPack: { name: string };
   phaseStartedAt: string;
   phaseDeadlineAt: string | null;
@@ -162,12 +181,27 @@ export interface GameSnapshot {
   meetingRules: {
     durationSeconds: number;
     votingMode: "timed" | "all_voted";
+    voteVisibility: "private" | "public";
     maxPerPlayer: number;
     calledBySelf: number;
     remainingForSelf: number;
     hasCompletedTask: boolean;
   };
   meeting: Meeting | null;
+  resultSummary: null | {
+    durationSeconds: number;
+    completedTasks: number;
+    totalTasks: number;
+    players: Array<{
+      id: string;
+      nickname: string;
+      role: "crew" | "imposter";
+      crewRole: MapRole | null;
+      lifeStatus: LifeStatus;
+      completedTasks: number;
+      totalTasks: number;
+    }>;
+  };
 }
 
 export interface EvidencePolicy {

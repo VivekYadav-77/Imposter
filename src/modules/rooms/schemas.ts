@@ -38,6 +38,7 @@ export const roomSettingsSchema = z
     meetingsPerPlayer: z.number().int().min(0).max(10).optional(),
     meetingDurationSeconds: z.number().int().min(30).max(1800).optional(),
     meetingVotingMode: z.enum(["timed", "all_voted"]).optional(),
+    voteVisibility: z.enum(["private", "public"]).optional(),
     imposterCooldownSeconds: z.number().int().min(10).max(300).optional(),
     imposterCount: z.number().int().min(1).max(7).optional(),
     taskCounts: z

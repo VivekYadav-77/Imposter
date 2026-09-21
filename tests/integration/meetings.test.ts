@@ -176,8 +176,24 @@ describeWithDatabase("meetings and terminal outcomes", () => {
       );
     }
     const terminal = await games.snapshot(target);
-    expect(terminal).toMatchObject({ phase: "game_over", winner: "crew" });
+    expect(terminal).toMatchObject({
+      phase: "game_over",
+      winner: "crew",
+      endReason: "imposters_ejected",
+    });
+    expect(terminal.resultSummary).not.toBeNull();
+    expect(terminal.resultSummary?.players.some((player) => player.role === "imposter")).toBe(true);
+    expect(terminal.resultSummary?.players.some((player) => player.role === "crew")).toBe(true);
     expect(terminal.meeting?.result?.ejectedParticipantId).toBe(imposter.participantId);
+    expect(terminal.meeting?.publicVotes).toEqual([]);
+
+    const leavingPrincipal = await rooms.authenticate(issued[1].sessionToken);
+    expect(leavingPrincipal).not.toBeNull();
+    await expect(rooms.leave(leavingPrincipal!, randomUUID())).resolves.toEqual({ left: true });
+    const terminalHost = await rooms.authenticate(issued[0].sessionToken);
+    expect(terminalHost).not.toBeNull();
+    const replayed = await rooms.replayRoom(terminalHost!, randomUUID());
+    expect(replayed).toMatchObject({ status: "lobby", gameId: null });
   });
 
   it("resumes after a skipped meeting and resolves imposter parity on the next kill", async () => {
@@ -197,7 +213,11 @@ describeWithDatabase("meetings and terminal outcomes", () => {
     const principals = await Promise.all(
       issued.map(async (entry) => (await rooms.authenticate(entry.sessionToken))!),
     );
-    await rooms.updateSettings(principals[0], { selectedTaskPackId: packId }, randomUUID());
+    await rooms.updateSettings(
+      principals[0],
+      { selectedTaskPackId: packId, voteVisibility: "public" },
+      randomUUID(),
+    );
     await games.start(principals[0], randomUUID());
     const initial = await Promise.all(principals.map((principal) => games.snapshot(principal)));
     const imposter = principals[initial.findIndex((snapshot) => snapshot.self.role === "imposter")];
@@ -230,7 +250,7 @@ describeWithDatabase("meetings and terminal outcomes", () => {
     const living = principals.filter(
       (principal) => principal.participantId !== crew[0].participantId,
     );
-    for (const voter of living) {
+    for (const [index, voter] of living.entries()) {
       const current = await games.snapshot(voter);
       await games.ejectionVote(
         voter,
@@ -238,6 +258,26 @@ describeWithDatabase("meetings and terminal outcomes", () => {
         { expectedStateVersion: current.stateVersion, targetParticipantId: null },
         randomUUID(),
       );
+      if (index === 0) {
+        const afterVote = await games.snapshot(voter);
+        expect(afterVote.meeting?.publicVotes).toEqual([
+          expect.objectContaining({
+            voterParticipantId: voter.participantId,
+            targetParticipantId: null,
+          }),
+        ]);
+        await expect(
+          games.ejectionVote(
+            voter,
+            afterVote.meeting!.id,
+            {
+              expectedStateVersion: afterVote.stateVersion,
+              targetParticipantId: imposter.participantId,
+            },
+            randomUUID(),
+          ),
+        ).rejects.toMatchObject({ code: "VOTE_ALREADY_CAST" });
+      }
     }
     const result = await games.snapshot(imposter);
     expect(result).toMatchObject({ phase: "result", winner: null });

@@ -84,10 +84,13 @@ export class GameService {
   ): Promise<MeetingDto | null> {
     if (gamePhase === "task" || gamePhase === "abandoned") return null;
     const meeting = await executor
-      .selectFrom("app.meetings")
-      .selectAll()
-      .where("game_id", "=", gameId)
-      .orderBy("sequence_number", "desc")
+      .selectFrom("app.meetings as meeting")
+      .innerJoin("app.games as game", "game.id", "meeting.game_id")
+      .innerJoin("app.rooms as room", "room.id", "game.room_id")
+      .selectAll("meeting")
+      .select("room.vote_visibility")
+      .where("meeting.game_id", "=", gameId)
+      .orderBy("meeting.sequence_number", "desc")
       .executeTakeFirst();
     if (!meeting) return null;
     const eligible = await executor
@@ -156,7 +159,7 @@ export class GameService {
         .executeTakeFirst(),
       executor
         .selectFrom("app.ejection_votes")
-        .select("target_participant_id")
+        .select(["voter_participant_id", "target_participant_id"])
         .where("meeting_id", "=", meeting.id)
         .execute(),
     ]);
@@ -165,6 +168,20 @@ export class GameService {
       meeting.phase === "resolved"
         ? resolveEjection(ejectionVotes.map((v) => v.target_participant_id))
         : null;
+    const publicVotes =
+      meeting.vote_visibility === "public"
+        ? ejectionVotes.map((vote) => ({
+            voterParticipantId: vote.voter_participant_id,
+            voterNickname:
+              eligible.find((entry) => entry.id === vote.voter_participant_id)?.nickname ??
+              "Unknown player",
+            targetParticipantId: vote.target_participant_id,
+            targetNickname: vote.target_participant_id
+              ? (eligible.find((entry) => entry.id === vote.target_participant_id)?.nickname ??
+                "Unknown player")
+              : null,
+          }))
+        : [];
     return {
       id: meeting.id,
       sequenceNumber: meeting.sequence_number,
@@ -188,6 +205,7 @@ export class GameService {
       ownEjectionTargetParticipantId: ownEjection?.target_participant_id ?? null,
       hasCastEjectionVote: Boolean(ownEjection),
       votesCast: ejectionVotes.length,
+      publicVotes,
       result: result
         ? {
             ejectedParticipantId: meeting.ejected_participant_id,
@@ -196,12 +214,13 @@ export class GameService {
               votes,
             })),
             skipVotes: result.skip,
+            ...(meeting.vote_visibility === "public" ? { ballots: publicVotes } : {}),
           }
         : null,
       capabilities:
         eligibleSelf && meeting.phase === "review"
           ? ["vote_review"]
-          : eligibleSelf && meeting.phase === "voting"
+          : eligibleSelf && meeting.phase === "voting" && !ownEjection
             ? ["vote_ejection"]
             : [],
     };
@@ -280,15 +299,18 @@ export class GameService {
         "games.phase",
         "games.state_version",
         "games.winner",
+        "games.end_reason",
         "games.task_pack_name_snapshot",
         "games.phase_started_at",
         "games.phase_deadline_at",
         "games.started_at",
+        "games.ended_at",
         "games.meeting_available_at",
         "rooms.host_participant_id",
         "rooms.task_phase_seconds",
         "rooms.meeting_duration_seconds",
         "rooms.meeting_voting_mode",
+        "rooms.vote_visibility",
         "rooms.imposter_cooldown_seconds",
         "rooms.meetings_per_player",
         "self.role",
@@ -311,11 +333,20 @@ export class GameService {
       meetingsCalled,
       completedBySelf,
       ownEliminations,
+      participantTaskStats,
     ] = await Promise.all([
       executor
         .selectFrom("app.game_participants as gp")
         .innerJoin("app.participants as participants", "participants.id", "gp.participant_id")
-        .select(["participants.id", "participants.nickname", "gp.life_status", "gp.role"])
+        .select([
+          "participants.id",
+          "participants.nickname",
+          "gp.life_status",
+          "gp.role",
+          "gp.crew_role_name",
+          "gp.crew_role_specialization",
+          "gp.crew_role_ability",
+        ])
         .where("gp.game_id", "=", game.id)
         .orderBy("participants.joined_at")
         .orderBy("participants.id")
@@ -365,6 +396,16 @@ export class GameService {
         .where("actor_participant_id", "=", principal.participantId)
         .where("type", "=", "killed")
         .execute(),
+      executor
+        .selectFrom("app.task_assignments")
+        .select([
+          "participant_id",
+          sql<number>`count(*)::int`.as("total"),
+          sql<number>`count(*) filter (where status = 'completed')::int`.as("completed"),
+        ])
+        .where("game_id", "=", game.id)
+        .groupBy("participant_id")
+        .execute(),
     ]);
 
     const taskProgress = progress.total ? progress.completed / progress.total : 0;
@@ -401,6 +442,7 @@ export class GameService {
       phase: game.phase,
       stateVersion: Number(game.state_version),
       winner: game.winner,
+      endReason: game.end_reason,
       taskPack: { name: game.task_pack_name_snapshot },
       phaseStartedAt: iso(game.phase_started_at),
       phaseDeadlineAt: game.phase_deadline_at ? iso(game.phase_deadline_at) : null,
@@ -456,12 +498,51 @@ export class GameService {
       meetingRules: {
         durationSeconds: game.meeting_duration_seconds,
         votingMode: game.meeting_voting_mode,
+        voteVisibility: game.vote_visibility,
         maxPerPlayer: game.meetings_per_player,
         calledBySelf: meetingsCalled.count,
         remainingForSelf: Math.max(0, game.meetings_per_player - meetingsCalled.count),
         hasCompletedTask: completedBySelf.count > 0,
       },
       meeting,
+      resultSummary:
+        game.phase === "game_over" || game.phase === "abandoned"
+          ? {
+              durationSeconds: Math.max(
+                0,
+                Math.round(
+                  ((game.ended_at ? new Date(game.ended_at).getTime() : Date.now()) -
+                    new Date(game.started_at).getTime()) /
+                    1000,
+                ),
+              ),
+              completedTasks: progress.completed,
+              totalTasks: progress.total,
+              players: participants.map((participant) => {
+                const stats = participantTaskStats.find(
+                  (entry) => entry.participant_id === participant.id,
+                );
+                return {
+                  id: participant.id,
+                  nickname: participant.nickname,
+                  role: participant.role,
+                  crewRole:
+                    participant.crew_role_name &&
+                    participant.crew_role_specialization &&
+                    participant.crew_role_ability
+                      ? {
+                          name: participant.crew_role_name,
+                          specialization: participant.crew_role_specialization,
+                          ability: participant.crew_role_ability,
+                        }
+                      : null,
+                  lifeStatus: participant.life_status,
+                  completedTasks: stats?.completed ?? 0,
+                  totalTasks: stats?.total ?? 0,
+                };
+              }),
+            }
+          : null,
     };
   }
 
@@ -786,6 +867,7 @@ export class GameService {
     winner: "crew" | "imposters",
     version: number,
     now: Date,
+    reason: "tasks_completed" | "imposters_ejected" | "imposter_parity" | "time_expired",
     meetingId?: string,
   ): Promise<void> {
     await trx
@@ -794,6 +876,7 @@ export class GameService {
         phase: "game_over",
         state_version: version,
         winner,
+        end_reason: reason,
         phase_started_at: now,
         phase_deadline_at: null,
         ended_at: now,
@@ -926,7 +1009,15 @@ export class GameService {
         .execute();
       const nextVersion = Number(game.state_version) + 1;
       const winner = await this.winnerWith(trx, game.id);
-      if (winner) await this.finishGame(trx, game, winner, nextVersion, now);
+      if (winner)
+        await this.finishGame(
+          trx,
+          game,
+          winner,
+          nextVersion,
+          now,
+          winner === "crew" ? "imposters_ejected" : "imposter_parity",
+        );
       else
         await trx
           .updateTable("app.games")
@@ -1410,7 +1501,15 @@ export class GameService {
       .execute();
     const winner = await this.winnerWith(trx, game.id);
     const nextVersion = Number(game.state_version) + 1;
-    if (winner) await this.finishGame(trx, game, winner, nextVersion, now);
+    if (winner)
+      await this.finishGame(
+        trx,
+        game,
+        winner,
+        nextVersion,
+        now,
+        winner === "crew" ? "imposters_ejected" : "imposter_parity",
+      );
     else
       await trx
         .updateTable("app.games")
@@ -1477,6 +1576,18 @@ export class GameService {
           "PLAYER_NOT_ELIGIBLE",
           "Only eligible living players may vote.",
         );
+      const existingVote = await trx
+        .selectFrom("app.ejection_votes")
+        .select("id")
+        .where("meeting_id", "=", meetingId)
+        .where("voter_participant_id", "=", principal.participantId)
+        .executeTakeFirst();
+      if (existingVote)
+        throw new ApplicationError(
+          409,
+          "VOTE_ALREADY_CAST",
+          "Your vote is locked for this meeting.",
+        );
       if (input.targetParticipantId) {
         const target = await trx
           .selectFrom("app.meeting_eligible_voters")
@@ -1502,12 +1613,6 @@ export class GameService {
           created_at: now,
           updated_at: now,
         })
-        .onConflict((conflict) =>
-          conflict.columns(["meeting_id", "voter_participant_id"]).doUpdateSet({
-            target_participant_id: input.targetParticipantId,
-            updated_at: now,
-          }),
-        )
         .execute();
       const [cast, voters] = await Promise.all([
         trx
@@ -1602,7 +1707,7 @@ export class GameService {
       let payload: Record<string, unknown> = { schemaVersion: 1 };
       if (game.phase === "task") {
         const winner = (await this.winnerWith(trx, game.id)) ?? "imposters";
-        await this.finishGame(trx, game, winner, nextVersion, now);
+        await this.finishGame(trx, game, winner, nextVersion, now, "time_expired");
         eventType = "game.ended";
         payload = { schemaVersion: 1, winner, reason: "time_expired" };
       } else if (game.phase === "discussion") {
@@ -1690,7 +1795,7 @@ export class GameService {
       } else if (game.phase === "result") {
         const deadline = game.game_ends_at ? new Date(game.game_ends_at) : now;
         if (deadline <= now) {
-          await this.finishGame(trx, game, "imposters", nextVersion, now);
+          await this.finishGame(trx, game, "imposters", nextVersion, now, "time_expired");
           eventType = "game.ended";
           payload = { schemaVersion: 1, winner: "imposters", reason: "time_expired" };
         } else {
