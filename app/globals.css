@@ -890,22 +890,94 @@ select {
   font-size: 2.2rem;
 }
 .lobby-layout {
-  max-width: 980px;
+  width: min(calc(100% - 48px), 1480px);
+  max-width: none;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 28px;
+  grid-template-columns: minmax(0, 1fr) minmax(400px, 460px);
+  align-items: start;
+  gap: clamp(24px, 3vw, 48px);
+}
+.lobby-layout-player {
+  grid-template-columns: minmax(0, 920px);
+  justify-content: center;
+}
+.lobby-main {
+  min-width: 0;
+}
+.lobby-invite-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 14px;
+  padding: clamp(22px, 3vw, 34px);
+  border: 1px solid #675225;
+  border-radius: 14px;
+  background:
+    linear-gradient(110deg, rgb(62 48 20 / 72%), rgb(25 24 20 / 96%) 62%),
+    var(--surface);
+  box-shadow: 0 18px 54px rgb(0 0 0 / 18%);
+}
+.lobby-invite-card h1 {
+  margin: 2px 0 8px;
+  color: var(--amber);
+  font-size: clamp(2.5rem, 6vw, 4.8rem);
+  line-height: 0.95;
+  letter-spacing: 0.16em;
+}
+.lobby-invite-card p:last-child {
+  max-width: 520px;
+  margin: 0;
+  color: var(--muted);
+}
+.lobby-invite-card .button {
+  flex: 0 0 auto;
+}
+.lobby-readiness {
+  display: grid;
+  grid-template-columns: minmax(220px, auto) minmax(180px, 1fr);
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 34px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 84%, transparent);
+}
+.lobby-readiness strong,
+.lobby-readiness span {
+  display: block;
+}
+.lobby-readiness > div:first-child span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+.readiness-track {
+  height: 10px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #0f0f0c;
+}
+.readiness-track span {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--amber), var(--success));
+  transition: width 240ms ease;
 }
 .roster-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
 }
 .roster-item {
   min-width: 0;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px;
+  min-height: 78px;
+  padding: 16px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -961,14 +1033,195 @@ select {
   padding: 22px;
 }
 .settings-card h2 {
-  font-size: 1.5rem;
+  margin: 0;
+  font-size: 1.65rem;
 }
 .settings-card {
   display: grid;
-  gap: 12px;
+  gap: 14px;
   align-self: start;
   position: sticky;
-  top: 120px;
+  top: 112px;
+  max-height: calc(100svh - 205px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 18px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--brass) transparent;
+}
+.settings-card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 4px 4px 8px;
+}
+.settings-card-heading .eyebrow {
+  margin-bottom: 3px;
+}
+.settings-section {
+  display: grid;
+  gap: 15px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg) 48%, transparent);
+}
+.settings-section-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.settings-section-heading > span:first-child {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 30px;
+  border: 1px solid #725c2c;
+  border-radius: 50%;
+  color: var(--amber);
+  font: 800 0.66rem var(--display);
+}
+.settings-section-heading strong,
+.settings-section-heading small {
+  display: block;
+}
+.settings-section-heading small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+.settings-collapsible {
+  display: block;
+}
+.settings-collapsible > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+.settings-collapsible > summary::-webkit-details-marker {
+  display: none;
+}
+.settings-collapsible > summary > span:last-child {
+  color: var(--muted);
+  font-size: 1.2rem;
+  transition: transform 180ms ease;
+}
+.settings-collapsible[open] > summary > span:last-child {
+  transform: rotate(180deg);
+}
+.settings-collapsible > :not(summary) {
+  margin-top: 16px;
+}
+.meeting-rule-control {
+  display: grid;
+  gap: 14px;
+}
+.meeting-mode-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.meeting-mode-grid > button {
+  min-height: 126px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--ink);
+  text-align: left;
+}
+.meeting-mode-grid > button.selected {
+  border-color: var(--amber);
+  background: #2b2416;
+  box-shadow: inset 0 0 0 1px rgb(226 151 49 / 18%);
+}
+.meeting-mode-grid > button small {
+  color: var(--muted);
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+.meeting-mode-icon {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 4px;
+  border-radius: 50%;
+  background: #2b2a24;
+  color: var(--amber);
+  font-weight: 900;
+}
+.meeting-mode-grid > button.selected .meeting-mode-icon {
+  background: var(--amber);
+  color: var(--bg);
+}
+.meeting-duration-editor {
+  display: grid;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.field-label-row strong {
+  color: var(--amber);
+  font-size: 0.8rem;
+}
+.duration-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.duration-presets button {
+  min-width: 42px;
+  min-height: 34px;
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+.duration-presets button.selected {
+  border-color: var(--amber);
+  background: var(--amber);
+  color: var(--bg);
+}
+.meeting-custom-time {
+  display: grid;
+  grid-template-columns: auto minmax(70px, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.meeting-custom-time input {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--ink);
+  padding: 8px 10px;
+}
+.meeting-custom-time .button {
+  min-height: 40px;
+  padding: 8px 13px;
 }
 .sticky-actions {
   position: fixed;

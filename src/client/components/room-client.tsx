@@ -203,6 +203,7 @@ function LobbyView({
   const [packs, setPacks] = useState<PublicPackSummary[]>([]);
   const [busy, setBusy] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [roleInfo, setRoleInfo] = useState<PublicPackSummary["roles"][number] | null>(null);
   const canSettings = room.self.capabilities.includes("change_settings");
   const canStart = room.self.capabilities.includes("start_game");
@@ -250,6 +251,8 @@ function LobbyView({
   };
   const copy = async () => {
     await navigator.clipboard.writeText(room.code);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1800);
   };
   return (
     <>
@@ -264,12 +267,48 @@ function LobbyView({
           <span>Copy</span>
         </button>
       </PhaseBar>
-      <div className="game-content lobby-layout">
-        <section>
+      <div className={`game-content lobby-layout ${canSettings ? "" : "lobby-layout-player"}`}>
+        <section className="lobby-main">
+          <div className="lobby-invite-card">
+            <div>
+              <p className="eyebrow">Invite your crew</p>
+              <h1>{room.code}</h1>
+              <p>Share this code. Players can join from any phone, tablet, or computer.</p>
+            </div>
+            <Button variant="secondary" onClick={() => void copy()}>
+              {copied ? "Code copied" : "Copy room code"}
+            </Button>
+          </div>
+          <div className="lobby-readiness">
+            <div>
+              <strong>
+                {room.participants.length >= room.minPlayers
+                  ? "Ready to start"
+                  : `${room.minPlayers - room.participants.length} more needed`}
+              </strong>
+              <span>
+                {room.participants.length} joined · minimum {room.minPlayers} · capacity {room.maxPlayers}
+              </span>
+            </div>
+            <div
+              className="readiness-track"
+              role="progressbar"
+              aria-label="Players needed to start"
+              aria-valuemin={0}
+              aria-valuemax={room.minPlayers}
+              aria-valuenow={Math.min(room.participants.length, room.minPlayers)}
+            >
+              <span
+                style={{
+                  width: `${Math.min(100, (room.participants.length / room.minPlayers) * 100)}%`,
+                }}
+              />
+            </div>
+          </div>
           <div className="section-heading">
             <div>
               <p className="eyebrow">Players present</p>
-              <h1>Lobby roster</h1>
+              <h2>Lobby roster</h2>
             </div>
             <Badge tone="info">
               {room.participants.length}/{room.maxPlayers}
@@ -290,9 +329,22 @@ function LobbyView({
         </section>
         {canSettings && (
           <aside className="settings-card">
-            <p className="eyebrow">Host setup</p>
-            <h2>Game settings</h2>
-            <label className="field">
+            <div className="settings-card-heading">
+              <div>
+                <p className="eyebrow">Host setup</p>
+                <h2>Game settings</h2>
+              </div>
+              <Badge tone={busy ? "warning" : "success"}>{busy ? "Saving" : "Saved"}</Badge>
+            </div>
+            <section className="settings-section">
+              <div className="settings-section-heading">
+                <span>01</span>
+                <div>
+                  <strong>Game basics</strong>
+                  <small>Choose the map and total play time.</small>
+                </div>
+              </div>
+              <label className="field">
               <span className="field-label">Map</span>
               <select
                 value={room.settings.selectedTaskPack?.id ?? ""}
@@ -317,40 +369,38 @@ function LobbyView({
                   </option>
                 ))}
               </select>
-            </label>
-            <TimerSelect
-              label="Game time"
-              value={room.settings.taskPhaseSeconds}
-              values={[300, 600, 900, 1200, 1800, 3600]}
-              onChange={(value) => void update({ taskPhaseSeconds: value })}
-            />
-            <TimerSelect
-              label="Meeting duration"
-              value={room.settings.meetingDurationSeconds}
-              values={[30, 45, 60, 90, 120, 180, 240, 300, 600, 900, 1800]}
-              onChange={(value) => void update({ meetingDurationSeconds: value })}
-            />
-            <CustomDurationField
-              label="Custom meeting duration"
-              value={room.settings.meetingDurationSeconds}
-              min={30}
-              max={1800}
-              onApply={(value) => void update({ meetingDurationSeconds: value })}
-            />
-            <label className="field">
-              <span className="field-label">Meeting ends</span>
-              <select
-                value={room.settings.meetingVotingMode}
-                disabled={busy}
-                onChange={(event) => void update({ meetingVotingMode: event.target.value })}
-              >
-                <option value="timed">When the timer expires or everyone votes</option>
-                <option value="all_voted">Only after every living player votes</option>
-              </select>
-              <span className="field-hint">
-                All-voted mode has no voting deadline; the meeting waits for every eligible player.
-              </span>
-            </label>
+              </label>
+              <TimerSelect
+                label="Game time"
+                value={room.settings.taskPhaseSeconds}
+                values={[300, 600, 900, 1200, 1800, 3600]}
+                onChange={(value) => void update({ taskPhaseSeconds: value })}
+              />
+            </section>
+            <section className="settings-section meeting-settings-section">
+              <div className="settings-section-heading">
+                <span>02</span>
+                <div>
+                  <strong>Meeting voting</strong>
+                  <small>Pick one clear rule for ending a vote.</small>
+                </div>
+              </div>
+              <MeetingVotingControl
+                mode={room.settings.meetingVotingMode}
+                duration={room.settings.meetingDurationSeconds}
+                busy={busy}
+                onModeChange={(mode) => void update({ meetingVotingMode: mode })}
+                onDurationChange={(value) => void update({ meetingDurationSeconds: value })}
+              />
+            </section>
+            <section className="settings-section">
+              <div className="settings-section-heading">
+                <span>03</span>
+                <div>
+                  <strong>Game balance</strong>
+                  <small>Control actions, meetings, and impostors.</small>
+                </div>
+              </div>
             <CustomDurationField
               label="Impostor cooldown base"
               value={room.settings.imposterCooldownSeconds}
@@ -396,8 +446,19 @@ function LobbyView({
                 Options keep crewmates in the majority at game start.
               </span>
             </label>
+            </section>
+            <details className="settings-section settings-collapsible" open>
+              <summary>
+                <span className="settings-section-heading">
+                  <span>04</span>
+                  <span>
+                    <strong>Tasks per player</strong>
+                    <small>{Object.values(room.settings.taskCounts).reduce((sum, count) => sum + count, 0)} tasks selected</small>
+                  </span>
+                </span>
+                <span aria-hidden="true">⌄</span>
+              </summary>
             <div className="difficulty-settings">
-              <span className="field-label">Tasks per player</span>
               {(["easy", "medium", "hard"] as const).map((difficulty) => (
                 <label className="field compact-field" key={difficulty}>
                   <span className="field-label">
@@ -443,9 +504,20 @@ function LobbyView({
                 </label>
               ))}
             </div>
+            </details>
             {room.settings.selectedTaskPack?.roles.length ? (
-              <div className="role-settings">
-                <span className="field-label">Crew role allocation</span>
+              <details className="settings-section settings-collapsible">
+                <summary>
+                  <span className="settings-section-heading">
+                    <span>05</span>
+                    <span>
+                      <strong>Crew roles</strong>
+                      <small>Optional specialist allocation</small>
+                    </span>
+                  </span>
+                  <span aria-hidden="true">⌄</span>
+                </summary>
+                <div className="role-settings">
                 {room.settings.selectedTaskPack.roles.map((role) => (
                   <label className="field compact-field" key={role.name}>
                     <button
@@ -486,7 +558,8 @@ function LobbyView({
                     <span className="field-hint">Select how many crewmates receive this role.</span>
                   </label>
                 ))}
-              </div>
+                </div>
+              </details>
             ) : null}
           </aside>
         )}
@@ -570,6 +643,105 @@ function TimerSelect({
         ))}
       </select>
     </label>
+  );
+}
+
+function MeetingVotingControl({
+  mode,
+  duration,
+  busy,
+  onModeChange,
+  onDurationChange,
+}: {
+  mode: "timed" | "all_voted";
+  duration: number;
+  busy: boolean;
+  onModeChange: (mode: "timed" | "all_voted") => void;
+  onDurationChange: (seconds: number) => void;
+}) {
+  const [draft, setDraft] = useState(String(duration));
+  useEffect(() => setDraft(String(duration)), [duration]);
+  const parsed = Number(draft);
+  const valid = Number.isInteger(parsed) && parsed >= 30 && parsed <= 1800;
+  const presets = [60, 90, 120, 180, 300, 600, 900];
+  return (
+    <div className="meeting-rule-control">
+      <div className="meeting-mode-grid" role="radiogroup" aria-label="Meeting voting rule">
+        <button
+          type="button"
+          role="radio"
+          aria-checked={mode === "timed"}
+          className={mode === "timed" ? "selected" : ""}
+          disabled={busy}
+          onClick={() => onModeChange("timed")}
+        >
+          <span className="meeting-mode-icon" aria-hidden="true">◷</span>
+          <strong>Timed vote</strong>
+          <small>Ends when everyone votes or time runs out.</small>
+        </button>
+        <button
+          type="button"
+          role="radio"
+          aria-checked={mode === "all_voted"}
+          className={mode === "all_voted" ? "selected" : ""}
+          disabled={busy}
+          onClick={() => onModeChange("all_voted")}
+        >
+          <span className="meeting-mode-icon" aria-hidden="true">✓</span>
+          <strong>Wait for everyone</strong>
+          <small>No timer. Every living player must vote.</small>
+        </button>
+      </div>
+      {mode === "timed" && (
+        <div className="meeting-duration-editor">
+          <div className="field-label-row">
+            <span className="field-label">Voting time</span>
+            <strong>{formatDuration(duration)}</strong>
+          </div>
+          <div className="duration-presets" aria-label="Quick voting time choices">
+            {presets.map((seconds) => (
+              <button
+                type="button"
+                key={seconds}
+                className={duration === seconds ? "selected" : ""}
+                disabled={busy}
+                onClick={() => onDurationChange(seconds)}
+              >
+                {seconds < 60 ? `${seconds}s` : `${seconds / 60}m`}
+              </button>
+            ))}
+          </div>
+          <label className="meeting-custom-time">
+            <span>Custom</span>
+            <input
+              type="number"
+              min={30}
+              max={1800}
+              step={5}
+              value={draft}
+              disabled={busy}
+              aria-invalid={!valid}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && valid && parsed !== duration) {
+                  event.preventDefault();
+                  onDurationChange(parsed);
+                }
+              }}
+            />
+            <span>seconds</span>
+            <Button
+              variant="secondary"
+              disabled={busy || !valid || parsed === duration}
+              onClick={() => onDurationChange(parsed)}
+            >
+              Set
+            </Button>
+          </label>
+          <small className="field-hint">Choose a preset or enter 30–1800 seconds.</small>
+        </div>
+      )}
+    </div>
   );
 }
 
