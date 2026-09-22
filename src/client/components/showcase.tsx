@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { useSearchParams } from "next/navigation";
-import { AVATAR_IDS, type AvatarId } from "../../shared/avatars";
-import { AvatarPicker } from "./player-avatar";
+import { AVATAR_IDS, avatarById, type AvatarId } from "../../shared/avatars";
+import { AvatarPicker, PlayerAvatar } from "./player-avatar";
 import { SignalSceneArt } from "./signal-visuals";
 import {
   Badge,
@@ -23,6 +23,13 @@ import {
   Timer,
   Toast,
 } from "./ui";
+
+type AvatarAccentStyle = CSSProperties & { "--avatar-dark": string; "--avatar-light": string };
+
+function avatarAccentStyle(id: AvatarId): AvatarAccentStyle {
+  const avatar = avatarById(id);
+  return { "--avatar-dark": avatar.dark, "--avatar-light": avatar.light };
+}
 
 function FixtureTimer({ value, label }: { value: string; label: string }) {
   return (
@@ -174,7 +181,11 @@ function GameFixture({ state }: { state: string }) {
     return (
       <main id="main-content" className="game-page game-dashboard-fixture">
         <GameShell phase="role" identity="Captain Extremely Suspicious" avatarId="panther">
-          <section className="role-screen role-screen-crew">
+          <section
+            className="role-screen role-screen-crew avatar-dashboard"
+            style={avatarAccentStyle("panther")}
+          >
+            <PlayerAvatar id="panther" size={96} className="dashboard-avatar-watermark" />
             <p className="eyebrow">Private briefing</p>
             <div className="role-card revealed">
               <span className="seal-mark" aria-hidden="true">
@@ -206,7 +217,11 @@ function GameFixture({ state }: { state: string }) {
           avatarId="panther"
           status={<FixtureTimer value="01:16" label="Meeting time" />}
         >
-          <div className="game-content narrow meeting-view">
+          <div
+            className="game-content narrow meeting-view avatar-dashboard"
+            style={avatarAccentStyle("panther")}
+          >
+            <PlayerAvatar id="panther" size={96} className="dashboard-avatar-watermark" />
             <p className="eyebrow">Meeting 2</p>
             <h1>{results ? "Room decision" : "Who do you trust least?"}</h1>
             {results ? (
@@ -230,7 +245,11 @@ function GameFixture({ state }: { state: string }) {
                 </p>
                 <div className="voting-grid">
                   {["Ada", "Max", "Captain Extremely Suspicious", "Skip"].map((name, index) => (
-                    <button className={`voting-option ${index === 1 ? "selected" : ""}`} key={name}>
+                    <button
+                      className={`voting-option avatar-accent-card ${index === 1 ? "selected" : ""}`}
+                      key={name}
+                      style={avatarAccentStyle(AVATAR_IDS[index] ?? "fox")}
+                    >
                       <IdentityToken name={name} avatarId={AVATAR_IDS[index] ?? "fox"} />
                       <strong>{name}</strong>
                       <small>{index === 1 ? "Selected" : "Tap to select"}</small>
@@ -269,7 +288,8 @@ function GameFixture({ state }: { state: string }) {
           </div>
         }
       >
-        <div className="task-command-shell">
+        <div className="task-command-shell avatar-dashboard" style={avatarAccentStyle("panther")}>
+          <PlayerAvatar id="panther" size={96} className="dashboard-avatar-watermark" />
           <div className="game-content task-command-main">
             <div className="section-heading">
               <div>
@@ -325,7 +345,10 @@ function GameFixture({ state }: { state: string }) {
             </div>
           </div>
           <aside className="game-context-rail" aria-label="Game controls and status">
-            <section className="live-identity-card">
+            <section
+              className="live-identity-card avatar-accent-card"
+              style={avatarAccentStyle("panther")}
+            >
               <IdentityToken
                 name="Captain Extremely Suspicious"
                 avatarId="panther"
@@ -353,7 +376,11 @@ function GameFixture({ state }: { state: string }) {
               </div>
               <ul className="elimination-history-list">
                 {["Ada", "Max with a very long callsign"].map((name) => (
-                  <li key={name}>
+                  <li
+                    className="avatar-accent-card"
+                    key={name}
+                    style={avatarAccentStyle(name === "Ada" ? "owl" : "wolf")}
+                  >
                     <IdentityToken name={name} avatarId={name === "Ada" ? "owl" : "wolf"} />
                     <span>
                       <strong>{name}</strong>

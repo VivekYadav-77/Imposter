@@ -1520,15 +1520,16 @@ html[data-theme="light"] .avatar-choice {
   align-content: center;
   gap: 6px;
   padding: 8px 4px;
-  border: 1px solid var(--line);
+  border: 1px solid color-mix(in srgb, var(--avatar-accent) 38%, var(--line));
   border-radius: 10px;
-  background: var(--surface);
+  background: color-mix(in srgb, var(--avatar-accent) 3%, var(--surface));
   color: var(--ink);
   cursor: pointer;
 }
 .avatar-choice:hover,
 .avatar-choice:focus-visible {
   border-color: var(--avatar-accent);
+  background: color-mix(in srgb, var(--avatar-accent) 7%, var(--surface));
 }
 .avatar-choice:focus-visible {
   outline: 3px solid color-mix(in srgb, var(--avatar-accent) 35%, transparent);
@@ -1549,7 +1550,37 @@ html[data-theme="light"] .avatar-choice {
 }
 .avatar-accent-card {
   --avatar-accent: var(--avatar-dark);
-  border-left-color: color-mix(in srgb, var(--avatar-accent) 76%, var(--line)) !important;
+  position: relative;
+  isolation: isolate;
+  outline: 1px solid color-mix(in srgb, var(--avatar-accent) 48%, var(--line));
+  outline-offset: -1px;
+  background-color: color-mix(in srgb, var(--avatar-accent) 5%, var(--surface));
+  transition:
+    outline-color 180ms ease,
+    background-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+.avatar-accent-card::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  inset: 10px auto 10px 0;
+  width: 3px;
+  border-radius: 0 999px 999px 0;
+  background: var(--avatar-accent);
+  opacity: 0.82;
+  pointer-events: none;
+}
+.avatar-accent-card:hover,
+.avatar-accent-card:focus-visible,
+.avatar-accent-card:focus-within {
+  outline-color: color-mix(in srgb, var(--avatar-accent) 82%, var(--line));
+  background-color: color-mix(in srgb, var(--avatar-accent) 8%, var(--surface));
+}
+.avatar-compact-card::after {
+  inset-block: 7px;
+  width: 2px;
 }
 html[data-theme="light"] .avatar-accent-card,
 html[data-theme="light"] .avatar-dashboard {
@@ -1567,13 +1598,33 @@ html[data-theme="light"] .avatar-dashboard {
   position: relative;
   isolation: isolate;
 }
+.avatar-dashboard::before {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  top: 18px;
+  right: 0;
+  width: 4px;
+  height: 64px;
+  border-radius: 999px 0 0 999px;
+  background: var(--avatar-accent);
+  opacity: 0.72;
+  pointer-events: none;
+}
+.avatar-dashboard > :not(.dashboard-avatar-watermark) {
+  position: relative;
+  z-index: 1;
+}
 .dashboard-avatar-watermark {
   position: absolute;
-  z-index: -1;
+  z-index: 0;
   top: 22px;
   right: 22px;
-  opacity: 0.045;
+  opacity: 0.075;
   pointer-events: none;
+}
+html[data-theme="light"] .dashboard-avatar-watermark {
+  opacity: 0.055;
 }
 .reported-player-chip {
   display: flex;

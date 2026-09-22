@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties, ReactNode } from "react";
+import { useEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import { AVATARS, avatarById, type AvatarId } from "../../shared/avatars";
 
 type AvatarStyle = CSSProperties & {
@@ -215,13 +215,44 @@ export function PlayerAvatar({
   animate?: boolean;
 }) {
   const avatar = avatarById(id);
+  const avatarRef = useRef<HTMLSpanElement>(null);
   const style: AvatarStyle = {
     "--avatar-dark": avatar.dark,
     "--avatar-light": avatar.light,
     "--avatar-size": `${size}px`,
   };
+  useEffect(() => {
+    const element = avatarRef.current;
+    if (!element || !animate) return;
+    const surface = element.closest<HTMLElement>(
+      ".avatar-choice, .avatar-accent-card, .avatar-dashboard, .phase-identity, .reported-player-chip, .ballot-party, .meeting-tally > span",
+    );
+    if (!surface) return;
+    let firstFrame = 0;
+    let secondFrame = 0;
+    const replay = () => {
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      window.cancelAnimationFrame(firstFrame);
+      window.cancelAnimationFrame(secondFrame);
+      element.classList.remove("avatar-animated");
+      firstFrame = window.requestAnimationFrame(() => {
+        secondFrame = window.requestAnimationFrame(() => element.classList.add("avatar-animated"));
+      });
+    };
+    surface.addEventListener("pointerenter", replay);
+    surface.addEventListener("pointerdown", replay);
+    surface.addEventListener("focusin", replay);
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      window.cancelAnimationFrame(secondFrame);
+      surface.removeEventListener("pointerenter", replay);
+      surface.removeEventListener("pointerdown", replay);
+      surface.removeEventListener("focusin", replay);
+    };
+  }, [animate, id]);
   return (
     <span
+      ref={avatarRef}
       className={`player-avatar avatar-${id} ${animate ? "avatar-animated" : ""} ${className}`}
       data-avatar={id}
       data-status={status}

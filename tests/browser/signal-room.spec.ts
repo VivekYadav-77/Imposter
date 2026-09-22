@@ -179,6 +179,18 @@ test("avatar motion settles without moving its reserved box", async ({ page }) =
   await page.waitForTimeout(750);
   const after = await avatar.boundingBox();
   expect(after).toEqual(before);
+
+  await page.mouse.move(0, 0);
+  await choice.hover();
+  await expect
+    .poll(() =>
+      avatar
+        .locator(".avatar-part-a")
+        .evaluate((element) =>
+          element.getAnimations().some((animation) => animation.playState === "running"),
+        ),
+    )
+    .toBe(true);
 });
 
 test("reduced motion disables avatar keyframes", async ({ page }) => {

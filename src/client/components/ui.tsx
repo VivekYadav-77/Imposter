@@ -5,6 +5,7 @@ import {
   useId,
   useRef,
   type ButtonHTMLAttributes,
+  type CSSProperties,
   type InputHTMLAttributes,
   type ReactNode,
 } from "react";
@@ -12,7 +13,7 @@ import { BrandMark, Icon, type IconName } from "./icons";
 import { isSoundEnabled, playGameSound, setSoundEnabled } from "../audio/game-sounds";
 import { ThemeToggle } from "./theme-toggle";
 import type { GameShellProps, GamePhaseVisual } from "./game-ui-types";
-import type { AvatarId } from "../../shared/avatars";
+import { avatarById, type AvatarId } from "../../shared/avatars";
 import { PlayerAvatar } from "./player-avatar";
 
 export { Icon, type IconName } from "./icons";
@@ -529,8 +530,15 @@ export function PhaseBar({
   avatarId?: AvatarId;
   children?: ReactNode;
 }) {
+  const avatar = avatarId ? avatarById(avatarId) : null;
+  const avatarStyle = avatar
+    ? ({ "--avatar-dark": avatar.dark, "--avatar-light": avatar.light } as CSSProperties)
+    : undefined;
   return (
-    <header className={`phase-bar phase-${phase}`}>
+    <header
+      className={`phase-bar phase-${phase}${avatar ? " avatar-phase-bar" : ""}`}
+      style={avatarStyle}
+    >
       <div className="phase-bar-inner">
         <div className="phase-primary">
           <span className="phase-label">

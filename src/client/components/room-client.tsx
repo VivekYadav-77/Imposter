@@ -1110,7 +1110,11 @@ function RoleReveal({
   return (
     <>
       <PhaseBar phase="role" identity={identity} avatarId={avatarId} />
-      <section className={`role-screen role-screen-${role}`}>
+      <section
+        className={`role-screen role-screen-${role} avatar-dashboard`}
+        style={avatarAccentStyle(avatarId)}
+      >
+        <PlayerAvatar id={avatarId} size={96} className="dashboard-avatar-watermark" />
         <p className="eyebrow">Private briefing</p>
         <div className={`role-card ${revealed ? "revealed" : "sealed"}`}>
           <span className="seal-mark" aria-hidden="true">
@@ -1272,12 +1276,7 @@ function TaskView({
           className="task-command-shell avatar-dashboard"
           style={avatarAccentStyle(room.self.avatarId)}
         >
-          <PlayerAvatar
-            id={room.self.avatarId}
-            size={96}
-            className="dashboard-avatar-watermark"
-            animate={false}
-          />
+          <PlayerAvatar id={room.self.avatarId} size={96} className="dashboard-avatar-watermark" />
           <div className="game-content task-command-main">
             <div className="section-heading">
               <div>
@@ -1446,25 +1445,26 @@ function TaskView({
                 </div>
                 {game.self.knownEliminatedParticipantIds.length ? (
                   <ul className="elimination-history-list">
-                    {game.self.knownEliminatedParticipantIds.map((id) => (
-                      <li key={id}>
-                        <IdentityToken
-                          name={
-                            game.participants.find((player) => player.id === id)?.nickname ??
-                            "Unknown player"
-                          }
-                          avatarId={game.participants.find((player) => player.id === id)?.avatarId}
-                        />
-                        <span>
-                          <strong>
-                            {game.participants.find((player) => player.id === id)?.nickname ??
-                              "Unknown player"}
-                          </strong>
-                          <small>Eliminated by you</small>
-                        </span>
-                        <Icon name="check" size={17} />
-                      </li>
-                    ))}
+                    {game.self.knownEliminatedParticipantIds.map((id) => {
+                      const player = game.participants.find((entry) => entry.id === id);
+                      return (
+                        <li
+                          className={player ? "avatar-accent-card" : undefined}
+                          key={id}
+                          style={player ? avatarAccentStyle(player.avatarId) : undefined}
+                        >
+                          <IdentityToken
+                            name={player?.nickname ?? "Unknown player"}
+                            avatarId={player?.avatarId}
+                          />
+                          <span>
+                            <strong>{player?.nickname ?? "Unknown player"}</strong>
+                            <small>Eliminated by you</small>
+                          </span>
+                          <Icon name="check" size={17} />
+                        </li>
+                      );
+                    })}
                   </ul>
                 ) : (
                   <p className="elimination-history-empty">No confirmed eliminations yet.</p>
@@ -2030,7 +2030,11 @@ function MeetingView({
     return (
       <>
         <PhaseBar phase="meeting" identity={room.self.nickname} avatarId={room.self.avatarId} />
-        <div className="game-content">
+        <div
+          className="game-content avatar-dashboard"
+          style={avatarAccentStyle(room.self.avatarId)}
+        >
+          <PlayerAvatar id={room.self.avatarId} size={96} className="dashboard-avatar-watermark" />
           <EmptyState
             title="Meeting is syncing"
             description="The authoritative meeting record is not available yet."
@@ -2100,7 +2104,11 @@ function MeetingView({
           </Badge>
         )}
       </PhaseBar>
-      <div className="game-content narrow meeting-view">
+      <div
+        className="game-content narrow meeting-view avatar-dashboard"
+        style={avatarAccentStyle(room.self.avatarId)}
+      >
+        <PlayerAvatar id={room.self.avatarId} size={96} className="dashboard-avatar-watermark" />
         <p className="eyebrow">Meeting {meeting.sequenceNumber}</p>
         <h1>
           {game.phase === "discussion"
@@ -2125,7 +2133,10 @@ function MeetingView({
                   : "The task window closed. Gather and talk face to face."}
             </p>
             {meeting.triggerType === "kill" && reported && (
-              <div className="reported-player-chip">
+              <div
+                className="reported-player-chip avatar-accent-card"
+                style={avatarAccentStyle(reported.avatarId)}
+              >
                 <IdentityToken name={reported.nickname} avatarId={reported.avatarId} size={56} />
                 <span>
                   <small>Reported player</small>
@@ -2292,7 +2303,10 @@ function PublicVoteFeed({ votes }: { votes: NonNullable<GameSnapshot["meeting"]>
         <ul>
           {votes.map((ballot) => (
             <li key={ballot.voterParticipantId}>
-              <div className="ballot-party ballot-voter">
+              <div
+                className="ballot-party ballot-voter avatar-accent-card avatar-compact-card"
+                style={avatarAccentStyle(ballot.voterAvatarId)}
+              >
                 <IdentityToken
                   name={ballot.voterNickname}
                   avatarId={ballot.voterAvatarId}
@@ -2307,7 +2321,14 @@ function PublicVoteFeed({ votes }: { votes: NonNullable<GameSnapshot["meeting"]>
                 <Icon name="arrow" size={17} />
                 <span className="sr-only">voted for</span>
               </span>
-              <div className="ballot-party ballot-target">
+              <div
+                className={
+                  ballot.targetAvatarId
+                    ? "ballot-party ballot-target avatar-accent-card avatar-compact-card"
+                    : "ballot-party ballot-target"
+                }
+                style={ballot.targetAvatarId ? avatarAccentStyle(ballot.targetAvatarId) : undefined}
+              >
                 {ballot.targetAvatarId && ballot.targetNickname ? (
                   <IdentityToken
                     name={ballot.targetNickname}
@@ -2339,22 +2360,26 @@ function ResultBlock({ game }: { game: GameSnapshot }) {
       <h2>{ejected ? `${ejected.nickname} was ejected` : "No one was ejected"}</h2>
       {result?.totals?.length ? (
         <div className="meeting-tally">
-          {result.totals.map((total) => (
-            <span key={total.participantId}>
-              {(() => {
-                const player = game.participants.find((entry) => entry.id === total.participantId);
-                return player ? (
+          {result.totals.map((total) => {
+            const player = game.participants.find((entry) => entry.id === total.participantId);
+            return (
+              <span
+                className={player ? "avatar-accent-card avatar-compact-card" : undefined}
+                key={total.participantId}
+                style={player ? avatarAccentStyle(player.avatarId) : undefined}
+              >
+                {player ? (
                   <>
                     <IdentityToken name={player.nickname} avatarId={player.avatarId} size={30} />
                     {player.nickname}
                   </>
                 ) : (
                   "Player"
-                );
-              })()}
-              <strong>{total.votes}</strong>
-            </span>
-          ))}
+                )}
+                <strong>{total.votes}</strong>
+              </span>
+            );
+          })}
           <span>
             Skipped<strong>{result.skipVotes ?? 0}</strong>
           </span>
@@ -2407,7 +2432,8 @@ function TerminalView({
   return (
     <>
       <PhaseBar phase="results" identity={room.self.nickname} avatarId={room.self.avatarId} />
-      <div className="game-content">
+      <div className="game-content avatar-dashboard" style={avatarAccentStyle(room.self.avatarId)}>
+        <PlayerAvatar id={room.self.avatarId} size={96} className="dashboard-avatar-watermark" />
         <section className="terminal-card">
           <span className="stamp">CASE CLOSED</span>
           <p className="eyebrow">Final outcome</p>

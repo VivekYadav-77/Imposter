@@ -1,12 +1,98 @@
-node_modules/
-.next/
-dist/
-coverage/
+# Dependencies and package-manager state
+/node_modules/
+/.npm/
+/.yarn/cache/
+/.yarn/install-state.gz
+/.pnp.*
+
+# Framework, compiler, and bundler output
+/.next/
+/out/
+/dist/
+/build/
+/.turbo/
+/.swc/
+/.cache/
+*.tsbuildinfo
+.eslintcache
+.stylelintcache
+
+# Test and coverage output
+/coverage/
+/.nyc_output/
+/.vitest/
+/.playwright-results/
+/playwright-report/
+/test-results/
+/blob-report/
+/junit.xml
+
+# Hosting and deployment-tool state
+/.vercel/
+/.netlify/
+/.serverless/
+/.sst/
+/.wrangler/
+
+# Local environment and secrets
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+*.local
+*.key
+*.p12
+*.pfx
+
+# Runtime data and temporary databases
+/.data/
+/.tmp-*/
+/pgdata/
+/postgres-data/
+/backups/
+/logs/
+/tmp/
+/temp/
+*.pid
+*.pid.lock
+
+# Generated contracts
+/openapi/.generated-openapi.json
+
+# Logs, crash reports, and package archives
 *.log
-openapi/.generated-openapi.json
-.data/
-.playwright-results/
-playwright-report/
+*.stackdump
+*.dmp
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+*.tgz
+
+# Editor and IDE state
+/.idea/
+/.vscode/
+*.code-workspace
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+*.swo
+*~
+
+# Operating-system metadata
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# Local backups and scratch files
+*.bak
+*.tmp
+*.temp
+docker-compose.override.yml

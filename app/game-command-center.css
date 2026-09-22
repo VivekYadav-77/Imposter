@@ -803,6 +803,65 @@ html[data-theme="light"] .game-page .phase-identity > span:last-child {
   color: var(--text-1);
 }
 
+/* Avatar identity accents stay secondary to phase, role, and status colors. */
+.game-page .avatar-phase-bar {
+  --avatar-accent: var(--avatar-dark);
+}
+
+html[data-theme="light"] .game-page .avatar-phase-bar {
+  --avatar-accent: var(--avatar-light);
+}
+
+.game-page .avatar-phase-bar .phase-identity {
+  border-color: color-mix(in srgb, var(--avatar-accent) 58%, var(--game-border));
+  background: color-mix(in srgb, var(--avatar-accent) 7%, var(--surface-1));
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--avatar-accent) 78%, transparent);
+}
+
+html[data-theme="light"] .game-page .avatar-phase-bar .phase-identity {
+  background: color-mix(in srgb, var(--avatar-accent) 5%, #fffdf8);
+}
+
+.game-page .avatar-accent-card {
+  border-color: color-mix(in srgb, var(--avatar-accent) 34%, var(--game-border));
+  background-color: color-mix(in srgb, var(--avatar-accent) 5%, var(--game-panel));
+}
+
+.game-page .avatar-accent-card:hover,
+.game-page .avatar-accent-card:focus-visible,
+.game-page .avatar-accent-card:focus-within {
+  border-color: color-mix(in srgb, var(--avatar-accent) 62%, var(--game-border));
+  background-color: color-mix(in srgb, var(--avatar-accent) 9%, var(--game-panel));
+}
+
+.game-page .voting-option.selected.avatar-accent-card {
+  border-color: var(--game-voting);
+  outline-color: var(--avatar-accent);
+}
+
+.game-page .result-player.avatar-accent-card {
+  border-left-color: var(--success);
+}
+
+.game-page .result-player-imposter.avatar-accent-card {
+  border-left-color: var(--danger);
+}
+
+.game-page .ballot-party.avatar-compact-card {
+  padding: 5px 7px;
+  border-radius: 10px;
+}
+
+.game-page .avatar-dashboard {
+  min-width: 0;
+}
+
+.game-page .role-screen.avatar-dashboard,
+.game-page .meeting-view.avatar-dashboard,
+.game-page .game-content.avatar-dashboard {
+  overflow: hidden;
+}
+
 @keyframes game-card-enter {
   from {
     opacity: 0;
