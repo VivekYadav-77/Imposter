@@ -43,6 +43,14 @@ describeWithDatabase("room and participant lifecycle persistence", () => {
       unique("test:capacity"),
     );
     createdRoomIds.push(created.room.id);
+    await expect(
+      rooms.joinRoom(
+        created.room.code,
+        { nickname: "  HOST " },
+        unique("duplicate-host"),
+        unique("test:duplicate-host"),
+      ),
+    ).rejects.toMatchObject({ code: "NICKNAME_TAKEN" });
     const race = await Promise.allSettled([
       rooms.joinRoom(
         created.room.code,

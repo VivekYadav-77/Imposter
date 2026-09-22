@@ -483,6 +483,19 @@ export class RoomService {
           .executeTakeFirstOrThrow();
         if (count.count >= room.max_players)
           throw new ApplicationError(409, "ROOM_FULL", "The room is full.");
+        const nicknameTaken = await trx
+          .selectFrom("app.participants")
+          .select("id")
+          .where("room_id", "=", room.id)
+          .where("normalized_nickname", "=", normalized.normalized)
+          .where("membership_status", "=", "joined")
+          .executeTakeFirst();
+        if (nicknameTaken)
+          throw new ApplicationError(
+            409,
+            "NICKNAME_TAKEN",
+            "That nickname is already in use in this room.",
+          );
         const participantId = randomUUID();
         const sessionId = randomUUID();
         const now = new Date();

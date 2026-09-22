@@ -309,4 +309,86 @@ describeWithDatabase("meetings and terminal outcomes", () => {
     );
     expect(terminal).toMatchObject({ phase: "game_over", winner: "imposters" });
   });
+
+  it("times out all-voted meetings and recovers legacy meetings with no deadline", async () => {
+    const issued = [
+      await rooms.createRoom(
+        { nickname: "Deadline Host" },
+        randomUUID(),
+        `deadline:${randomUUID()}`,
+      ),
+    ];
+    roomIds.push(issued[0].room.id);
+    for (let index = 1; index < 5; index += 1)
+      issued.push(
+        await rooms.joinRoom(
+          issued[0].room.code,
+          { nickname: `Deadline ${index}` },
+          randomUUID(),
+          `deadline:${randomUUID()}`,
+        ),
+      );
+    const principals = await Promise.all(
+      issued.map(async (entry) => (await rooms.authenticate(entry.sessionToken))!),
+    );
+    await rooms.updateSettings(
+      principals[0],
+      {
+        selectedTaskPackId: packId,
+        meetingVotingMode: "all_voted",
+        meetingDurationSeconds: 30,
+      },
+      randomUUID(),
+    );
+    const started = await games.start(principals[0], randomUUID());
+    const assignment = await dependencies.db
+      .selectFrom("app.task_assignments")
+      .select("id")
+      .where("game_id", "=", started.id)
+      .where("participant_id", "=", principals[0].participantId)
+      .executeTakeFirstOrThrow();
+    await dependencies.db
+      .updateTable("app.task_assignments")
+      .set({ status: "completed", completed_at: new Date() })
+      .where("id", "=", assignment.id)
+      .execute();
+    const ready = await games.snapshot(principals[0]);
+    const voting = await games.callMeeting(
+      principals[0],
+      { expectedStateVersion: ready.stateVersion },
+      randomUUID(),
+    );
+    expect(voting).toMatchObject({ phase: "voting", meeting: { votesCast: 0 } });
+    expect(voting.phaseDeadlineAt).not.toBeNull();
+    expect(voting.meeting?.deadlineAt).not.toBeNull();
+
+    for (const voter of principals.slice(0, 4)) {
+      const current = await games.snapshot(voter);
+      await games.ejectionVote(
+        voter,
+        current.meeting!.id,
+        { expectedStateVersion: current.stateVersion, targetParticipantId: null },
+        randomUUID(),
+      );
+    }
+    expect((await games.snapshot(principals[0])).phase).toBe("voting");
+
+    // Simulate a meeting created by the previous all-voted implementation.
+    await dependencies.db
+      .updateTable("app.games")
+      .set({ phase_deadline_at: null })
+      .where("id", "=", started.id)
+      .execute();
+    await dependencies.db
+      .updateTable("app.meetings")
+      .set({ deadline_at: null })
+      .where("id", "=", voting.meeting!.id)
+      .execute();
+    expect(await games.runDueTransitions()).toBeGreaterThan(0);
+    const resolved = await games.snapshot(principals[4]);
+    expect(resolved).toMatchObject({
+      phase: "result",
+      meeting: { phase: "resolved", votesCast: 4 },
+    });
+  });
 });

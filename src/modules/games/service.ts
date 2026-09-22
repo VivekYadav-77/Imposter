@@ -782,7 +782,7 @@ export class GameService {
   ) {
     const room = await trx
       .selectFrom("app.rooms")
-      .select(["discussion_seconds", "meeting_duration_seconds", "meeting_voting_mode"])
+      .select(["discussion_seconds", "meeting_duration_seconds"])
       .where("id", "=", game.room_id)
       .executeTakeFirstOrThrow();
     const previous = await trx
@@ -791,13 +791,10 @@ export class GameService {
       .where("game_id", "=", game.id)
       .executeTakeFirstOrThrow();
     const meetingId = randomUUID();
-    const deadline =
-      startInVoting && room.meeting_voting_mode === "all_voted"
-        ? null
-        : new Date(
-            now.getTime() +
-              (startInVoting ? room.meeting_duration_seconds : room.discussion_seconds) * 1000,
-          );
+    const deadline = new Date(
+      now.getTime() +
+        (startInVoting ? room.meeting_duration_seconds : room.discussion_seconds) * 1000,
+    );
     await trx
       .insertInto("app.meetings")
       .values({
@@ -1214,13 +1211,10 @@ export class GameService {
     const settings = await trx
       .selectFrom("app.games as game")
       .innerJoin("app.rooms as room", "room.id", "game.room_id")
-      .select(["room.voting_seconds", "room.meeting_voting_mode"])
+      .select("room.voting_seconds")
       .where("game.id", "=", gameId)
       .executeTakeFirstOrThrow();
-    const deadline =
-      settings.meeting_voting_mode === "all_voted"
-        ? null
-        : new Date(now.getTime() + settings.voting_seconds * 1000);
+    const deadline = new Date(now.getTime() + settings.voting_seconds * 1000);
     await trx
       .updateTable("app.meetings")
       .set({ phase: "voting", deadline_at: deadline })
@@ -1680,7 +1674,12 @@ export class GameService {
       const candidate = await this.database
         .selectFrom("app.games")
         .select("id")
-        .where("phase_deadline_at", "<=", new Date())
+        .where((eb) =>
+          eb.or([
+            eb("phase_deadline_at", "<=", new Date()),
+            eb.and([eb("phase", "=", "voting"), eb("phase_deadline_at", "is", null)]),
+          ]),
+        )
         .where("phase", "not in", ["game_over", "abandoned"])
         .orderBy("phase_deadline_at")
         .executeTakeFirst();
@@ -1701,7 +1700,11 @@ export class GameService {
         .forUpdate()
         .executeTakeFirst();
       const now = new Date();
-      if (!game || !game.phase_deadline_at || new Date(game.phase_deadline_at) > now) return null;
+      if (!game) return null;
+      if (game.phase_deadline_at && new Date(game.phase_deadline_at) > now) return null;
+      // Older all-voted meetings had no deadline. Treat those as due so a
+      // missing or disconnected voter cannot leave an existing room stuck.
+      if (!game.phase_deadline_at && game.phase !== "voting") return null;
       const nextVersion = Number(game.state_version) + 1;
       let eventType = "meeting.phase_changed";
       let payload: Record<string, unknown> = { schemaVersion: 1 };

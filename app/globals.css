@@ -804,7 +804,14 @@ select {
 }
 .phase-tasks {
   background: var(--tasks);
-  color: var(--bg);
+  color: #17120c;
+}
+.phase-tasks .progress-label {
+  color: #3f3218;
+}
+.phase-tasks .progress {
+  border-color: rgb(23 18 12 / 45%);
+  background: rgb(23 18 12 / 18%);
 }
 .phase-meeting {
   background: var(--meeting);
@@ -2047,6 +2054,7 @@ select {
   border-radius: 12px;
   overflow: hidden;
   background: #121311;
+  color: #ede7d8;
 }
 .covert-cover {
   width: 100%;
@@ -2058,16 +2066,16 @@ select {
   padding: 18px;
   border: 0;
   background: linear-gradient(120deg, #1b1d1a, #10110f);
-  color: var(--ink);
+  color: #ede7d8;
   text-align: left;
 }
 .covert-cover > span {
   grid-row: span 2;
-  color: var(--muted);
+  color: #a69e86;
   font-size: 2rem;
 }
 .covert-cover small {
-  color: var(--muted);
+  color: #a69e86;
 }
 .covert-console.is-open {
   padding: 20px;
@@ -2083,6 +2091,7 @@ select {
 }
 .covert-console-heading h2 {
   margin: 0 0 16px;
+  color: #ede7d8;
 }
 .covert-lock {
   border: 1px solid #704139;
@@ -2102,7 +2111,7 @@ select {
   margin-top: 16px;
   padding-top: 14px;
   border-top: 1px solid #48302b;
-  color: var(--muted);
+  color: #a69e86;
   font-size: 0.76rem;
 }
 .elimination-ledger > div {
@@ -2147,7 +2156,11 @@ select {
 .role-card.revealed {
   background: #272419;
   border-color: var(--amber);
+  color: #ede7d8;
   transform: scale(1.01);
+}
+.role-card.revealed h1 {
+  color: #ede7d8;
 }
 .role-card h1 {
   font-size: 3.8rem;
@@ -3316,6 +3329,7 @@ select {
 .game-toast-region .toast-danger {
   border-color: var(--danger);
   background: #351713;
+  color: #f0b7a8;
 }
 .game-toast-region .toast-info {
   border-color: #6e93a9;
@@ -3484,6 +3498,13 @@ html[data-theme="light"] .phase-results {
 }
 html[data-theme="light"] .game-toast-region .toast {
   box-shadow: 0 16px 44px var(--shadow);
+}
+html[data-theme="light"] .game-toast-region .toast-danger {
+  background: #f9e2dc;
+  color: #852819;
+}
+html[data-theme="light"] .game-toast-region .toast-danger button {
+  color: #852819;
 }
 
 html[data-theme="dark"] .admin-page {

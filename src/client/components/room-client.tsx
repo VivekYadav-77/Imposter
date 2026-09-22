@@ -786,58 +786,58 @@ function MeetingVotingControl({
             ✓
           </span>
           <strong>Wait for everyone</strong>
-          <small>No timer. Every living player must vote.</small>
+          <small>Ends when everyone votes, with a safety time limit.</small>
         </button>
       </div>
-      {mode === "timed" && (
-        <div className="meeting-duration-editor">
-          <div className="field-label-row">
-            <span className="field-label">Voting time</span>
-            <strong>{formatDuration(duration)}</strong>
-          </div>
-          <div className="duration-presets" aria-label="Quick voting time choices">
-            {presets.map((seconds) => (
-              <button
-                type="button"
-                key={seconds}
-                className={duration === seconds ? "selected" : ""}
-                disabled={busy}
-                onClick={() => onDurationChange(seconds)}
-              >
-                {seconds < 60 ? `${seconds}s` : `${seconds / 60}m`}
-              </button>
-            ))}
-          </div>
-          <label className="meeting-custom-time">
-            <span>Custom</span>
-            <input
-              type="number"
-              min={30}
-              max={1800}
-              step={5}
-              value={draft}
-              disabled={busy}
-              aria-invalid={!valid}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && valid && parsed !== duration) {
-                  event.preventDefault();
-                  onDurationChange(parsed);
-                }
-              }}
-            />
-            <span>seconds</span>
-            <Button
-              variant="secondary"
-              disabled={busy || !valid || parsed === duration}
-              onClick={() => onDurationChange(parsed)}
-            >
-              Set
-            </Button>
-          </label>
-          <small className="field-hint">Choose a preset or enter 30–1800 seconds.</small>
+      <div className="meeting-duration-editor">
+        <div className="field-label-row">
+          <span className="field-label">
+            {mode === "all_voted" ? "Maximum wait" : "Voting time"}
+          </span>
+          <strong>{formatDuration(duration)}</strong>
         </div>
-      )}
+        <div className="duration-presets" aria-label="Quick voting time choices">
+          {presets.map((seconds) => (
+            <button
+              type="button"
+              key={seconds}
+              className={duration === seconds ? "selected" : ""}
+              disabled={busy}
+              onClick={() => onDurationChange(seconds)}
+            >
+              {seconds < 60 ? `${seconds}s` : `${seconds / 60}m`}
+            </button>
+          ))}
+        </div>
+        <label className="meeting-custom-time">
+          <span>Custom</span>
+          <input
+            type="number"
+            min={30}
+            max={1800}
+            step={5}
+            value={draft}
+            disabled={busy}
+            aria-invalid={!valid}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && valid && parsed !== duration) {
+                event.preventDefault();
+                onDurationChange(parsed);
+              }
+            }}
+          />
+          <span>seconds</span>
+          <Button
+            variant="secondary"
+            disabled={busy || !valid || parsed === duration}
+            onClick={() => onDurationChange(parsed)}
+          >
+            Set
+          </Button>
+        </label>
+        <small className="field-hint">Choose a preset or enter 30–1800 seconds.</small>
+      </div>
     </div>
   );
 }
@@ -1027,12 +1027,10 @@ function RoleReveal({
       <Button
         className="reveal-button"
         variant={revealed ? "secondary" : "primary"}
-        onPointerDown={() => setRevealed(true)}
-        onPointerUp={() => setRevealed(false)}
-        onPointerCancel={() => setRevealed(false)}
+        aria-pressed={revealed}
         onClick={() => setRevealed(!revealed)}
       >
-        {revealed ? "Hide role" : "Press and hold to reveal"}
+        {revealed ? "Hide role" : "Reveal role"}
       </Button>
       <Button variant="ghost" disabled={!revealed} onClick={onContinue}>
         I understand
@@ -1068,12 +1066,25 @@ function TaskView({
     return () => window.clearInterval(timer);
   }, []);
   useEffect(() => {
-    participantApi
-      .submissions()
-      .then((response) =>
-        setOwnProofs(response.data.filter((item) => item.uploader.id === game.self.participantId)),
-      )
-      .catch((error: unknown) => onError(errorMessage(error)));
+    let cancelled = false;
+    let refreshTimer: number | undefined;
+    const refreshOwnProofs = async () => {
+      try {
+        const response = await participantApi.submissions();
+        if (cancelled) return;
+        const proofs = response.data.filter((item) => item.uploader.id === game.self.participantId);
+        setOwnProofs(proofs);
+        if (proofs.some((item) => item.processingStatus === "pending"))
+          refreshTimer = window.setTimeout(() => void refreshOwnProofs(), 1_250);
+      } catch (error) {
+        if (!cancelled) onError(errorMessage(error));
+      }
+    };
+    void refreshOwnProofs();
+    return () => {
+      cancelled = true;
+      if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
+    };
   }, [game.self.participantId, game.stateVersion, onError]);
   const selected = game.assignments.find((task) => task.id === assignmentId);
   const killReady =
@@ -1346,7 +1357,7 @@ function TaskView({
         onClose={() => setConfirmMeeting(false)}
         onConfirm={() => void callMeeting()}
         title="Call a meeting?"
-        description={`${game.meetingRules.votingMode === "all_voted" ? "Voting stays open until every living player votes." : `Voting will open for ${formatDuration(game.meetingRules.durationSeconds)}.`} You will have ${Math.max(0, game.meetingRules.remainingForSelf - 1)} meeting calls left.`}
+        description={`${game.meetingRules.votingMode === "all_voted" ? `Voting ends when everyone votes or after ${formatDuration(game.meetingRules.durationSeconds)}.` : `Voting will open for ${formatDuration(game.meetingRules.durationSeconds)}.`} You will have ${Math.max(0, game.meetingRules.remainingForSelf - 1)} meeting calls left.`}
         confirmLabel="Open meeting"
         loading={meetingBusy}
       />
@@ -1874,7 +1885,8 @@ function MeetingView({
           <>
             {game.meetingRules.votingMode === "all_voted" && (
               <Banner tone="info">
-                No timer is running. This meeting resolves after every eligible living player votes.
+                This meeting resolves after every eligible living player votes, or when the safety
+                timer expires.
               </Banner>
             )}
             <p className="lead">

@@ -62,4 +62,26 @@ describe("frontend design foundations", () => {
     expect(toggle).toContain("aria-label={label}");
     expect(toggle).toContain("localStorage.setItem(STORAGE_KEY, theme)");
   });
+
+  it("keeps dark privacy surfaces legible when the light theme is active", async () => {
+    const css = await readFile("app/globals.css", "utf8");
+    expect(css).toMatch(/\.role-card\.revealed\s*\{[^}]*color: #ede7d8;/s);
+    expect(css).toMatch(/\.covert-console\s*\{[^}]*color: #ede7d8;/s);
+    expect(css).toMatch(
+      /html\[data-theme="light"\] \.game-toast-region \.toast-danger\s*\{[^}]*color: #852819;/s,
+    );
+  });
+
+  it("uses one deterministic toggle for revealing and hiding the private role", async () => {
+    const roomClient = await readFile("src/client/components/room-client.tsx", "utf8");
+    expect(roomClient).toContain("onClick={() => setRevealed(!revealed)}");
+    expect(roomClient).not.toContain("onPointerUp={() => setRevealed(false)}");
+  });
+
+  it("refreshes an uploader's task preview while evidence is processing", async () => {
+    const roomClient = await readFile("src/client/components/room-client.tsx", "utf8");
+    expect(roomClient).toContain('item.processingStatus === "pending"');
+    expect(roomClient).toContain("window.setTimeout(() => void refreshOwnProofs(), 1_250)");
+    expect(roomClient).toContain("window.clearTimeout(refreshTimer)");
+  });
 });
