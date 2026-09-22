@@ -7,10 +7,12 @@ import type {
   Meeting,
   PublicPackSummary,
   RoomSnapshot,
+  RoomJoinOptions,
   SessionIssue,
   Submission,
   UploadIntent,
 } from "./types";
+import type { AvatarId } from "../../shared/avatars";
 
 export class ApiError extends Error {
   constructor(
@@ -117,21 +119,26 @@ export const participantApi = {
     minPlayersOrKey: number | string = 3,
     maxPlayers = 12,
     key = createIdempotencyKey(),
+    avatarId?: AvatarId,
   ) =>
     apiRequest<SessionIssue>("/api/v1/rooms", {
       method: "POST",
       body: json(
         typeof minPlayersOrKey === "number"
-          ? { nickname, minPlayers: minPlayersOrKey, maxPlayers }
-          : { nickname },
+          ? { nickname, minPlayers: minPlayersOrKey, maxPlayers, ...(avatarId ? { avatarId } : {}) }
+          : { nickname, ...(avatarId ? { avatarId } : {}) },
       ),
       headers: { "X-Session-Transport": "cookie" },
       idempotencyKey: typeof minPlayersOrKey === "string" ? minPlayersOrKey : key,
     }),
-  joinRoom: (code: string, nickname: string, key = createIdempotencyKey()) =>
+  joinOptions: (code: string) =>
+    apiRequest<RoomJoinOptions>(`/api/v1/rooms/${encodeURIComponent(code)}/join-options`, {
+      retry: false,
+    }),
+  joinRoom: (code: string, nickname: string, key = createIdempotencyKey(), avatarId?: AvatarId) =>
     apiRequest<SessionIssue>(`/api/v1/rooms/${encodeURIComponent(code)}/participants`, {
       method: "POST",
-      body: json({ nickname }),
+      body: json({ nickname, ...(avatarId ? { avatarId } : {}) }),
       headers: { "X-Session-Transport": "cookie" },
       idempotencyKey: key,
     }),

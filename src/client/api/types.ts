@@ -1,3 +1,5 @@
+import type { AvatarId } from "../../shared/avatars";
+
 export type TransportState = "connecting" | "connected" | "reconnecting" | "offline" | "revoked";
 export type CommandState = "idle" | "submitting" | "retryable_error" | "conflict" | "succeeded";
 
@@ -19,6 +21,7 @@ export interface ApiErrorBody {
 export interface ParticipantSelf {
   participantId: string;
   nickname: string;
+  avatarId: AvatarId;
   isHost: boolean;
   capabilities: string[];
 }
@@ -55,6 +58,7 @@ export interface RoomSnapshot {
   participants: Array<{
     id: string;
     nickname: string;
+    avatarId: AvatarId;
     isHost: boolean;
     presence: "connected" | "away";
     joinedAt: string;
@@ -68,6 +72,11 @@ export interface SessionIssue {
   room: RoomSnapshot;
   participant: ParticipantSelf;
   sessionExpiresAt: string;
+}
+
+export interface RoomJoinOptions {
+  availableAvatarIds: AvatarId[];
+  spotsRemaining: number;
 }
 
 export interface PublicPackSummary {
@@ -121,8 +130,10 @@ export interface MeetingResult {
 export interface PublicBallot {
   voterParticipantId: string;
   voterNickname: string;
+  voterAvatarId: AvatarId;
   targetParticipantId: string | null;
   targetNickname: string | null;
+  targetAvatarId: AvatarId | null;
 }
 
 export interface Meeting {
@@ -132,7 +143,7 @@ export interface Meeting {
   reportedParticipantId: string | null;
   phase: "discussion" | "review" | "voting" | "resolved";
   deadlineAt: string | null;
-  eligibleParticipants: Array<{ id: string; nickname: string }>;
+  eligibleParticipants: Array<{ id: string; nickname: string; avatarId: AvatarId }>;
   reviewItem: MeetingReviewItem | null;
   ownEjectionTargetParticipantId: string | null;
   hasCastEjectionVote: boolean;
@@ -159,9 +170,16 @@ export interface GameSnapshot {
   taskPack: { name: string };
   phaseStartedAt: string;
   phaseDeadlineAt: string | null;
-  participants: Array<{ id: string; nickname: string; isHost: boolean; lifeStatus: LifeStatus }>;
+  participants: Array<{
+    id: string;
+    nickname: string;
+    avatarId: AvatarId;
+    isHost: boolean;
+    lifeStatus: LifeStatus;
+  }>;
   self: {
     participantId: string;
+    avatarId: AvatarId;
     role: "crew" | "imposter";
     lifeStatus: LifeStatus;
     capabilities: string[];
@@ -201,6 +219,7 @@ export interface GameSnapshot {
     players: Array<{
       id: string;
       nickname: string;
+      avatarId: AvatarId;
       role: "crew" | "imposter";
       crewRole: MapRole | null;
       lifeStatus: LifeStatus;

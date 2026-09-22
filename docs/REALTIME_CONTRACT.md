@@ -6,6 +6,10 @@ Socket.IO is served at `/realtime` with WebSocket transport only. Authentication
 
 Every typed server message contains `schemaVersion: 1`, `type`, `occurredAt`, and (when room-scoped) `roomId`.
 
+Room and game snapshots carry the participant's stable `avatarId`. This is an additive v1 field:
+replace the entire local snapshot as usual, retain the avatar across reconnects, and use the same
+identity in lobby, meeting, voting, and result views.
+
 | Message                  | Data                                                                         | Recovery behavior                                                      |
 | ------------------------ | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | `room.snapshot`          | Complete participant-specific lobby snapshot                                 | Replaces local lobby state; sent on connect and lobby changes.         |

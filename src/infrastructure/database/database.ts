@@ -2,6 +2,7 @@ import { Kysely, PostgresDialect, sql, type ColumnType, type Generated } from "k
 import { Pool, type PoolConfig } from "pg";
 
 import type { AppConfig } from "../configuration/config.js";
+import type { AvatarId } from "../../shared/avatars.js";
 
 type Timestamp = ColumnType<Date, Date | string | undefined, Date | string>;
 type NullableTimestamp = ColumnType<
@@ -115,6 +116,7 @@ export interface ParticipantsTable {
   room_id: string;
   nickname: string;
   normalized_nickname: string;
+  avatar_id: AvatarId;
   membership_status: "joined" | "left" | "removed";
   joined_at: Timestamp;
   last_seen_at: Timestamp;

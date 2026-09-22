@@ -1265,6 +1265,355 @@ select {
 .identity-token[data-status="away"]::after {
   background: var(--disabled);
 }
+.player-avatar {
+  --avatar-accent: var(--avatar-dark);
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: 0 0 var(--avatar-size);
+  width: var(--avatar-size);
+  height: var(--avatar-size);
+  overflow: visible;
+  border: 1px solid color-mix(in srgb, var(--avatar-accent) 72%, var(--line));
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--avatar-accent) 11%, var(--surface));
+  color: var(--avatar-accent);
+}
+html[data-theme="light"] .player-avatar,
+html[data-theme="light"] .avatar-choice {
+  --avatar-accent: var(--avatar-light);
+}
+.player-avatar svg {
+  display: block;
+  width: 88%;
+  height: 88%;
+  overflow: visible;
+}
+.player-avatar path,
+.player-avatar circle {
+  fill: currentColor;
+  stroke: none;
+}
+.player-avatar .avatar-backplate {
+  fill: color-mix(in srgb, var(--avatar-accent) 12%, var(--surface));
+}
+.player-avatar .avatar-detail {
+  fill: none;
+  stroke: var(--surface-strong, var(--bg));
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.player-avatar::after {
+  content: "";
+  position: absolute;
+  right: -1px;
+  bottom: 1px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: var(--success);
+}
+.player-avatar:not([data-status])::after {
+  display: none;
+}
+.player-avatar[data-status="away"]::after {
+  background: var(--disabled);
+}
+.avatar-motion {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.avatar-animated.avatar-fox .avatar-part-a {
+  animation: avatar-ear-flick 420ms ease-out both;
+}
+.avatar-animated.avatar-owl .avatar-part-a {
+  animation: avatar-slow-blink 620ms ease-out both;
+}
+.avatar-animated.avatar-wolf .avatar-motion {
+  animation: avatar-head-lift 480ms ease-out both;
+}
+.avatar-animated.avatar-raven .avatar-part-a {
+  animation: avatar-feather-ruffle 520ms ease-out both;
+}
+.avatar-animated.avatar-moth .avatar-part-a {
+  animation: avatar-wing-pulse 620ms ease-out both;
+}
+.avatar-animated.avatar-cobra .avatar-motion {
+  animation: avatar-head-sway 520ms ease-out both;
+}
+.avatar-animated.avatar-stag .avatar-part-a {
+  animation: avatar-antler-trace 700ms ease-out both;
+}
+.avatar-animated.avatar-hare .avatar-part-a {
+  animation: avatar-ear-rise 460ms ease-out both;
+}
+.avatar-animated.avatar-panther .avatar-part-a {
+  animation: avatar-eye-sweep 500ms ease-out both;
+}
+.avatar-animated.avatar-shark .avatar-part-a {
+  animation: avatar-fin-pass 520ms ease-out both;
+}
+.avatar-animated.avatar-bull .avatar-motion {
+  animation: avatar-head-dip 420ms ease-out both;
+}
+.avatar-animated.avatar-gecko .avatar-part-a {
+  animation: avatar-alternating-blink 660ms ease-out both;
+}
+.avatar-animated.avatar-beetle .avatar-part-a {
+  animation: avatar-shell-shift 520ms ease-out both;
+}
+.avatar-animated.avatar-spider .avatar-part-a {
+  animation: avatar-foreleg-tap 560ms ease-out both;
+}
+.avatar-animated.avatar-bat .avatar-part-a {
+  animation: avatar-wing-fold 620ms ease-out both;
+}
+.avatar-animated.avatar-raccoon .avatar-part-a {
+  animation: avatar-tail-curl 520ms ease-out both;
+}
+.avatar-animated.avatar-lynx .avatar-part-a {
+  animation: avatar-ear-tuft-twitch 460ms ease-out both;
+}
+.avatar-animated.avatar-falcon .avatar-motion {
+  animation: avatar-head-turn 500ms ease-out both;
+}
+@keyframes avatar-ear-flick {
+  45% {
+    transform: rotate(-7deg);
+  }
+}
+@keyframes avatar-slow-blink {
+  45% {
+    transform: scaleY(0.12);
+  }
+}
+@keyframes avatar-head-lift {
+  45% {
+    transform: translateY(-3px);
+  }
+}
+@keyframes avatar-feather-ruffle {
+  35% {
+    transform: rotate(-4deg) scale(1.04);
+  }
+  65% {
+    transform: rotate(3deg);
+  }
+}
+@keyframes avatar-wing-pulse {
+  50% {
+    transform: scaleX(1.1);
+  }
+}
+@keyframes avatar-head-sway {
+  35% {
+    transform: rotate(-4deg);
+  }
+  70% {
+    transform: rotate(3deg);
+  }
+}
+@keyframes avatar-antler-trace {
+  from {
+    stroke-dasharray: 50;
+    stroke-dashoffset: 50;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes avatar-ear-rise {
+  from {
+    transform: translateY(4px) scaleY(0.85);
+  }
+}
+@keyframes avatar-eye-sweep {
+  50% {
+    transform: translateX(2px);
+  }
+}
+@keyframes avatar-fin-pass {
+  from {
+    transform: translateX(-4px);
+    opacity: 0.45;
+  }
+}
+@keyframes avatar-head-dip {
+  50% {
+    transform: translateY(3px) rotate(1deg);
+  }
+}
+@keyframes avatar-alternating-blink {
+  35% {
+    transform: scaleY(0.2);
+  }
+  60% {
+    transform: scaleY(1);
+  }
+}
+@keyframes avatar-shell-shift {
+  50% {
+    transform: scaleX(1.08);
+  }
+}
+@keyframes avatar-foreleg-tap {
+  35% {
+    transform: rotate(-4deg);
+  }
+  65% {
+    transform: rotate(3deg);
+  }
+}
+@keyframes avatar-wing-fold {
+  50% {
+    transform: scaleX(0.8);
+  }
+}
+@keyframes avatar-tail-curl {
+  50% {
+    transform: rotate(4deg);
+  }
+}
+@keyframes avatar-ear-tuft-twitch {
+  45% {
+    transform: translateY(-2px) rotate(2deg);
+  }
+}
+@keyframes avatar-head-turn {
+  45% {
+    transform: translateX(2px) scaleX(0.94);
+  }
+}
+
+.avatar-picker {
+  min-width: 0;
+  margin: 0;
+  padding: 18px 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+.avatar-picker legend {
+  padding: 0;
+  color: var(--ink);
+  font: 800 1.05rem var(--display);
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+.avatar-picker > p {
+  margin: 4px 0 14px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.avatar-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 9px;
+}
+.avatar-choice {
+  --avatar-accent: var(--avatar-dark);
+  min-width: 0;
+  min-height: 92px;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 6px;
+  padding: 8px 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+.avatar-choice:hover,
+.avatar-choice:focus-visible {
+  border-color: var(--avatar-accent);
+}
+.avatar-choice:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--avatar-accent) 35%, transparent);
+  outline-offset: 2px;
+}
+.avatar-choice.selected {
+  border: 2px solid var(--avatar-accent);
+  background: color-mix(in srgb, var(--avatar-accent) 8%, var(--surface));
+}
+.avatar-choice > span:last-child {
+  overflow: hidden;
+  max-width: 100%;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+}
+.avatar-accent-card {
+  --avatar-accent: var(--avatar-dark);
+  border-left-color: color-mix(in srgb, var(--avatar-accent) 76%, var(--line)) !important;
+}
+html[data-theme="light"] .avatar-accent-card,
+html[data-theme="light"] .avatar-dashboard {
+  --avatar-accent: var(--avatar-light);
+}
+.avatar-codename {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.avatar-dashboard {
+  --avatar-accent: var(--avatar-dark);
+  position: relative;
+  isolation: isolate;
+}
+.dashboard-avatar-watermark {
+  position: absolute;
+  z-index: -1;
+  top: 22px;
+  right: 22px;
+  opacity: 0.045;
+  pointer-events: none;
+}
+.reported-player-chip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 18px 0;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.reported-player-chip span,
+.reported-player-chip small,
+.reported-player-chip strong,
+.reported-player-chip em {
+  display: block;
+}
+.reported-player-chip small,
+.reported-player-chip em {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-style: normal;
+}
+.meeting-tally .player-avatar {
+  display: inline-grid;
+  margin-right: 7px;
+  vertical-align: middle;
+}
+@media (max-width: 760px) {
+  .avatar-picker-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .player-avatar .avatar-motion {
+    animation: none !important;
+  }
+}
 .settings-card,
 .card {
   background: var(--surface);

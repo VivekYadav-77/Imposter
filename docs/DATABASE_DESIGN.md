@@ -346,12 +346,13 @@ Use a partial unique index on `code` for non-terminal rooms. Codes may be reused
 | `room_id`             | `uuid`        |   No | FK to `rooms`, cascade on room purge      |
 | `nickname`            | `text`        |   No | Display value, bounded                    |
 | `normalized_nickname` | `text`        |   No | Unique with room ID                       |
+| `avatar_id`           | `text`        |   No | Night Operative catalog identifier        |
 | `membership_status`   | `text`        |   No | `joined`, `left`, `removed`               |
 | `joined_at`           | `timestamptz` |   No | Default current time                      |
 | `last_seen_at`        | `timestamptz` |   No | Presence hint; not every heartbeat writes |
 | `disconnected_at`     | `timestamptz` |  Yes | Durable grace-period input                |
 
-Unique `(room_id, normalized_nickname)`. A participant record is temporary identity, not an account.
+Unique `(room_id, normalized_nickname)` and, for joined members, `(room_id, avatar_id)`. A participant record is temporary identity, not an account.
 
 ### `participant_sessions`
 

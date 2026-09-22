@@ -13,6 +13,10 @@ Treat navigation, a backgrounded tab, and transport loss as a soft disconnect, n
 Compatibility policy:
 
 - `/api/v1` and realtime `schemaVersion: 1` are frozen as of backend `1.0.0`.
+- Participant snapshots now include the additive `avatarId` identity field. Existing clients may
+  omit `avatarId` when creating or joining a room and receive a server-assigned available avatar;
+  interactive clients should fetch `GET /api/v1/rooms/{code}/join-options` and submit an explicit
+  choice. Treat `409 AVATAR_TAKEN` as a refresh-and-reselect conflict.
 - New optional response fields and new event types may be added in v1; clients must ignore unknown fields/events.
 - Existing meanings, required request fields, enum values used by clients, authentication behavior, or field types are not changed incompatibly in v1.
 - Deprecations receive documentation and at least one released-client migration window. A breaking change uses `/api/v2` or realtime schema version 2 with parallel support.

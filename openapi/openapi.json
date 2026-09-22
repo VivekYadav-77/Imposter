@@ -391,6 +391,80 @@
         }
       }
     },
+    "/api/v1/rooms/{code}/join-options": {
+      "get": {
+        "operationId": "getRoomJoinOptions",
+        "summary": "List unclaimed avatars in an open lobby",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9]{6}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/RoomJoinOptions"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "requestId",
+                        "serverTime"
+                      ],
+                      "properties": {
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "serverTime": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/rooms/current": {
       "get": {
         "operationId": "getCurrentRoom",
@@ -3286,6 +3360,50 @@
       }
     },
     "schemas": {
+      "AvatarId": {
+        "type": "string",
+        "enum": [
+          "fox",
+          "owl",
+          "wolf",
+          "raven",
+          "moth",
+          "cobra",
+          "stag",
+          "hare",
+          "panther",
+          "shark",
+          "bull",
+          "gecko",
+          "beetle",
+          "spider",
+          "bat",
+          "raccoon",
+          "lynx",
+          "falcon"
+        ]
+      },
+      "RoomJoinOptions": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "availableAvatarIds",
+          "spotsRemaining"
+        ],
+        "properties": {
+          "availableAvatarIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AvatarId"
+            }
+          },
+          "spotsRemaining": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 15
+          }
+        }
+      },
       "RoomMembershipInput": {
         "type": "object",
         "additionalProperties": false,
@@ -3297,6 +3415,9 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 24
+          },
+          "avatarId": {
+            "$ref": "#/components/schemas/AvatarId"
           }
         }
       },
@@ -3311,6 +3432,9 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 24
+          },
+          "avatarId": {
+            "$ref": "#/components/schemas/AvatarId"
           },
           "minPlayers": {
             "type": "integer",
@@ -3437,6 +3561,7 @@
         "required": [
           "participantId",
           "nickname",
+          "avatarId",
           "isHost",
           "capabilities"
         ],
@@ -3447,6 +3572,9 @@
           },
           "nickname": {
             "type": "string"
+          },
+          "avatarId": {
+            "$ref": "#/components/schemas/AvatarId"
           },
           "isHost": {
             "type": "boolean"
@@ -3655,6 +3783,7 @@
               "required": [
                 "id",
                 "nickname",
+                "avatarId",
                 "isHost",
                 "presence",
                 "joinedAt"
@@ -3666,6 +3795,9 @@
                 },
                 "nickname": {
                   "type": "string"
+                },
+                "avatarId": {
+                  "$ref": "#/components/schemas/AvatarId"
                 },
                 "isHost": {
                   "type": "boolean"
@@ -4024,6 +4156,7 @@
               "required": [
                 "id",
                 "nickname",
+                "avatarId",
                 "isHost",
                 "lifeStatus"
               ],
@@ -4034,6 +4167,9 @@
                 },
                 "nickname": {
                   "type": "string"
+                },
+                "avatarId": {
+                  "$ref": "#/components/schemas/AvatarId"
                 },
                 "isHost": {
                   "type": "boolean"
@@ -4054,6 +4190,7 @@
             "additionalProperties": false,
             "required": [
               "participantId",
+              "avatarId",
               "role",
               "lifeStatus",
               "capabilities",
@@ -4065,6 +4202,9 @@
               "participantId": {
                 "type": "string",
                 "format": "uuid"
+              },
+              "avatarId": {
+                "$ref": "#/components/schemas/AvatarId"
               },
               "role": {
                 "type": "string",
@@ -4339,7 +4479,8 @@
               "type": "object",
               "required": [
                 "id",
-                "nickname"
+                "nickname",
+                "avatarId"
               ],
               "properties": {
                 "id": {
@@ -4348,6 +4489,9 @@
                 },
                 "nickname": {
                   "type": "string"
+                },
+                "avatarId": {
+                  "$ref": "#/components/schemas/AvatarId"
                 }
               }
             }
@@ -4384,8 +4528,10 @@
               "required": [
                 "voterParticipantId",
                 "voterNickname",
+                "voterAvatarId",
                 "targetParticipantId",
-                "targetNickname"
+                "targetNickname",
+                "targetAvatarId"
               ],
               "properties": {
                 "voterParticipantId": {
@@ -4394,6 +4540,9 @@
                 },
                 "voterNickname": {
                   "type": "string"
+                },
+                "voterAvatarId": {
+                  "$ref": "#/components/schemas/AvatarId"
                 },
                 "targetParticipantId": {
                   "type": [
@@ -4406,6 +4555,16 @@
                   "type": [
                     "string",
                     "null"
+                  ]
+                },
+                "targetAvatarId": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AvatarId"
+                    }
                   ]
                 }
               }

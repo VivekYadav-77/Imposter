@@ -84,6 +84,7 @@ describe("realtime authentication boundary", () => {
           self: {
             participantId: principal.participantId,
             nickname: "Asha",
+            avatarId: "fox",
             isHost: true,
             capabilities: ["change_settings"],
           },

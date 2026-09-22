@@ -1,3 +1,5 @@
+import type { AvatarId } from "../../shared/avatars.js";
+
 export type RoomStatus = "lobby" | "active" | "completed" | "abandoned" | "expired";
 
 export interface ParticipantPrincipal {
@@ -9,6 +11,7 @@ export interface ParticipantPrincipal {
 export interface ParticipantDto {
   id: string;
   nickname: string;
+  avatarId: AvatarId;
   isHost: boolean;
   presence: "connected" | "away";
   joinedAt: string;
@@ -47,9 +50,20 @@ export interface RoomSnapshotDto {
     votingSeconds?: number;
   };
   participants: ParticipantDto[];
-  self: { participantId: string; nickname: string; isHost: boolean; capabilities: string[] };
+  self: {
+    participantId: string;
+    nickname: string;
+    avatarId: AvatarId;
+    isHost: boolean;
+    capabilities: string[];
+  };
   expiresAt: string;
   gameId: string | null;
+}
+
+export interface RoomJoinOptionsDto {
+  availableAvatarIds: AvatarId[];
+  spotsRemaining: number;
 }
 
 export interface SessionIssueDto {

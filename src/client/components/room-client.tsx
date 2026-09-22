@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { ApiError, createIdempotencyKey, errorMessage, participantApi } from "../api/client";
@@ -14,6 +14,8 @@ import type {
 } from "../api/types";
 import { RealtimeClient } from "../realtime/client";
 import { playGameSound, playMeetingAlert } from "../audio/game-sounds";
+import { avatarById, type AvatarId } from "../../shared/avatars";
+import { PlayerAvatar } from "./player-avatar";
 import {
   Badge,
   Banner,
@@ -35,6 +37,12 @@ import {
 
 type GameToastDetail = { message: string; tone: "success" | "danger" | "info" };
 const GAME_TOAST_EVENT = "imposter-game:toast";
+
+type AvatarAccentStyle = CSSProperties & { "--avatar-dark": string; "--avatar-light": string };
+function avatarAccentStyle(id: AvatarId): AvatarAccentStyle {
+  const avatar = avatarById(id);
+  return { "--avatar-dark": avatar.dark, "--avatar-light": avatar.light };
+}
 
 function gameToast(message: string, tone: GameToastDetail["tone"] = "success") {
   if (typeof window !== "undefined")
@@ -314,7 +322,7 @@ function LobbyView({
   };
   return (
     <>
-      <PhaseBar phase="lobby" identity={room.self.nickname} />
+      <PhaseBar phase="lobby" identity={room.self.nickname} avatarId={room.self.avatarId} />
       <div className={`game-content lobby-layout ${canSettings ? "" : "lobby-layout-player"}`}>
         <section className="lobby-main">
           <div className="lobby-invite-card">
@@ -365,11 +373,22 @@ function LobbyView({
           </div>
           <div className="roster-grid">
             {room.participants.map((player) => (
-              <article className="roster-item" key={player.id}>
-                <IdentityToken name={player.nickname} status={player.presence} />
+              <article
+                className="roster-item avatar-accent-card"
+                key={player.id}
+                style={avatarAccentStyle(player.avatarId)}
+              >
+                <IdentityToken
+                  name={player.nickname}
+                  avatarId={player.avatarId}
+                  status={player.presence}
+                />
                 <div>
                   <strong title={player.nickname}>{player.nickname}</strong>
-                  <span>{player.presence === "connected" ? "In the room" : "Away"}</span>
+                  <span>
+                    {avatarById(player.avatarId).name} ·{" "}
+                    {player.presence === "connected" ? "In the room" : "Away"}
+                  </span>
                 </div>
                 {player.isHost && <Badge tone="warning">Host</Badge>}
               </article>
@@ -1055,6 +1074,7 @@ function GameView({
         role={game.self.role}
         crewRole={game.self.crewRole}
         identity={room.self.nickname}
+        avatarId={room.self.avatarId}
         revealed={revealed}
         setRevealed={setRevealed}
         onContinue={() => {
@@ -1074,6 +1094,7 @@ function RoleReveal({
   role,
   crewRole,
   identity,
+  avatarId,
   revealed,
   setRevealed,
   onContinue,
@@ -1081,13 +1102,14 @@ function RoleReveal({
   role: "crew" | "imposter";
   crewRole: GameSnapshot["self"]["crewRole"];
   identity: string;
+  avatarId: AvatarId;
   revealed: boolean;
   setRevealed: (value: boolean) => void;
   onContinue: () => void;
 }) {
   return (
     <>
-      <PhaseBar phase="role" identity={identity} />
+      <PhaseBar phase="role" identity={identity} avatarId={avatarId} />
       <section className={`role-screen role-screen-${role}`}>
         <p className="eyebrow">Private briefing</p>
         <div className={`role-card ${revealed ? "revealed" : "sealed"}`}>
@@ -1238,6 +1260,7 @@ function TaskView({
       <GameShell
         phase="tasks"
         identity={room.self.nickname}
+        avatarId={room.self.avatarId}
         status={
           <div className="header-game-status">
             <Progress value={game.progress.percent} max={100} label="Crew progress" />
@@ -1245,7 +1268,16 @@ function TaskView({
           </div>
         }
       >
-        <div className="task-command-shell">
+        <div
+          className="task-command-shell avatar-dashboard"
+          style={avatarAccentStyle(room.self.avatarId)}
+        >
+          <PlayerAvatar
+            id={room.self.avatarId}
+            size={96}
+            className="dashboard-avatar-watermark"
+            animate={false}
+          />
           <div className="game-content task-command-main">
             <div className="section-heading">
               <div>
@@ -1379,12 +1411,21 @@ function TaskView({
             )}
           </div>
           <aside className="game-context-rail" aria-label="Game controls and status">
-            <section className="live-identity-card">
-              <IdentityToken name={room.self.nickname} status="connected" />
+            <section
+              className="live-identity-card avatar-accent-card"
+              style={avatarAccentStyle(room.self.avatarId)}
+            >
+              <IdentityToken
+                name={room.self.nickname}
+                avatarId={room.self.avatarId}
+                status="connected"
+              />
               <div>
                 <span>Playing as</span>
                 <strong>{room.self.nickname}</strong>
-                <small>{roleDetails.name}</small>
+                <small>
+                  {avatarById(room.self.avatarId).name} · {roleDetails.name}
+                </small>
               </div>
               <IconButton icon="eye" onClick={() => setRoleInfo(true)} label="View role details" />
             </section>
@@ -1412,6 +1453,7 @@ function TaskView({
                             game.participants.find((player) => player.id === id)?.nickname ??
                             "Unknown player"
                           }
+                          avatarId={game.participants.find((player) => player.id === id)?.avatarId}
                         />
                         <span>
                           <strong>
@@ -1987,7 +2029,7 @@ function MeetingView({
   if (!meeting)
     return (
       <>
-        <PhaseBar phase="meeting" identity={room.self.nickname} />
+        <PhaseBar phase="meeting" identity={room.self.nickname} avatarId={room.self.avatarId} />
         <div className="game-content">
           <EmptyState
             title="Meeting is syncing"
@@ -2040,6 +2082,7 @@ function MeetingView({
       <PhaseBar
         phase={game.phase === "result" ? "results" : game.phase === "voting" ? "voting" : "meeting"}
         identity={room.self.nickname}
+        avatarId={room.self.avatarId}
       >
         {!(
           game.meetingRules.votingMode === "all_voted" && ["review", "voting"].includes(game.phase)
@@ -2081,6 +2124,16 @@ function MeetingView({
                   ? "A player called an anonymous meeting. Gather and talk face to face."
                   : "The task window closed. Gather and talk face to face."}
             </p>
+            {meeting.triggerType === "kill" && reported && (
+              <div className="reported-player-chip">
+                <IdentityToken name={reported.nickname} avatarId={reported.avatarId} size={56} />
+                <span>
+                  <small>Reported player</small>
+                  <strong>{reported.nickname}</strong>
+                  <em>{avatarById(reported.avatarId).name}</em>
+                </span>
+              </div>
+            )}
             <Banner tone="info">This app does not record or carry your conversation.</Banner>
           </>
         )}
@@ -2135,7 +2188,12 @@ function MeetingView({
               {meeting.eligibleParticipants.map((player) => (
                 <button
                   key={player.id}
-                  className={vote === player.id ? "voting-option selected" : "voting-option"}
+                  className={
+                    vote === player.id
+                      ? "voting-option selected avatar-accent-card"
+                      : "voting-option avatar-accent-card"
+                  }
+                  style={avatarAccentStyle(player.avatarId)}
                   disabled={!canVote}
                   onClick={() => {
                     setVote(player.id);
@@ -2143,11 +2201,14 @@ function MeetingView({
                   }}
                 >
                   <span className="vote-avatar">
-                    <IdentityToken name={player.nickname} />
+                    <IdentityToken name={player.nickname} avatarId={player.avatarId} size={56} />
                     {vote === player.id && <VoteCheckIcon />}
                   </span>
                   <strong>{player.nickname}</strong>
-                  <small>{vote === player.id ? "Selected" : "Tap to select"}</small>
+                  <small>
+                    {avatarById(player.avatarId).name} ·{" "}
+                    {vote === player.id ? "Selected" : "Tap to select"}
+                  </small>
                 </button>
               ))}
               <button
@@ -2232,7 +2293,11 @@ function PublicVoteFeed({ votes }: { votes: NonNullable<GameSnapshot["meeting"]>
           {votes.map((ballot) => (
             <li key={ballot.voterParticipantId}>
               <div className="ballot-party ballot-voter">
-                <IdentityToken name={ballot.voterNickname} />
+                <IdentityToken
+                  name={ballot.voterNickname}
+                  avatarId={ballot.voterAvatarId}
+                  size={30}
+                />
                 <span className="ballot-copy">
                   <small>Voter</small>
                   <strong>{ballot.voterNickname}</strong>
@@ -2242,10 +2307,19 @@ function PublicVoteFeed({ votes }: { votes: NonNullable<GameSnapshot["meeting"]>
                 <Icon name="arrow" size={17} />
                 <span className="sr-only">voted for</span>
               </span>
-              <span className="ballot-copy ballot-target">
-                <small>Voted for</small>
-                <strong>{ballot.targetNickname ?? "Skipped"}</strong>
-              </span>
+              <div className="ballot-party ballot-target">
+                {ballot.targetAvatarId && ballot.targetNickname ? (
+                  <IdentityToken
+                    name={ballot.targetNickname}
+                    avatarId={ballot.targetAvatarId}
+                    size={30}
+                  />
+                ) : null}
+                <span className="ballot-copy">
+                  <small>Voted for</small>
+                  <strong>{ballot.targetNickname ?? "Skipped"}</strong>
+                </span>
+              </div>
             </li>
           ))}
         </ul>
@@ -2267,8 +2341,17 @@ function ResultBlock({ game }: { game: GameSnapshot }) {
         <div className="meeting-tally">
           {result.totals.map((total) => (
             <span key={total.participantId}>
-              {game.participants.find((player) => player.id === total.participantId)?.nickname ??
-                "Player"}
+              {(() => {
+                const player = game.participants.find((entry) => entry.id === total.participantId);
+                return player ? (
+                  <>
+                    <IdentityToken name={player.nickname} avatarId={player.avatarId} size={30} />
+                    {player.nickname}
+                  </>
+                ) : (
+                  "Player"
+                );
+              })()}
               <strong>{total.votes}</strong>
             </span>
           ))}
@@ -2323,7 +2406,7 @@ function TerminalView({
                 : "This game was abandoned before a winner was decided.";
   return (
     <>
-      <PhaseBar phase="results" />
+      <PhaseBar phase="results" identity={room.self.nickname} avatarId={room.self.avatarId} />
       <div className="game-content">
         <section className="terminal-card">
           <span className="stamp">CASE CLOSED</span>
@@ -2370,10 +2453,15 @@ function TerminalView({
               </div>
               <div className="result-roster">
                 {summary.players.map((player) => (
-                  <article className={`result-player result-player-${player.role}`} key={player.id}>
-                    <IdentityToken name={player.nickname} />
+                  <article
+                    className={`result-player result-player-${player.role} avatar-accent-card`}
+                    key={player.id}
+                    style={avatarAccentStyle(player.avatarId)}
+                  >
+                    <IdentityToken name={player.nickname} avatarId={player.avatarId} />
                     <div>
                       <strong>{player.nickname}</strong>
+                      <small className="avatar-codename">{avatarById(player.avatarId).name}</small>
                       <span className="result-role-label">
                         <Icon name={player.role === "imposter" ? "warning" : "tool"} size={16} />
                         {player.role === "imposter"

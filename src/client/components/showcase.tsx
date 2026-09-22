@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { AVATAR_IDS, type AvatarId } from "../../shared/avatars";
+import { AvatarPicker } from "./player-avatar";
 import { SignalSceneArt } from "./signal-visuals";
 import {
   Badge,
@@ -75,7 +77,7 @@ export function Showcase() {
               <Badge tone="danger">Rejected</Badge>
             </div>
             <Progress value={3} max={5} label="Evidence processed" />
-            <IdentityToken name="Ada Lovelace" status="connected" />
+            <IdentityToken name="Ada Lovelace" avatarId="owl" status="connected" />
           </article>
           <article className="card">
             <h2>Feedback</h2>
@@ -117,7 +119,7 @@ export function Showcase() {
         </section>
       )}
       <section className="showcase-phase">
-        <PhaseBar phase="meeting" identity="Ada">
+        <PhaseBar phase="meeting" identity="Ada" avatarId="owl">
           <Timer deadline={new Date(Date.now() + 90_000).toISOString()} />
         </PhaseBar>
       </section>
@@ -130,11 +132,12 @@ export function Showcase() {
 
 function GameFixture({ state }: { state: string }) {
   if (state === "select") return <SelectFixture />;
+  if (state === "avatars") return <AvatarFixture />;
 
   if (state === "toast") {
     return (
       <main id="main-content" className="game-page game-dashboard-fixture">
-        <GameShell phase="lobby" identity="Host player">
+        <GameShell phase="lobby" identity="Host player" avatarId="fox">
           <div className="game-content" />
         </GameShell>
         <div className="game-toast-region" aria-label="Game notifications">
@@ -152,7 +155,7 @@ function GameFixture({ state }: { state: string }) {
   if (state === "dialog") {
     return (
       <main id="main-content" className="game-page game-dashboard-fixture">
-        <GameShell phase="tasks" identity="Visible Player Name">
+        <GameShell phase="tasks" identity="Visible Player Name" avatarId="raven">
           <div className="game-content">
             <Dialog open title="Call a meeting?" onClose={() => undefined}>
               <p className="muted">Voting will open after everyone gathers.</p>
@@ -170,7 +173,7 @@ function GameFixture({ state }: { state: string }) {
   if (state === "role") {
     return (
       <main id="main-content" className="game-page game-dashboard-fixture">
-        <GameShell phase="role" identity="Captain Extremely Suspicious">
+        <GameShell phase="role" identity="Captain Extremely Suspicious" avatarId="panther">
           <section className="role-screen role-screen-crew">
             <p className="eyebrow">Private briefing</p>
             <div className="role-card revealed">
@@ -200,6 +203,7 @@ function GameFixture({ state }: { state: string }) {
         <GameShell
           phase={results ? "results" : "voting"}
           identity="Captain Extremely Suspicious"
+          avatarId="panther"
           status={<FixtureTimer value="01:16" label="Meeting time" />}
         >
           <div className="game-content narrow meeting-view">
@@ -227,7 +231,7 @@ function GameFixture({ state }: { state: string }) {
                 <div className="voting-grid">
                   {["Ada", "Max", "Captain Extremely Suspicious", "Skip"].map((name, index) => (
                     <button className={`voting-option ${index === 1 ? "selected" : ""}`} key={name}>
-                      <IdentityToken name={name} />
+                      <IdentityToken name={name} avatarId={AVATAR_IDS[index] ?? "fox"} />
                       <strong>{name}</strong>
                       <small>{index === 1 ? "Selected" : "Tap to select"}</small>
                     </button>
@@ -257,6 +261,7 @@ function GameFixture({ state }: { state: string }) {
       <GameShell
         phase="tasks"
         identity="Captain Extremely Suspicious"
+        avatarId="panther"
         status={
           <div className="header-game-status">
             <Progress value={42} max={100} label="Crew progress" />
@@ -321,7 +326,11 @@ function GameFixture({ state }: { state: string }) {
           </div>
           <aside className="game-context-rail" aria-label="Game controls and status">
             <section className="live-identity-card">
-              <IdentityToken name="Captain Extremely Suspicious" status="connected" />
+              <IdentityToken
+                name="Captain Extremely Suspicious"
+                avatarId="panther"
+                status="connected"
+              />
               <div>
                 <span>Playing as</span>
                 <strong>Captain Extremely Suspicious</strong>
@@ -345,7 +354,7 @@ function GameFixture({ state }: { state: string }) {
               <ul className="elimination-history-list">
                 {["Ada", "Max with a very long callsign"].map((name) => (
                   <li key={name}>
-                    <IdentityToken name={name} />
+                    <IdentityToken name={name} avatarId={name === "Ada" ? "owl" : "wolf"} />
                     <span>
                       <strong>{name}</strong>
                       <small>Eliminated by you</small>
@@ -389,7 +398,7 @@ function SelectFixture() {
   const [value, setValue] = useState("");
   return (
     <main id="main-content" className="game-page game-dashboard-fixture">
-      <GameShell phase="lobby" identity="Host player">
+      <GameShell phase="lobby" identity="Host player" avatarId="fox">
         <div className="game-content" style={{ paddingTop: 32 }}>
           <section className="settings-section">
             <GameSelect
@@ -405,6 +414,19 @@ function SelectFixture() {
               ]}
             />
           </section>
+        </div>
+      </GameShell>
+    </main>
+  );
+}
+
+function AvatarFixture() {
+  const [avatarId, setAvatarId] = useState<AvatarId | null>("fox");
+  return (
+    <main id="main-content" className="game-page game-dashboard-fixture">
+      <GameShell phase="lobby" identity="Host player" avatarId={avatarId ?? "fox"}>
+        <div className="game-content" style={{ paddingTop: 32 }}>
+          <AvatarPicker availableIds={AVATAR_IDS} value={avatarId} onChange={setAvatarId} />
         </div>
       </GameShell>
     </main>

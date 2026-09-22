@@ -59,6 +59,7 @@ const snapshot = {
     {
       id: "00000000-0000-4000-8000-000000000002",
       nickname: "Asha",
+      avatarId: "fox" as const,
       isHost: true,
       presence: "connected" as const,
       joinedAt: new Date(0).toISOString(),
@@ -67,6 +68,7 @@ const snapshot = {
   self: {
     participantId: "00000000-0000-4000-8000-000000000002",
     nickname: "Asha",
+    avatarId: "fox" as const,
     isHost: true,
     capabilities: ["change_settings"],
   },
@@ -94,6 +96,7 @@ function roomApi(options: { games?: GameService; evidence?: EvidenceService } = 
           : null,
       ),
     snapshot: () => Promise.resolve(snapshot),
+    joinOptions: () => Promise.resolve({ availableAvatarIds: ["owl", "wolf"], spotsRemaining: 11 }),
   } as unknown as RoomService;
   const config = loadConfig({
     APP_ENV: "test",
@@ -115,6 +118,17 @@ function roomApi(options: { games?: GameService; evidence?: EvidenceService } = 
 }
 
 describe("room HTTP transport", () => {
+  it("returns only public join availability without requiring a session", async () => {
+    const response = await roomApi().get("/api/v1/rooms/ABC234/join-options");
+    expect(response.status).toBe(200);
+    expect(response.headers["cache-control"]).toBe("no-store");
+    const body = response.body as { data: unknown };
+    expect(body.data).toEqual({
+      availableAvatarIds: ["owl", "wolf"],
+      spotsRemaining: 11,
+    });
+  });
+
   it("returns bearer credentials to native clients", async () => {
     const response = await roomApi()
       .post("/api/v1/rooms")
@@ -208,5 +222,15 @@ describe("nickname normalization", () => {
   it("rejects control characters and more than 24 display code points", () => {
     expect(roomMembershipSchema.safeParse({ nickname: "bad\u0000name" }).success).toBe(false);
     expect(roomMembershipSchema.safeParse({ nickname: "x".repeat(25) }).success).toBe(false);
+  });
+
+  it("accepts only catalog avatar identifiers while preserving legacy omission", () => {
+    expect(roomMembershipSchema.safeParse({ nickname: "Asha", avatarId: "fox" }).success).toBe(
+      true,
+    );
+    expect(roomMembershipSchema.safeParse({ nickname: "Asha" }).success).toBe(true);
+    expect(roomMembershipSchema.safeParse({ nickname: "Asha", avatarId: "crewmate" }).success).toBe(
+      false,
+    );
   });
 });

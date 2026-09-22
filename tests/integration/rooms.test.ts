@@ -130,6 +130,56 @@ describeWithDatabase("room and participant lifecycle persistence", () => {
     expect(persisted.status).toBe("expired");
   });
 
+  it("reserves avatars atomically and releases them only after leaving", async () => {
+    const created = await rooms.createRoom(
+      { nickname: "Avatar Host", avatarId: "fox", minPlayers: 3, maxPlayers: 5 },
+      unique("create-avatars"),
+      unique("test:avatars"),
+    );
+    createdRoomIds.push(created.room.id);
+    const race = await Promise.allSettled([
+      rooms.joinRoom(
+        created.room.code,
+        { nickname: "Owl One", avatarId: "owl" },
+        unique("owl-one"),
+        unique("test:owl-one"),
+      ),
+      rooms.joinRoom(
+        created.room.code,
+        { nickname: "Owl Two", avatarId: "owl" },
+        unique("owl-two"),
+        unique("test:owl-two"),
+      ),
+    ]);
+    const fulfilled = race.find((result) => result.status === "fulfilled");
+    expect(fulfilled?.status).toBe("fulfilled");
+    expect(race.filter((result) => result.status === "rejected")).toHaveLength(1);
+    const rejected = race.find((result) => result.status === "rejected");
+    expect(rejected?.status).toBe("rejected");
+    if (rejected?.status === "rejected") {
+      const reason = rejected.reason as {
+        code?: string;
+        details?: { availableAvatarIds?: unknown[] };
+      };
+      expect(reason.code).toBe("AVATAR_TAKEN");
+      expect(reason.details?.availableAvatarIds).toBeInstanceOf(Array);
+    }
+    expect(
+      (await rooms.joinOptions(created.room.code, unique("test:avatar-options")))
+        .availableAvatarIds,
+    ).not.toContain("owl");
+
+    if (fulfilled?.status === "fulfilled") {
+      const principal = await rooms.authenticate(fulfilled.value.sessionToken);
+      expect(principal).not.toBeNull();
+      await rooms.leave(principal!, unique("leave-owl"));
+    }
+    expect(
+      (await rooms.joinOptions(created.room.code, unique("test:avatar-released")))
+        .availableAvatarIds,
+    ).toContain("owl");
+  });
+
   it("denies a principal projected into another room", async () => {
     const first = await rooms.createRoom(
       { nickname: "One" },

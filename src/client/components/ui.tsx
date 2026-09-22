@@ -12,6 +12,8 @@ import { BrandMark, Icon, type IconName } from "./icons";
 import { isSoundEnabled, playGameSound, setSoundEnabled } from "../audio/game-sounds";
 import { ThemeToggle } from "./theme-toggle";
 import type { GameShellProps, GamePhaseVisual } from "./game-ui-types";
+import type { AvatarId } from "../../shared/avatars";
+import { PlayerAvatar } from "./player-avatar";
 
 export { Icon, type IconName } from "./icons";
 
@@ -491,7 +493,18 @@ function useCountdown(deadline: string | null) {
 // Aliased to keep React imported APIs explicit in the public component signatures.
 import { useState as ReactUseState } from "react";
 
-export function IdentityToken({ name, status }: { name: string; status?: "connected" | "away" }) {
+export function IdentityToken({
+  name,
+  avatarId,
+  status,
+  size = 42,
+}: {
+  name: string;
+  avatarId?: AvatarId;
+  status?: "connected" | "away";
+  size?: number;
+}) {
+  if (avatarId) return <PlayerAvatar id={avatarId} status={status} size={size} />;
   const initials = name
     .trim()
     .split(/\s+/)
@@ -508,10 +521,12 @@ export function IdentityToken({ name, status }: { name: string; status?: "connec
 export function PhaseBar({
   phase,
   identity,
+  avatarId,
   children,
 }: {
   phase: PhaseVisual;
   identity?: string;
+  avatarId?: AvatarId;
   children?: ReactNode;
 }) {
   return (
@@ -529,7 +544,7 @@ export function PhaseBar({
         <div className="phase-utilities">
           {identity && (
             <span className="phase-identity" title={identity}>
-              <IdentityToken name={identity} status="connected" />
+              <IdentityToken name={identity} avatarId={avatarId} status="connected" />
               <span>{identity}</span>
             </span>
           )}
@@ -576,10 +591,10 @@ export function GameSoundToggle() {
   );
 }
 
-export function GameShell({ phase, identity, status, aside, children }: GameShellProps) {
+export function GameShell({ phase, identity, avatarId, status, aside, children }: GameShellProps) {
   return (
     <>
-      <PhaseBar phase={phase} identity={identity}>
+      <PhaseBar phase={phase} identity={identity} avatarId={avatarId}>
         {status}
       </PhaseBar>
       <div className={`game-shell-body game-shell-${phase}`}>

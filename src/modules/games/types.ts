@@ -1,4 +1,5 @@
 import type { GamePhase, GameRole, LifeStatus, Winner } from "./domain.js";
+import type { AvatarId } from "../../shared/avatars.js";
 
 export interface GameAssignmentDto {
   id: string;
@@ -27,11 +28,13 @@ export interface GameSnapshotDto {
   participants: Array<{
     id: string;
     nickname: string;
+    avatarId: AvatarId;
     isHost: boolean;
     lifeStatus: LifeStatus;
   }>;
   self: {
     participantId: string;
+    avatarId: AvatarId;
     role: GameRole;
     lifeStatus: LifeStatus;
     capabilities: string[];
@@ -65,6 +68,7 @@ export interface GameSnapshotDto {
     players: Array<{
       id: string;
       nickname: string;
+      avatarId: AvatarId;
       role: GameRole;
       crewRole: null | { name: string; specialization: string; ability: string };
       lifeStatus: LifeStatus;
@@ -81,7 +85,7 @@ export interface MeetingDto {
   reportedParticipantId: string | null;
   phase: "discussion" | "review" | "voting" | "resolved";
   deadlineAt: string | null;
-  eligibleParticipants: Array<{ id: string; nickname: string }>;
+  eligibleParticipants: Array<{ id: string; nickname: string; avatarId: AvatarId }>;
   reviewItem: null | {
     id: string;
     submissionId: string;
@@ -104,15 +108,19 @@ export interface MeetingDto {
     ballots?: Array<{
       voterParticipantId: string;
       voterNickname: string;
+      voterAvatarId: AvatarId;
       targetParticipantId: string | null;
       targetNickname: string | null;
+      targetAvatarId: AvatarId | null;
     }>;
   };
   publicVotes: Array<{
     voterParticipantId: string;
     voterNickname: string;
+    voterAvatarId: AvatarId;
     targetParticipantId: string | null;
     targetNickname: string | null;
+    targetAvatarId: AvatarId | null;
   }>;
   capabilities: string[];
 }

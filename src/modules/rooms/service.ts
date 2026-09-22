@@ -6,6 +6,7 @@ import type { AppConfig } from "../../infrastructure/configuration/config.js";
 import type { Database, DatabaseSchema } from "../../infrastructure/database/database.js";
 import { inTransaction } from "../../infrastructure/database/transaction.js";
 import { ApplicationError } from "../../shared/errors/application-error.js";
+import { AVATAR_IDS, type AvatarId } from "../../shared/avatars.js";
 import { hashSecret } from "../../shared/security/tokens.js";
 import { maximumImposterCount } from "../games/domain.js";
 import {
@@ -18,6 +19,7 @@ import type {
   ParticipantPrincipal,
   PresenceUpdate,
   RoomSnapshotDto,
+  RoomJoinOptionsDto,
   SessionIssueDto,
 } from "./types.js";
 
@@ -204,7 +206,7 @@ export class RoomService {
       : { easy: 0, medium: 0, hard: 0 };
     const participants = await executor
       .selectFrom("app.participants")
-      .select(["id", "nickname", "joined_at", "disconnected_at"])
+      .select(["id", "nickname", "avatar_id", "joined_at", "disconnected_at"])
       .where("room_id", "=", principal.roomId)
       .where("membership_status", "=", "joined")
       .orderBy("joined_at")
@@ -260,6 +262,7 @@ export class RoomService {
       participants: participants.map((participant) => ({
         id: participant.id,
         nickname: participant.nickname,
+        avatarId: participant.avatar_id,
         isHost: participant.id === room.host_participant_id,
         presence: participant.disconnected_at ? "away" : "connected",
         joinedAt: iso(participant.joined_at),
@@ -267,6 +270,7 @@ export class RoomService {
       self: {
         participantId: self.id,
         nickname: self.nickname,
+        avatarId: self.avatar_id,
         isHost,
         capabilities:
           isHost && room.status === "lobby"
@@ -277,6 +281,42 @@ export class RoomService {
       },
       expiresAt: iso(room.expires_at),
       gameId: room.status === "lobby" ? null : room.game_id,
+    };
+  }
+
+  private async availableAvatarIds(executor: Executor, roomId: string): Promise<AvatarId[]> {
+    const occupied = await executor
+      .selectFrom("app.participants")
+      .select("avatar_id")
+      .where("room_id", "=", roomId)
+      .where("membership_status", "=", "joined")
+      .execute();
+    const unavailable = new Set(occupied.map((participant) => participant.avatar_id));
+    return AVATAR_IDS.filter((id) => !unavailable.has(id));
+  }
+
+  async joinOptions(codeInput: string, requestScope: string): Promise<RoomJoinOptionsDto> {
+    this.throttlePublic(requestScope);
+    const room = await this.database
+      .selectFrom("app.rooms")
+      .select(["id", "max_players", "expires_at"])
+      .where("code", "=", codeInput.toUpperCase())
+      .where("status", "=", "lobby")
+      .executeTakeFirst();
+    if (!room || new Date(room.expires_at).getTime() <= Date.now())
+      throw new ApplicationError(404, "ROOM_NOT_FOUND", "The room is unavailable.");
+    const [availableAvatarIds, joined] = await Promise.all([
+      this.availableAvatarIds(this.database, room.id),
+      this.database
+        .selectFrom("app.participants")
+        .select(sql<number>`count(*)::int`.as("count"))
+        .where("room_id", "=", room.id)
+        .where("membership_status", "=", "joined")
+        .executeTakeFirstOrThrow(),
+    ]);
+    return {
+      availableAvatarIds,
+      spotsRemaining: Math.max(0, room.max_players - joined.count),
     };
   }
 
@@ -321,7 +361,8 @@ export class RoomService {
     const normalized = normalizeNickname(input.nickname);
     const minPlayers = input.minPlayers ?? 3;
     const maxPlayers = input.maxPlayers ?? 12;
-    const replayInput = { ...normalized, minPlayers, maxPlayers };
+    const avatarId = input.avatarId ?? AVATAR_IDS[0];
+    const replayInput = { ...normalized, avatarId, minPlayers, maxPlayers };
     for (let attempt = 0; attempt < 8; attempt += 1) {
       try {
         const result = await inTransaction(this.database, async (trx) => {
@@ -399,6 +440,7 @@ export class RoomService {
               room_id: roomId,
               nickname: normalized.display,
               normalized_nickname: normalized.normalized,
+              avatar_id: avatarId,
               membership_status: "joined",
               last_seen_at: now,
               disconnected_at: null,
@@ -452,6 +494,7 @@ export class RoomService {
     this.throttlePublic(requestScope.slice(0, -7));
     const code = codeInput.toUpperCase();
     const normalized = normalizeNickname(input.nickname);
+    const replayInput = { ...normalized, avatarId: input.avatarId ?? null };
     try {
       const result = await inTransaction(this.database, async (trx) => {
         const operation = `room.join:${code}`;
@@ -460,7 +503,7 @@ export class RoomService {
           requestScope,
           key,
           operation,
-          normalized,
+          replayInput,
         );
         if (replayed) {
           if (!replayed.sessionId)
@@ -488,6 +531,12 @@ export class RoomService {
           .executeTakeFirstOrThrow();
         if (count.count >= room.max_players)
           throw new ApplicationError(409, "ROOM_FULL", "The room is full.");
+        const availableAvatarIds = await this.availableAvatarIds(trx, room.id);
+        const avatarId = input.avatarId ?? availableAvatarIds[0];
+        if (!avatarId || !availableAvatarIds.includes(avatarId))
+          throw new ApplicationError(409, "AVATAR_TAKEN", "That avatar was just selected.", {
+            availableAvatarIds,
+          });
         const nicknameTaken = await trx
           .selectFrom("app.participants")
           .select("id")
@@ -512,6 +561,7 @@ export class RoomService {
             room_id: room.id,
             nickname: normalized.display,
             normalized_nickname: normalized.normalized,
+            avatar_id: avatarId,
             membership_status: "joined",
             last_seen_at: now,
             disconnected_at: null,
@@ -533,12 +583,33 @@ export class RoomService {
           participant: snapshot.self,
           sessionExpiresAt: issued.expiresAt.toISOString(),
         };
-        await this.remember(trx, requestScope, key, operation, normalized, safeResponse, sessionId);
+        await this.remember(
+          trx,
+          requestScope,
+          key,
+          operation,
+          replayInput,
+          safeResponse,
+          sessionId,
+        );
         return { ...safeResponse, sessionToken: issued.token };
       });
       this.events.roomChanged(result.room.id);
       return result;
     } catch (error) {
+      if (
+        (error as { code?: string; constraint?: string }).code === "23505" &&
+        (error as { constraint?: string }).constraint === "participants_joined_avatar_unique"
+      ) {
+        const room = await this.database
+          .selectFrom("app.rooms")
+          .select("id")
+          .where("code", "=", code)
+          .executeTakeFirst();
+        throw new ApplicationError(409, "AVATAR_TAKEN", "That avatar was just selected.", {
+          availableAvatarIds: room ? await this.availableAvatarIds(this.database, room.id) : [],
+        });
+      }
       if ((error as { code?: string }).code === "23505")
         throw new ApplicationError(
           409,

@@ -81,10 +81,44 @@ test("theme choice persists across public routes", async ({ page }) => {
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
 });
 
+test("room creation failures use a dismissible toast", async ({ page }) => {
+  await page.route("**/api/v1/rooms/current", async (route) => {
+    await route.fulfill({
+      status: 401,
+      contentType: "application/json",
+      body: JSON.stringify({
+        error: { code: "UNAUTHORIZED", message: "No active room session." },
+      }),
+    });
+  });
+  await page.route("**/api/v1/rooms", async (route) => {
+    await route.fulfill({
+      status: 500,
+      contentType: "application/json",
+      body: JSON.stringify({
+        error: { code: "INTERNAL_ERROR", message: "Room creation is temporarily unavailable." },
+      }),
+    });
+  });
+  await page.goto("/play");
+  await page.getByLabel("Your nickname").fill("Toast tester");
+  await page.getByRole("radio", { name: /Fox avatar/ }).click();
+  await page.getByRole("checkbox").check();
+  await page.getByRole("button", { name: "Create room" }).click();
+
+  const toast = page.getByLabel("Play notifications").getByRole("alert");
+  await expect(toast).toContainText("Couldn’t continue");
+  await expect(toast).toContainText("Room creation is temporarily unavailable.");
+  await toast.getByRole("button", { name: "Dismiss notification" }).click();
+  await expect(toast).toBeHidden();
+});
+
 test("mobile game confirmations are vertically centered", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/dev/showcase?fixture=dialog");
-  const box = await page.locator("dialog").boundingBox();
+  const dialog = page.locator("dialog");
+  await expect(dialog).toBeVisible();
+  const box = await dialog.boundingBox();
   expect(box).not.toBeNull();
   expect(Math.abs(box!.y + box!.height / 2 - 844 / 2)).toBeLessThanOrEqual(2);
 });
@@ -109,6 +143,49 @@ test("mobile game dropdown stays inside its field and viewport", async ({ page }
   expect(menu!.x).toBeGreaterThanOrEqual(0);
   expect(menu!.x + menu!.width).toBeLessThanOrEqual(320);
   expect(Math.abs(menu!.width - trigger!.width)).toBeLessThanOrEqual(1);
+});
+
+for (const theme of ["light", "dark"] as const) {
+  for (const viewport of [
+    { name: "phone", width: 320, height: 720 },
+    { name: "tablet", width: 768, height: 1024 },
+    { name: "desktop", width: 1440, height: 900 },
+  ]) {
+    test(`avatar catalog fits ${viewport.name} in ${theme}`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await setTheme(page, theme);
+      await page.goto("/dev/showcase?fixture=avatars");
+      await expect(page.getByRole("radio")).toHaveCount(18);
+      const geometry = await page.evaluate(() => ({
+        clientWidth: document.documentElement.clientWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+      }));
+      expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth + 1);
+      await expect(page.getByRole("radio", { name: /Fox avatar/ })).toHaveAttribute(
+        "aria-checked",
+        "true",
+      );
+    });
+  }
+}
+
+test("avatar motion settles without moving its reserved box", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("/dev/showcase?fixture=avatars");
+  const choice = page.getByRole("radio", { name: /Owl avatar/ });
+  const avatar = choice.locator(".player-avatar");
+  const before = await avatar.boundingBox();
+  await choice.click();
+  await page.waitForTimeout(750);
+  const after = await avatar.boundingBox();
+  expect(after).toEqual(before);
+});
+
+test("reduced motion disables avatar keyframes", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/dev/showcase?fixture=avatars");
+  const motion = page.locator(".avatar-fox .avatar-motion").first();
+  await expect(motion).toHaveCSS("animation-name", "none");
 });
 
 test("game toast stays compact below the command bar", async ({ page }) => {

@@ -134,6 +134,25 @@ export const openApiDocument: OpenAPIObject = {
         },
       },
     },
+    "/api/v1/rooms/{code}/join-options": {
+      get: {
+        operationId: "getRoomJoinOptions",
+        summary: "List unclaimed avatars in an open lobby",
+        parameters: [
+          {
+            name: "code",
+            in: "path",
+            required: true,
+            schema: { type: "string", pattern: "^[A-Za-z0-9]{6}$" },
+          },
+        ],
+        responses: {
+          "200": envelope({ $ref: "#/components/schemas/RoomJoinOptions" }),
+          "404": error,
+          "429": error,
+        },
+      },
+    },
     "/api/v1/rooms/current": {
       get: {
         operationId: "getCurrentRoom",
@@ -758,11 +777,49 @@ export const openApiDocument: OpenAPIObject = {
       participantCookie: { type: "apiKey", in: "cookie", name: "participant_session" },
     },
     schemas: {
+      AvatarId: {
+        type: "string",
+        enum: [
+          "fox",
+          "owl",
+          "wolf",
+          "raven",
+          "moth",
+          "cobra",
+          "stag",
+          "hare",
+          "panther",
+          "shark",
+          "bull",
+          "gecko",
+          "beetle",
+          "spider",
+          "bat",
+          "raccoon",
+          "lynx",
+          "falcon",
+        ],
+      },
+      RoomJoinOptions: {
+        type: "object",
+        additionalProperties: false,
+        required: ["availableAvatarIds", "spotsRemaining"],
+        properties: {
+          availableAvatarIds: {
+            type: "array",
+            items: { $ref: "#/components/schemas/AvatarId" },
+          },
+          spotsRemaining: { type: "integer", minimum: 0, maximum: 15 },
+        },
+      },
       RoomMembershipInput: {
         type: "object",
         additionalProperties: false,
         required: ["nickname"],
-        properties: { nickname: { type: "string", minLength: 1, maxLength: 24 } },
+        properties: {
+          nickname: { type: "string", minLength: 1, maxLength: 24 },
+          avatarId: { $ref: "#/components/schemas/AvatarId" },
+        },
       },
       RoomCreationInput: {
         type: "object",
@@ -770,6 +827,7 @@ export const openApiDocument: OpenAPIObject = {
         required: ["nickname"],
         properties: {
           nickname: { type: "string", minLength: 1, maxLength: 24 },
+          avatarId: { $ref: "#/components/schemas/AvatarId" },
           minPlayers: { type: "integer", minimum: 3, maximum: 15, default: 3 },
           maxPlayers: { type: "integer", minimum: 3, maximum: 15, default: 12 },
         },
@@ -808,10 +866,11 @@ export const openApiDocument: OpenAPIObject = {
       ParticipantSelf: {
         type: "object",
         additionalProperties: false,
-        required: ["participantId", "nickname", "isHost", "capabilities"],
+        required: ["participantId", "nickname", "avatarId", "isHost", "capabilities"],
         properties: {
           participantId: { type: "string", format: "uuid" },
           nickname: { type: "string" },
+          avatarId: { $ref: "#/components/schemas/AvatarId" },
           isHost: { type: "boolean" },
           capabilities: { type: "array", items: { type: "string" } },
         },
@@ -904,10 +963,11 @@ export const openApiDocument: OpenAPIObject = {
             type: "array",
             items: {
               type: "object",
-              required: ["id", "nickname", "isHost", "presence", "joinedAt"],
+              required: ["id", "nickname", "avatarId", "isHost", "presence", "joinedAt"],
               properties: {
                 id: { type: "string", format: "uuid" },
                 nickname: { type: "string" },
+                avatarId: { $ref: "#/components/schemas/AvatarId" },
                 isHost: { type: "boolean" },
                 presence: { type: "string", enum: ["connected", "away"] },
                 joinedAt: { type: "string", format: "date-time" },
@@ -1066,10 +1126,11 @@ export const openApiDocument: OpenAPIObject = {
             items: {
               type: "object",
               additionalProperties: false,
-              required: ["id", "nickname", "isHost", "lifeStatus"],
+              required: ["id", "nickname", "avatarId", "isHost", "lifeStatus"],
               properties: {
                 id: { type: "string", format: "uuid" },
                 nickname: { type: "string" },
+                avatarId: { $ref: "#/components/schemas/AvatarId" },
                 isHost: { type: "boolean" },
                 lifeStatus: { type: "string", enum: ["alive", "killed", "ejected"] },
               },
@@ -1080,6 +1141,7 @@ export const openApiDocument: OpenAPIObject = {
             additionalProperties: false,
             required: [
               "participantId",
+              "avatarId",
               "role",
               "lifeStatus",
               "capabilities",
@@ -1089,6 +1151,7 @@ export const openApiDocument: OpenAPIObject = {
             ],
             properties: {
               participantId: { type: "string", format: "uuid" },
+              avatarId: { $ref: "#/components/schemas/AvatarId" },
               role: { type: "string", enum: ["crew", "imposter"] },
               lifeStatus: { type: "string", enum: ["alive", "killed", "ejected"] },
               capabilities: { type: "array", items: { type: "string" } },
@@ -1199,8 +1262,12 @@ export const openApiDocument: OpenAPIObject = {
             type: "array",
             items: {
               type: "object",
-              required: ["id", "nickname"],
-              properties: { id: { type: "string", format: "uuid" }, nickname: { type: "string" } },
+              required: ["id", "nickname", "avatarId"],
+              properties: {
+                id: { type: "string", format: "uuid" },
+                nickname: { type: "string" },
+                avatarId: { $ref: "#/components/schemas/AvatarId" },
+              },
             },
           },
           reviewItem: { type: ["object", "null"], additionalProperties: true },
@@ -1215,14 +1282,20 @@ export const openApiDocument: OpenAPIObject = {
               required: [
                 "voterParticipantId",
                 "voterNickname",
+                "voterAvatarId",
                 "targetParticipantId",
                 "targetNickname",
+                "targetAvatarId",
               ],
               properties: {
                 voterParticipantId: { type: "string", format: "uuid" },
                 voterNickname: { type: "string" },
+                voterAvatarId: { $ref: "#/components/schemas/AvatarId" },
                 targetParticipantId: { type: ["string", "null"], format: "uuid" },
                 targetNickname: { type: ["string", "null"] },
+                targetAvatarId: {
+                  oneOf: [{ type: "null" }, { $ref: "#/components/schemas/AvatarId" }],
+                },
               },
             },
           },

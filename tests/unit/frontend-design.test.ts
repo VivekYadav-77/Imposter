@@ -64,7 +64,7 @@ describe("frontend design foundations", () => {
     expect(css).toContain("@media (max-width: 1099px)");
     expect(css).toContain("@media (max-width: 760px)");
     expect(css).toContain("env(safe-area-inset-bottom)");
-    expect(room).toContain('className="task-command-shell"');
+    expect(room).toContain('className="task-command-shell avatar-dashboard"');
     expect(room).toContain('className="game-context-rail"');
     expect(room).toContain('playGameSound("vote-select")');
     expect(sounds).toContain('| "upload-failure"');
@@ -76,7 +76,9 @@ describe("frontend design foundations", () => {
       readFile("src/client/components/room-client.tsx", "utf8"),
       readFile("app/game-command-center.css", "utf8"),
     ]);
-    expect(room).toContain('<PhaseBar phase="lobby" identity={room.self.nickname} />');
+    expect(room).toContain(
+      '<PhaseBar phase="lobby" identity={room.self.nickname} avatarId={room.self.avatarId} />',
+    );
     expect(room).not.toContain("aria-label={`Copy room code ${room.code}`}");
     expect(room).toContain('copied ? "Code copied" : "Copy room code"');
     expect(css).toMatch(

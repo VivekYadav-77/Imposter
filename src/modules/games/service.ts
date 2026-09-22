@@ -148,7 +148,12 @@ export class GameService {
     const eligible = await executor
       .selectFrom("app.meeting_eligible_voters as eligible")
       .innerJoin("app.participants as participant", "participant.id", "eligible.participant_id")
-      .select(["participant.id", "participant.nickname", "participant.disconnected_at"])
+      .select([
+        "participant.id",
+        "participant.nickname",
+        "participant.avatar_id",
+        "participant.disconnected_at",
+      ])
       .where("eligible.meeting_id", "=", meeting.id)
       .orderBy("participant.joined_at")
       .orderBy("participant.id")
@@ -234,10 +239,16 @@ export class GameService {
             voterNickname:
               eligible.find((entry) => entry.id === vote.voter_participant_id)?.nickname ??
               "Unknown player",
+            voterAvatarId:
+              eligible.find((entry) => entry.id === vote.voter_participant_id)?.avatar_id ?? "fox",
             targetParticipantId: vote.target_participant_id,
             targetNickname: vote.target_participant_id
               ? (eligible.find((entry) => entry.id === vote.target_participant_id)?.nickname ??
                 "Unknown player")
+              : null,
+            targetAvatarId: vote.target_participant_id
+              ? (eligible.find((entry) => entry.id === vote.target_participant_id)?.avatar_id ??
+                null)
               : null,
           }))
         : [];
@@ -248,7 +259,11 @@ export class GameService {
       reportedParticipantId: meeting.reported_participant_id,
       phase: meeting.phase,
       deadlineAt: meeting.deadline_at ? iso(meeting.deadline_at) : null,
-      eligibleParticipants: eligible.map(({ id, nickname }) => ({ id, nickname })),
+      eligibleParticipants: eligible.map(({ id, nickname, avatar_id }) => ({
+        id,
+        nickname,
+        avatarId: avatar_id,
+      })),
       reviewItem: review
         ? {
             id: review.id,
@@ -409,6 +424,7 @@ export class GameService {
         .select([
           "participants.id",
           "participants.nickname",
+          "participants.avatar_id",
           "gp.life_status",
           "gp.role",
           "gp.crew_role_name",
@@ -514,6 +530,7 @@ export class GameService {
       participants: participants.map((participant) => ({
         id: participant.id,
         nickname: participant.nickname,
+        avatarId: participant.avatar_id,
         isHost: participant.id === game.host_participant_id,
         lifeStatus:
           participant.id === principal.participantId || participant.life_status !== "killed"
@@ -522,6 +539,8 @@ export class GameService {
       })),
       self: {
         participantId: principal.participantId,
+        avatarId: participants.find((participant) => participant.id === principal.participantId)!
+          .avatar_id,
         role: game.role,
         lifeStatus: game.life_status,
         capabilities,
@@ -591,6 +610,7 @@ export class GameService {
                 return {
                   id: participant.id,
                   nickname: participant.nickname,
+                  avatarId: participant.avatar_id,
                   role: participant.role,
                   crewRole:
                     participant.crew_role_name &&

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isAvatarId, type AvatarId } from "../../shared/avatars.js";
 
 function displayNickname(value: string): string {
   return value.normalize("NFKC").trim().replace(/\s+/gu, " ");
@@ -18,10 +19,13 @@ const nickname = z
   )
   .refine((value) => !/[\p{Cc}\p{Cf}]/u.test(value), "Nickname cannot contain control characters.");
 
-export const roomMembershipSchema = z.object({ nickname }).strict();
+const avatarId = z.custom<AvatarId>(isAvatarId, "Choose a valid avatar.");
+
+export const roomMembershipSchema = z.object({ nickname, avatarId: avatarId.optional() }).strict();
 export const roomCreationSchema = z
   .object({
     nickname,
+    avatarId: avatarId.optional(),
     minPlayers: z.number().int().min(3).max(15).default(3),
     maxPlayers: z.number().int().min(3).max(15).default(12),
   })

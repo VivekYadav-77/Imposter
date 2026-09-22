@@ -15,6 +15,7 @@ export type SafeErrorCode =
   | "RATE_LIMITED"
   | "ROOM_CODE_UNAVAILABLE"
   | "ROOM_FULL"
+  | "AVATAR_TAKEN"
   | "ROOM_NOT_FOUND"
   | "ROOM_NOT_IN_LOBBY"
   | "NICKNAME_TAKEN"

@@ -373,6 +373,23 @@ async function handleRoomRoute(
     sendIssuedSession(request, response, 201, issued, requestId, config);
     return;
   }
+  const joinOptionsMatch = path.match(/^\/api\/v1\/rooms\/([A-Za-z0-9]{6})\/join-options$/);
+  if (method === "GET" && joinOptionsMatch) {
+    response.setHeader("Cache-Control", "no-store");
+    sendJson(
+      response,
+      200,
+      successEnvelope(
+        await rooms.joinOptions(
+          joinOptionsMatch[1],
+          `${publicScope}:${joinOptionsMatch[1].toUpperCase()}`,
+        ),
+        requestId,
+      ),
+      requestId,
+    );
+    return;
+  }
   const joinMatch = path.match(/^\/api\/v1\/rooms\/([A-Za-z0-9]{6})\/participants$/);
   if (method === "POST" && joinMatch) {
     const key = requireIdempotencyKey(request);

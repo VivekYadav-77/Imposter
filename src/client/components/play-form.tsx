@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ApiError, createIdempotencyKey, errorMessage, participantApi } from "../api/client";
 import type { RoomSnapshot } from "../api/types";
-import { Banner, Button, Field, GameSelect } from "./ui";
+import { Button, Field, GameSelect, Toast } from "./ui";
+import { AvatarPicker } from "./player-avatar";
+import { AVATAR_IDS, isAvatarId, type AvatarId } from "../../shared/avatars";
 
 type Mode = "create" | "join";
 export function PlayForm() {
@@ -15,11 +17,34 @@ export function PlayForm() {
   const [minPlayers, setMinPlayers] = useState(3);
   const [maxPlayers, setMaxPlayers] = useState(12);
   const [accepted, setAccepted] = useState(false);
-  const [error, setError] = useState("");
+  const [avatarId, setAvatarId] = useState<AvatarId | null>(null);
+  const [availableAvatarIds, setAvailableAvatarIds] = useState<AvatarId[]>([]);
+  const [joinOptionsLoaded, setJoinOptionsLoaded] = useState(false);
+  const [toast, setToast] = useState<{ id: number; message: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [resumeRoom, setResumeRoom] = useState<RoomSnapshot | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
   const key = useRef(createIdempotencyKey());
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dismissToast = useCallback(() => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = null;
+    setToast(null);
+  }, []);
+  const showErrorToast = useCallback((message: string) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast({ id: Date.now(), message });
+    toastTimer.current = setTimeout(() => {
+      setToast(null);
+      toastTimer.current = null;
+    }, 6_000);
+  }, []);
+  useEffect(
+    () => () => {
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+    },
+    [],
+  );
   useEffect(() => {
     let active = true;
     participantApi
@@ -32,7 +57,7 @@ export function PlayForm() {
           active &&
           !(cause instanceof ApiError && (cause.status === 401 || cause.status === 404))
         )
-          setError(errorMessage(cause));
+          showErrorToast(errorMessage(cause));
       })
       .finally(() => {
         if (active) setCheckingSession(false);
@@ -40,7 +65,7 @@ export function PlayForm() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [showErrorToast]);
   const nicknameError =
     nickname.length > 24
       ? "Use 24 characters or fewer."
@@ -51,12 +76,33 @@ export function PlayForm() {
     mode === "join" && !/^[A-Z0-9]{6}$/.test(code) ? "Enter the 6-character room code." : "";
   const select = (next: Mode) => {
     setMode(next);
-    setError("");
+    dismissToast();
+    setAvatarId(null);
+    setAvailableAvatarIds([]);
+    setJoinOptionsLoaded(false);
     key.current = createIdempotencyKey();
+  };
+  const findRoom = async () => {
+    if (codeError || busy) return;
+    setBusy(true);
+    dismissToast();
+    try {
+      const response = await participantApi.joinOptions(code);
+      setAvailableAvatarIds(response.data.availableAvatarIds);
+      setJoinOptionsLoaded(true);
+      setAvatarId(null);
+      if (response.data.spotsRemaining === 0) showErrorToast("That room is full.");
+    } catch (cause) {
+      setJoinOptionsLoaded(false);
+      setAvailableAvatarIds([]);
+      showErrorToast(errorMessage(cause));
+    } finally {
+      setBusy(false);
+    }
   };
   const startNewGame = async (room: RoomSnapshot) => {
     setBusy(true);
-    setError("");
+    dismissToast();
     try {
       if (room.status !== "active") await participantApi.leave();
       setMode("create");
@@ -66,7 +112,7 @@ export function PlayForm() {
       setResumeRoom(null);
       key.current = createIdempotencyKey();
     } catch (cause) {
-      setError(errorMessage(cause));
+      showErrorToast(errorMessage(cause));
     } finally {
       setBusy(false);
     }
@@ -75,18 +121,44 @@ export function PlayForm() {
     event.preventDefault();
     if (nicknameError || codeError || !accepted || busy) return;
     setBusy(true);
-    setError("");
+    dismissToast();
     try {
       if (mode === "create")
-        await participantApi.createRoom(nickname.trim(), minPlayers, maxPlayers, key.current);
-      else await participantApi.joinRoom(code, nickname.trim(), key.current);
+        await participantApi.createRoom(
+          nickname.trim(),
+          minPlayers,
+          maxPlayers,
+          key.current,
+          avatarId!,
+        );
+      else await participantApi.joinRoom(code, nickname.trim(), key.current, avatarId!);
       router.replace("/room");
     } catch (cause) {
+      if (cause instanceof ApiError && cause.code === "AVATAR_TAKEN") {
+        const available = Array.isArray(cause.details?.availableAvatarIds)
+          ? cause.details.availableAvatarIds.filter(isAvatarId)
+          : [];
+        setAvailableAvatarIds(available);
+        setAvatarId(null);
+        showErrorToast("That operative was just selected. Choose another available avatar.");
+        window.requestAnimationFrame(() =>
+          document.querySelector<HTMLButtonElement>(".avatar-choice")?.focus(),
+        );
+        setBusy(false);
+        return;
+      }
       if (!(cause instanceof ApiError && cause.retryable)) key.current = createIdempotencyKey();
-      setError(errorMessage(cause));
+      showErrorToast(errorMessage(cause));
       setBusy(false);
     }
   };
+  const toastRegion = toast && (
+    <div className="game-toast-region" aria-label="Play notifications">
+      <Toast key={toast.id} tone="danger" title="Couldn’t continue" onDismiss={dismissToast}>
+        {toast.message}
+      </Toast>
+    </div>
+  );
   if (checkingSession)
     return (
       <div className="play-panel resume-panel" role="status">
@@ -120,12 +192,12 @@ export function PlayForm() {
               disabled={busy}
               onClick={async () => {
                 setBusy(true);
-                setError("");
+                dismissToast();
                 try {
                   await participantApi.leave();
                   setResumeRoom(null);
                 } catch (cause) {
-                  setError(errorMessage(cause));
+                  showErrorToast(errorMessage(cause));
                 } finally {
                   setBusy(false);
                 }
@@ -141,7 +213,7 @@ export function PlayForm() {
             continues without this browser.
           </p>
         )}
-        {error && <Banner tone="danger">{error}</Banner>}
+        {toastRegion}
       </div>
     );
   }
@@ -166,7 +238,6 @@ export function PlayForm() {
         </button>
       </div>
       <form onSubmit={(event) => void submit(event)} noValidate>
-        {error && <Banner tone="danger">{error}</Banner>}
         {mode === "join" && (
           <Field
             label="Room code"
@@ -178,6 +249,9 @@ export function PlayForm() {
                   .replace(/[^A-Z0-9]/g, "")
                   .slice(0, 6),
               );
+              setJoinOptionsLoaded(false);
+              setAvailableAvatarIds([]);
+              setAvatarId(null);
               key.current = createIdempotencyKey();
             }}
             className="code-field"
@@ -188,19 +262,32 @@ export function PlayForm() {
             placeholder="ABC123"
           />
         )}
-        <Field
-          label="Your nickname"
-          value={nickname}
-          onChange={(e) => {
-            setNickname(e.target.value);
-            key.current = createIdempotencyKey();
-          }}
-          maxLength={24}
-          autoComplete="nickname"
-          error={nickname.length > 24 ? nicknameError : undefined}
-          hint={`${nickname.length}/24 characters`}
-          placeholder="What should the room call you?"
-        />
+        {mode === "join" && !joinOptionsLoaded && (
+          <Button
+            type="button"
+            variant="secondary"
+            loading={busy}
+            disabled={Boolean(codeError)}
+            onClick={() => void findRoom()}
+          >
+            Find room
+          </Button>
+        )}
+        {(mode === "create" || joinOptionsLoaded) && (
+          <Field
+            label="Your nickname"
+            value={nickname}
+            onChange={(e) => {
+              setNickname(e.target.value);
+              key.current = createIdempotencyKey();
+            }}
+            maxLength={24}
+            autoComplete="nickname"
+            error={nickname.length > 24 ? nicknameError : undefined}
+            hint={`${nickname.length}/24 characters`}
+            placeholder="What should the room call you?"
+          />
+        )}
         {mode === "create" && (
           <div className="form-grid two-column">
             <GameSelect
@@ -233,28 +320,45 @@ export function PlayForm() {
             />
           </div>
         )}
-        <label className="check-row">
-          <input
-            type="checkbox"
-            checked={accepted}
-            onChange={(e) => setAccepted(e.target.checked)}
+        {(mode === "create" || joinOptionsLoaded) && (
+          <AvatarPicker
+            availableIds={mode === "create" ? AVATAR_IDS : availableAvatarIds}
+            value={avatarId}
+            onChange={(id) => {
+              setAvatarId(id);
+              dismissToast();
+              key.current = createIdempotencyKey();
+            }}
+            disabled={busy}
           />
-          <span>
-            I’m 18 or older and agree to the{" "}
-            <a href="/privacy-and-photos" target="_blank">
-              photo and privacy notice
-            </a>
-            .
-          </span>
-        </label>
-        <Button
-          type="submit"
-          loading={busy}
-          disabled={Boolean(nicknameError || codeError || !accepted)}
-        >
-          {mode === "create" ? "Create room" : "Join room"}
-        </Button>
+        )}
+        {(mode === "create" || joinOptionsLoaded) && (
+          <label className="check-row">
+            <input
+              type="checkbox"
+              checked={accepted}
+              onChange={(e) => setAccepted(e.target.checked)}
+            />
+            <span>
+              I’m 18 or older and agree to the{" "}
+              <a href="/privacy-and-photos" target="_blank">
+                photo and privacy notice
+              </a>
+              .
+            </span>
+          </label>
+        )}
+        {(mode === "create" || joinOptionsLoaded) && (
+          <Button
+            type="submit"
+            loading={busy}
+            disabled={Boolean(nicknameError || codeError || !accepted || !avatarId)}
+          >
+            {mode === "create" ? "Create room" : "Join room"}
+          </Button>
+        )}
       </form>
+      {toastRegion}
     </div>
   );
 }
