@@ -141,7 +141,11 @@ describe("frontend design foundations", () => {
     ]);
     expect(playForm).toContain("Resume game");
     expect(playForm).toContain("View results");
+    expect(playForm).toContain("Play new game");
     expect(playForm).toMatch(/participantApi\s*\.room\(\)/);
+    expect(playForm).toContain('if (room.status !== "active") await participantApi.leave()');
+    expect(playForm).toContain('setMode("create")');
+    expect(playForm).toContain("setNickname(room.self.nickname)");
     expect(roomClient).toContain('window.addEventListener("beforeunload", warnBeforeExit)');
   });
 

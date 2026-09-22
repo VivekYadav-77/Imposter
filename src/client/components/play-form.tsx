@@ -54,6 +54,23 @@ export function PlayForm() {
     setError("");
     key.current = createIdempotencyKey();
   };
+  const startNewGame = async (room: RoomSnapshot) => {
+    setBusy(true);
+    setError("");
+    try {
+      if (room.status !== "active") await participantApi.leave();
+      setMode("create");
+      setNickname(room.self.nickname);
+      setCode("");
+      setAccepted(false);
+      setResumeRoom(null);
+      key.current = createIdempotencyKey();
+    } catch (cause) {
+      setError(errorMessage(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (nicknameError || codeError || !accepted || busy) return;
@@ -91,13 +108,16 @@ export function PlayForm() {
           latest server state{completedGame ? " and show what happened while you were away" : ""}.
         </p>
         <div className="dialog-actions">
-          <Button onClick={() => router.replace("/room")}>
+          <Button disabled={busy} onClick={() => router.replace("/room")}>
             {activeGame ? "Resume game" : completedGame ? "View results" : "Return to room"}
+          </Button>
+          <Button variant="secondary" loading={busy} onClick={() => void startNewGame(resumeRoom)}>
+            Play new game
           </Button>
           {!activeGame && (
             <Button
               variant="secondary"
-              loading={busy}
+              disabled={busy}
               onClick={async () => {
                 setBusy(true);
                 setError("");
@@ -117,8 +137,8 @@ export function PlayForm() {
         </div>
         {activeGame && (
           <p className="field-hint">
-            To protect the match, an active seat can’t be replaced by joining again with a new
-            identity.
+            Resume keeps your saved seat. Starting a new game opens a separate room while this match
+            continues without this browser.
           </p>
         )}
         {error && <Banner tone="danger">{error}</Banner>}
