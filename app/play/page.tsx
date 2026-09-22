@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 export default function Play() {
   return (
     <div className="funnel-page">
-      <SiteHeader minimal />
+      <SiteHeader minimal backHref="/" backLabel="Back home" />
       <main id="main-content">
         <header>
           <p className="eyebrow">Enter the room</p>

@@ -90,13 +90,42 @@ describe("frontend design foundations", () => {
       readFile("src/client/components/ui.tsx", "utf8"),
       readFile("app/game-command-center.css", "utf8"),
     ]);
-    expect(room.match(/<GameSelect/g)).toHaveLength(2);
+    expect(room.match(/<GameSelect/g)?.length).toBeGreaterThanOrEqual(7);
+    expect(room).not.toContain("<select");
+    expect(ui).toContain("data-placement={placement}");
+    expect(ui).toContain('event.key === "ArrowDown"');
     expect(ui).toContain("export function GameSelect");
     expect(ui).toContain('role="listbox"');
     expect(ui).toContain('role="option"');
     expect(css).toMatch(/\.game-page \.game-select-menu\s*\{[^}]*width: 100%;[^}]*min-width: 0;/s);
     expect(css).toMatch(
       /\.game-page \.game-select-menu > button > span\s*\{[^}]*text-overflow: ellipsis;/s,
+    );
+  });
+
+  it("uses the constrained custom dropdown for every project option menu", async () => {
+    const sources = await Promise.all([
+      readFile("src/client/components/room-client.tsx", "utf8"),
+      readFile("src/client/components/play-form.tsx", "utf8"),
+      readFile("src/client/components/admin-client.tsx", "utf8"),
+    ]);
+    for (const source of sources) expect(source).not.toContain("<select");
+    expect(sources.join("\n")).toContain('label="Game time"');
+    expect(sources.join("\n")).toContain('label="Meetings per player"');
+    expect(sources.join("\n")).toContain('label="Impostors"');
+  });
+
+  it("places the host start action after the final lobby setting", async () => {
+    const [room, css] = await Promise.all([
+      readFile("src/client/components/room-client.tsx", "utf8"),
+      readFile("app/globals.css", "utf8"),
+    ]);
+    expect(room.match(/Start game/g)).toHaveLength(1);
+    expect(room.indexOf("Start game")).toBeGreaterThan(room.indexOf("Crew roles"));
+    expect(room).toContain('className="settings-completion"');
+    expect(css).toContain(".settings-completion .settings-start-button");
+    expect(css).toMatch(
+      /@media \(max-width: 760px\)[\s\S]*?\.settings-completion \.settings-start-button\s*\{[^}]*width: 100%;/s,
     );
   });
 

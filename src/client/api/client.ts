@@ -97,6 +97,7 @@ export async function apiRequest<T>(
         };
       return (await response.json()) as ApiEnvelope<T>;
     } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") throw error;
       const apiError =
         error instanceof ApiError
           ? error
@@ -249,8 +250,10 @@ export const adminApi = {
     }),
   logout: () =>
     apiRequest<void>("/api/v1/admin/sessions/current", { method: "DELETE", retry: false }),
-  list: (query = "") =>
-    apiRequest<AdminPackSummary[]>(`/api/v1/admin/task-packs${query ? `?${query}` : ""}`),
+  list: (query = "", signal?: AbortSignal) =>
+    apiRequest<AdminPackSummary[]>(`/api/v1/admin/task-packs${query ? `?${query}` : ""}`, {
+      signal,
+    }),
   get: (id: string) => apiRequest<AdminPack>(`/api/v1/admin/task-packs/${id}`),
   create: (
     body: {

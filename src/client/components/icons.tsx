@@ -11,6 +11,7 @@ export type IconName =
   | "close"
   | "evidence"
   | "eye"
+  | "eyeOff"
   | "lobby"
   | "lock"
   | "meeting"
@@ -24,6 +25,7 @@ export type IconName =
   | "tool"
   | "spark"
   | "timer"
+  | "trash"
   | "trophy"
   | "upload"
   | "uploading"
@@ -65,6 +67,13 @@ const paths: Record<IconName, ReactNode> = {
     <>
       <path d="M2.8 12s3.3-5.2 9.2-5.2S21.2 12 21.2 12s-3.3 5.2-9.2 5.2S2.8 12 2.8 12Z" />
       <circle cx="12" cy="12" r="2.35" />
+    </>
+  ),
+  eyeOff: (
+    <>
+      <path d="M3 3l18 18" />
+      <path d="M10.6 6.9A10.7 10.7 0 0 1 12 6.8c5.9 0 9.2 5.2 9.2 5.2a16.5 16.5 0 0 1-2.2 2.8M6.1 6.1C4 7.6 2.8 12 2.8 12s3.3 5.2 9.2 5.2c1.4 0 2.7-.3 3.8-.8" />
+      <path d="M9.8 9.8a3 3 0 0 0 4.4 4.4" />
     </>
   ),
   lobby: (
@@ -119,6 +128,12 @@ const paths: Record<IconName, ReactNode> = {
     <>
       <circle cx="12" cy="13" r="8" />
       <path d="M9 3h6M12 9v4l3 2" />
+    </>
+  ),
+  trash: (
+    <>
+      <path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14" />
+      <path d="M10 11v6M14 11v6" />
     </>
   ),
   trophy: (

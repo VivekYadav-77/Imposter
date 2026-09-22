@@ -808,14 +808,27 @@ select {
 }
 
 .admin-header {
-  padding-right: max(80px, env(safe-area-inset-right));
-  background: var(--surface-1);
-  border-bottom-color: var(--border-1);
+  padding-inline: max(24px, calc((100vw - 1180px) / 2));
+  background: var(--admin-header);
+  color: #fffaf0;
+  border-bottom-color: var(--amber);
 }
 .admin-header a {
   min-height: 44px;
   display: inline-flex;
   align-items: center;
+}
+.admin-header .theme-toggle-compact {
+  position: static;
+  top: auto;
+  right: auto;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border-color: #5b523f;
+  background: #312e25;
+  color: #fffaf0;
+  box-shadow: none;
 }
 .admin-page {
   background: var(--canvas);
@@ -1010,6 +1023,9 @@ select {
   .theme-toggle {
     top: max(14px, env(safe-area-inset-top));
     right: max(14px, env(safe-area-inset-right));
+  }
+  .admin-header {
+    padding-inline: max(16px, env(safe-area-inset-left));
   }
   .signal-hero {
     min-height: auto;

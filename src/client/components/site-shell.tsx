@@ -4,13 +4,27 @@ import Link from "next/link";
 import { useState } from "react";
 import { Brand, Icon } from "./ui";
 
-export function SiteHeader({ minimal = false }: { minimal?: boolean }) {
+export function SiteHeader({
+  minimal = false,
+  backHref,
+  backLabel = "Back",
+}: {
+  minimal?: boolean;
+  backHref?: string;
+  backLabel?: string;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <header className="site-header">
       <Link href="/" aria-label="Imposter Game home">
         <Brand />
       </Link>
+      {minimal && backHref && (
+        <Link className="back-link header-back-link" href={backHref}>
+          <Icon name="arrow" size={17} />
+          <span>{backLabel}</span>
+        </Link>
+      )}
       {!minimal && (
         <>
           <button

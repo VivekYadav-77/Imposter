@@ -115,22 +115,49 @@ export function GameSelect({
   options,
   disabled,
   className = "",
+  hint,
+  labelHidden = false,
+  labelAction,
   onChange,
 }: {
   label: string;
   value: string;
-  placeholder: string;
+  placeholder?: string;
   options: Array<{ value: string; label: string }>;
   disabled?: boolean;
   className?: string;
+  hint?: string;
+  labelHidden?: boolean;
+  labelAction?: ReactNode;
   onChange: (value: string) => void;
 }) {
   const id = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const [open, setOpen] = ReactUseState(false);
+  const [placement, setPlacement] = ReactUseState<"top" | "bottom">("bottom");
   const selected = options.find((option) => option.value === value);
-  const menuOptions = [{ value: "", label: placeholder }, ...options];
+  const menuOptions = placeholder ? [{ value: "", label: placeholder }, ...options] : options;
+
+  const openMenu = (preferredIndex?: number) => {
+    if (disabled || menuOptions.length === 0) return;
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (rect) {
+      const roomBelow = window.innerHeight - rect.bottom;
+      setPlacement(roomBelow < 230 && rect.top > roomBelow ? "top" : "bottom");
+    }
+    setOpen(true);
+    const selectedIndex = menuOptions.findIndex((option) => option.value === value);
+    const nextIndex = preferredIndex ?? (selectedIndex >= 0 ? selectedIndex : 0);
+    window.requestAnimationFrame(() => optionRefs.current[nextIndex]?.focus());
+  };
+
+  const selectOption = (nextValue: string) => {
+    onChange(nextValue);
+    setOpen(false);
+    triggerRef.current?.focus();
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -150,11 +177,41 @@ export function GameSelect({
     };
   }, [open]);
 
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
+
+  const moveOptionFocus = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
+    let next = index;
+    if (event.key === "ArrowDown") next = Math.min(menuOptions.length - 1, index + 1);
+    else if (event.key === "ArrowUp") next = Math.max(0, index - 1);
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = menuOptions.length - 1;
+    else return;
+    event.preventDefault();
+    optionRefs.current[next]?.focus();
+  };
+
   return (
-    <div className={`field game-select ${className}`} ref={rootRef}>
-      <span className="field-label" id={`${id}-label`}>
-        {label}
-      </span>
+    <div
+      className={`field game-select ${className}`}
+      ref={rootRef}
+      onBlurCapture={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
+      }}
+    >
+      {labelHidden ? (
+        <span className="sr-only" id={`${id}-label`}>
+          {label}
+        </span>
+      ) : (
+        <span className="game-select-label-row">
+          <span className="field-label" id={`${id}-label`}>
+            {label}
+          </span>
+          {labelAction}
+        </span>
+      )}
       <button
         ref={triggerRef}
         type="button"
@@ -165,9 +222,18 @@ export function GameSelect({
         aria-expanded={open}
         aria-controls={`${id}-options`}
         disabled={disabled}
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => (open ? setOpen(false) : openMenu())}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            openMenu();
+          } else if (event.key === "ArrowUp") {
+            event.preventDefault();
+            openMenu(menuOptions.length - 1);
+          }
+        }}
       >
-        <span id={`${id}-value`}>{selected?.label ?? placeholder}</span>
+        <span id={`${id}-value`}>{selected?.label ?? placeholder ?? "Select an option"}</span>
         <Icon name="chevron" size={18} aria-hidden="true" />
       </button>
       {open && (
@@ -176,19 +242,22 @@ export function GameSelect({
           id={`${id}-options`}
           role="listbox"
           aria-labelledby={`${id}-label`}
+          data-placement={placement}
         >
-          {menuOptions.map((option) => (
+          {menuOptions.map((option, index) => (
             <button
+              ref={(node) => {
+                optionRefs.current[index] = node;
+              }}
               type="button"
               role="option"
+              id={`${id}-option-${index}`}
               aria-selected={option.value === value}
               className={option.value === value ? "selected" : ""}
+              tabIndex={option.value === value || (!selected && index === 0) ? 0 : -1}
               key={option.value}
-              onClick={() => {
-                onChange(option.value);
-                setOpen(false);
-                triggerRef.current?.focus();
-              }}
+              onClick={() => selectOption(option.value)}
+              onKeyDown={(event) => moveOptionFocus(event, index)}
             >
               <span>{option.label}</span>
               {option.value === value && <Icon name="check" size={17} aria-hidden="true" />}
@@ -196,6 +265,7 @@ export function GameSelect({
           ))}
         </div>
       )}
+      {hint && <span className="field-hint">{hint}</span>}
     </div>
   );
 }
@@ -322,6 +392,7 @@ export function Dialog({
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
@@ -334,10 +405,10 @@ export function Dialog({
       className="dialog"
       onCancel={onClose}
       onClose={onClose}
-      aria-labelledby="dialog-title"
+      aria-labelledby={titleId}
     >
       <div className="dialog-head">
-        <h2 id="dialog-title">{title}</h2>
+        <h2 id={titleId}>{title}</h2>
         <IconButton icon="close" onClick={onClose} label="Close dialog" />
       </div>
       {children}
@@ -575,11 +646,18 @@ export function Drawer({
 export function Toast({
   children,
   tone = "success",
+  title,
+  action,
+  onDismiss,
 }: {
   children: ReactNode;
-  tone?: "success" | "danger" | "info";
+  tone?: "success" | "danger" | "warning" | "info";
+  title?: string;
+  action?: { label: string; onClick: () => void };
+  onDismiss?: () => void;
 }) {
-  const icon: IconName = tone === "success" ? "check" : tone === "danger" ? "warning" : "spark";
+  const icon: IconName =
+    tone === "success" ? "check" : tone === "danger" || tone === "warning" ? "warning" : "spark";
   return (
     <div
       className={`toast toast-${tone}`}
@@ -589,7 +667,31 @@ export function Toast({
       <span className="toast-icon" aria-hidden="true">
         <Icon name={icon} size={18} />
       </span>
-      <span className="toast-body">{children}</span>
+      <span className="toast-body">
+        {title || action ? (
+          <>
+            <span className="toast-copy">
+              {title && <strong>{title}</strong>}
+              <span>{children}</span>
+            </span>
+            {action && (
+              <button type="button" className="toast-action" onClick={action.onClick}>
+                {action.label}
+              </button>
+            )}
+          </>
+        ) : (
+          children
+        )}
+      </span>
+      {onDismiss && (
+        <IconButton
+          className="toast-dismiss"
+          icon="close"
+          label="Dismiss notification"
+          onClick={onDismiss}
+        />
+      )}
     </div>
   );
 }

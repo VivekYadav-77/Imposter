@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ApiError, createIdempotencyKey, errorMessage, participantApi } from "../api/client";
 import type { RoomSnapshot } from "../api/types";
-import { Banner, Button, Field } from "./ui";
+import { Banner, Button, Field, GameSelect } from "./ui";
 
 type Mode = "create" | "join";
 export function PlayForm() {
@@ -203,44 +203,34 @@ export function PlayForm() {
         />
         {mode === "create" && (
           <div className="form-grid two-column">
-            <label className="field">
-              <span className="field-label">Minimum players</span>
-              <select
-                value={minPlayers}
-                onChange={(event) => {
-                  const value = Number(event.target.value);
-                  setMinPlayers(value);
-                  if (maxPlayers < value) setMaxPlayers(value);
-                  key.current = createIdempotencyKey();
-                }}
-              >
-                {Array.from({ length: 13 }, (_, index) => index + 3).map((value) => (
-                  <option key={value} value={value}>
-                    {value}
-                  </option>
-                ))}
-              </select>
-              <span className="field-hint">At least 3 players are required.</span>
-            </label>
-            <label className="field">
-              <span className="field-label">Maximum players</span>
-              <select
-                value={maxPlayers}
-                onChange={(event) => {
-                  setMaxPlayers(Number(event.target.value));
-                  key.current = createIdempotencyKey();
-                }}
-              >
-                {Array.from({ length: 16 - minPlayers }, (_, index) => index + minPlayers).map(
-                  (value) => (
-                    <option key={value} value={value}>
-                      {value}
-                    </option>
-                  ),
-                )}
-              </select>
-              <span className="field-hint">Limited to 15 for reliable realtime play.</span>
-            </label>
+            <GameSelect
+              label="Minimum players"
+              value={String(minPlayers)}
+              options={Array.from({ length: 13 }, (_, index) => index + 3).map((value) => ({
+                value: String(value),
+                label: String(value),
+              }))}
+              hint="At least 3 players are required."
+              onChange={(nextValue) => {
+                const value = Number(nextValue);
+                setMinPlayers(value);
+                if (maxPlayers < value) setMaxPlayers(value);
+                key.current = createIdempotencyKey();
+              }}
+            />
+            <GameSelect
+              label="Maximum players"
+              value={String(maxPlayers)}
+              options={Array.from(
+                { length: 16 - minPlayers },
+                (_, index) => index + minPlayers,
+              ).map((value) => ({ value: String(value), label: String(value) }))}
+              hint="Limited to 15 for reliable realtime play."
+              onChange={(value) => {
+                setMaxPlayers(Number(value));
+                key.current = createIdempotencyKey();
+              }}
+            />
           </div>
         )}
         <label className="check-row">

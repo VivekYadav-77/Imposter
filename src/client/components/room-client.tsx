@@ -253,6 +253,15 @@ function LobbyView({
   const [roleInfo, setRoleInfo] = useState<PublicPackSummary["roles"][number] | null>(null);
   const canSettings = room.self.capabilities.includes("change_settings");
   const canStart = room.self.capabilities.includes("start_game");
+  const startDisabled =
+    !canStart || !room.settings.selectedTaskPack || room.participants.length < room.minPlayers;
+  const startMessage = !canStart
+    ? "Waiting for the host to start the game."
+    : !room.settings.selectedTaskPack
+      ? "Choose a map to complete setup."
+      : room.participants.length < room.minPlayers
+        ? `${room.minPlayers - room.participants.length} more player${room.minPlayers - room.participants.length === 1 ? "" : "s"} needed before starting.`
+        : "Settings complete. Your crew is ready to begin.";
   const selectedPack = packs.find((pack) => pack.id === room.settings.selectedTaskPack?.id);
   const availableTaskCounts =
     selectedPack?.difficultyTaskCounts ??
@@ -379,16 +388,6 @@ function LobbyView({
               </div>
               <div className="settings-heading-actions">
                 <Badge tone={busy ? "warning" : "success"}>{busy ? "Saving" : "Saved"}</Badge>
-                <Button
-                  className="settings-start-button"
-                  loading={busy}
-                  disabled={
-                    !room.settings.selectedTaskPack || room.participants.length < room.minPlayers
-                  }
-                  onClick={() => void start()}
-                >
-                  Start game
-                </Button>
               </div>
             </div>
             <section className="settings-section">
@@ -532,22 +531,16 @@ function LobbyView({
                 onApply={(value) => void update({ meetingCooldownSeconds: value })}
                 hint="Time after a meeting ends before another meeting can be called."
               />
-              <label className="field">
-                <span className="field-label">Meetings per player</span>
-                <select
-                  value={room.settings.meetingsPerPlayer}
-                  disabled={busy}
-                  onChange={(event) =>
-                    void update({ meetingsPerPlayer: Number(event.target.value) })
-                  }
-                >
-                  {Array.from({ length: 6 }, (_, count) => (
-                    <option key={count} value={count}>
-                      {count}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <GameSelect
+                label="Meetings per player"
+                value={String(room.settings.meetingsPerPlayer)}
+                disabled={busy}
+                options={Array.from({ length: 6 }, (_, count) => ({
+                  value: String(count),
+                  label: String(count),
+                }))}
+                onChange={(value) => void update({ meetingsPerPlayer: Number(value) })}
+              />
               <div className="vote-visibility-control">
                 <span className="field-label">Impostor task needed to call a meeting</span>
                 <div role="radiogroup" aria-label="Impostor task requirement for calling a meeting">
@@ -582,24 +575,17 @@ function LobbyView({
                   Crew members always need one completed task. The caller’s identity is never shown.
                 </span>
               </div>
-              <label className="field">
-                <span className="field-label">Impostors</span>
-                <select
-                  value={room.settings.imposterCount}
-                  onChange={(event) => void update({ imposterCount: Number(event.target.value) })}
-                  disabled={busy}
-                >
-                  {room.settings.allowedImposterCounts.map((count) => (
-                    <option key={count} value={count}>
-                      {count}
-                      {count === 1 ? " (recommended for small rooms)" : ""}
-                    </option>
-                  ))}
-                </select>
-                <span className="field-hint">
-                  Options keep crewmates in the majority at game start.
-                </span>
-              </label>
+              <GameSelect
+                label="Impostors"
+                value={String(room.settings.imposterCount)}
+                disabled={busy}
+                options={room.settings.allowedImposterCounts.map((count) => ({
+                  value: String(count),
+                  label: `${count}${count === 1 ? " (recommended for small rooms)" : ""}`,
+                }))}
+                hint="Options keep crewmates in the majority at game start."
+                onChange={(value) => void update({ imposterCount: Number(value) })}
+              />
             </section>
             <details className="settings-section settings-collapsible" open>
               <summary>
@@ -620,48 +606,39 @@ function LobbyView({
               </summary>
               <div className="difficulty-settings">
                 {(["easy", "medium", "hard"] as const).map((difficulty) => (
-                  <label className="field compact-field" key={difficulty}>
-                    <span className="field-label">
-                      {difficulty[0].toUpperCase() + difficulty.slice(1)}
-                    </span>
-                    <select
-                      value={room.settings.taskCounts[difficulty]}
-                      disabled={
-                        busy ||
-                        !room.settings.selectedTaskPack ||
-                        availableTaskCounts[difficulty] === 0
-                      }
-                      onChange={(event) =>
-                        void update({
-                          taskCounts: {
-                            ...room.settings.taskCounts,
-                            [difficulty]: Number(event.target.value),
-                          },
-                        })
-                      }
-                    >
-                      {Array.from(
-                        {
-                          length:
-                            Math.min(
-                              availableTaskCounts[difficulty],
-                              15 -
-                                Object.entries(room.settings.taskCounts)
-                                  .filter(([name]) => name !== difficulty)
-                                  .reduce((sum, [, count]) => sum + count, 0),
-                            ) + 1,
+                  <GameSelect
+                    className="compact-field"
+                    key={difficulty}
+                    label={difficulty[0].toUpperCase() + difficulty.slice(1)}
+                    value={String(room.settings.taskCounts[difficulty])}
+                    disabled={
+                      busy ||
+                      !room.settings.selectedTaskPack ||
+                      availableTaskCounts[difficulty] === 0
+                    }
+                    options={Array.from(
+                      {
+                        length:
+                          Math.min(
+                            availableTaskCounts[difficulty],
+                            15 -
+                              Object.entries(room.settings.taskCounts)
+                                .filter(([name]) => name !== difficulty)
+                                .reduce((sum, [, count]) => sum + count, 0),
+                          ) + 1,
+                      },
+                      (_, index) => ({ value: String(index), label: String(index) }),
+                    )}
+                    hint={`${availableTaskCounts[difficulty]} active on this map`}
+                    onChange={(value) =>
+                      void update({
+                        taskCounts: {
+                          ...room.settings.taskCounts,
+                          [difficulty]: Number(value),
                         },
-                        (_, index) => (
-                          <option key={index} value={index}>
-                            {index}
-                          </option>
-                        ),
-                      )}
-                    </select>
-                    <span className="field-hint">
-                      {availableTaskCounts[difficulty]} active on this map
-                    </span>
-                  </label>
+                      })
+                    }
+                  />
                 ))}
               </div>
             </details>
@@ -679,50 +656,62 @@ function LobbyView({
                 </summary>
                 <div className="role-settings">
                   {room.settings.selectedTaskPack.roles.map((role) => (
-                    <label className="field compact-field" key={role.name}>
-                      <button
-                        type="button"
-                        className="role-info-trigger"
-                        onClick={() => setRoleInfo(role)}
-                        aria-label={`About the ${role.name} role`}
-                      >
-                        <span>{role.name}</span>
-                        <span aria-hidden="true">i</span>
-                      </button>
-                      <select
-                        value={room.settings.roleCounts[role.name] ?? 0}
-                        disabled={busy}
-                        onChange={(event) =>
-                          void update({
-                            roleCounts: {
-                              ...room.settings.roleCounts,
-                              [role.name]: Number(event.target.value),
-                            },
-                          })
-                        }
-                      >
-                        {Array.from(
-                          {
-                            length: Math.max(
-                              1,
-                              room.participants.length - room.settings.imposterCount + 1,
-                            ),
-                          },
-                          (_, index) => (
-                            <option key={index} value={index}>
-                              {index}
-                            </option>
+                    <GameSelect
+                      className="compact-field"
+                      key={role.name}
+                      label={role.name}
+                      labelAction={
+                        <button
+                          type="button"
+                          className="role-info-trigger"
+                          onClick={() => setRoleInfo(role)}
+                          aria-label={`About the ${role.name} role`}
+                        >
+                          <span className="sr-only">About {role.name}</span>
+                          <span aria-hidden="true">i</span>
+                        </button>
+                      }
+                      value={String(room.settings.roleCounts[role.name] ?? 0)}
+                      disabled={busy}
+                      options={Array.from(
+                        {
+                          length: Math.max(
+                            1,
+                            room.participants.length - room.settings.imposterCount + 1,
                           ),
-                        )}
-                      </select>
-                      <span className="field-hint">
-                        Select how many crewmates receive this role.
-                      </span>
-                    </label>
+                        },
+                        (_, index) => ({ value: String(index), label: String(index) }),
+                      )}
+                      hint="Select how many crewmates receive this role."
+                      onChange={(value) =>
+                        void update({
+                          roleCounts: {
+                            ...room.settings.roleCounts,
+                            [role.name]: Number(value),
+                          },
+                        })
+                      }
+                    />
                   ))}
                 </div>
               </details>
             ) : null}
+            <div className="settings-completion" aria-label="Finish game setup">
+              <div>
+                <span className="eyebrow">Ready check</span>
+                <strong>{startDisabled ? "Complete setup" : "Ready to launch"}</strong>
+                <small aria-live="polite">{startMessage}</small>
+              </div>
+              <Button
+                className="settings-start-button"
+                loading={busy}
+                disabled={startDisabled}
+                title={startDisabled ? startMessage : "Start the configured game"}
+                onClick={() => void start()}
+              >
+                Start game
+              </Button>
+            </div>
           </aside>
         )}
       </div>
@@ -786,19 +775,21 @@ function GameDurationControl({
   const valid = Number.isInteger(parsedMinutes) && parsedMinutes >= 5 && parsedMinutes <= 240;
   return (
     <div className="field custom-duration-field">
-      <span className="field-label">Game time</span>
-      <select
-        value={value}
+      <GameSelect
+        label="Game time"
+        value={String(value)}
         disabled={busy}
-        onChange={(event) => onChange(Number(event.target.value))}
-      >
-        {!presets.includes(value) && <option value={value}>{value / 60} min (custom)</option>}
-        {presets.map((seconds) => (
-          <option value={seconds} key={seconds}>
-            {seconds / 60} min
-          </option>
-        ))}
-      </select>
+        options={[
+          ...(!presets.includes(value)
+            ? [{ value: String(value), label: `${value / 60} min (custom)` }]
+            : []),
+          ...presets.map((seconds) => ({
+            value: String(seconds),
+            label: `${seconds / 60} min`,
+          })),
+        ]}
+        onChange={(nextValue) => onChange(Number(nextValue))}
+      />
       <span className="duration-input-row">
         <input
           type="number"
