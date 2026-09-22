@@ -39,13 +39,64 @@ describe("frontend design foundations", () => {
     expect(css).toContain("max-width: 360px");
   });
 
-  it("keeps the game sound control fixed below the sticky phase bar", async () => {
-    const css = await readFile("app/globals.css", "utf8");
+  it("aligns theme and sound controls inside the game command bar", async () => {
+    const [css, ui, theme] = await Promise.all([
+      readFile("app/game-command-center.css", "utf8"),
+      readFile("src/client/components/ui.tsx", "utf8"),
+      readFile("src/client/components/theme-toggle.tsx", "utf8"),
+    ]);
+    expect(css).toContain(".game-page .phase-utilities");
+    expect(css).toContain(".game-page .game-utility-button");
+    expect(css).toContain(".game-page .theme-toggle-game");
+    expect(ui).toContain("<GameSoundToggle />");
+    expect(ui).toContain('<ThemeToggle placement="game" />');
+    expect(theme).toContain('pathname.startsWith("/room")');
+  });
+
+  it("ships the responsive Vivid Tactical command center", async () => {
+    const [css, room, sounds, icons] = await Promise.all([
+      readFile("app/game-command-center.css", "utf8"),
+      readFile("src/client/components/room-client.tsx", "utf8"),
+      readFile("src/client/audio/game-sounds.ts", "utf8"),
+      readFile("src/client/components/icons.tsx", "utf8"),
+    ]);
+    expect(css).toContain("grid-template-columns: minmax(0, 1fr) minmax(300px, 330px)");
+    expect(css).toContain("@media (max-width: 1099px)");
+    expect(css).toContain("@media (max-width: 760px)");
+    expect(css).toContain("env(safe-area-inset-bottom)");
+    expect(room).toContain('className="task-command-shell"');
+    expect(room).toContain('className="game-context-rail"');
+    expect(room).toContain('playGameSound("vote-select")');
+    expect(sounds).toContain('| "upload-failure"');
+    expect(icons).toContain('| "voteLock"');
+  });
+
+  it("keeps lobby copy inside the invite card and centers mobile game dialogs", async () => {
+    const [room, css] = await Promise.all([
+      readFile("src/client/components/room-client.tsx", "utf8"),
+      readFile("app/game-command-center.css", "utf8"),
+    ]);
+    expect(room).toContain('<PhaseBar phase="lobby" identity={room.self.nickname} />');
+    expect(room).not.toContain("aria-label={`Copy room code ${room.code}`}");
+    expect(room).toContain('copied ? "Code copied" : "Copy room code"');
     expect(css).toMatch(
-      /\.sound-toggle\s*\{[^}]*position: fixed;[^}]*top: calc\(max\(12px, env\(safe-area-inset-top\)\) \+ 96px\);[^}]*left: max\(14px, env\(safe-area-inset-left\)\);/s,
+      /\.game-page \.dialog:not\(\.image-preview-dialog\)\s*\{[^}]*inset: 50% auto auto 50%;[^}]*transform: translate\(-50%, -50%\);/s,
     );
+  });
+
+  it("uses constrained custom dropdowns for map and elimination choices", async () => {
+    const [room, ui, css] = await Promise.all([
+      readFile("src/client/components/room-client.tsx", "utf8"),
+      readFile("src/client/components/ui.tsx", "utf8"),
+      readFile("app/game-command-center.css", "utf8"),
+    ]);
+    expect(room.match(/<GameSelect/g)).toHaveLength(2);
+    expect(ui).toContain("export function GameSelect");
+    expect(ui).toContain('role="listbox"');
+    expect(ui).toContain('role="option"');
+    expect(css).toMatch(/\.game-page \.game-select-menu\s*\{[^}]*width: 100%;[^}]*min-width: 0;/s);
     expect(css).toMatch(
-      /@media \(max-width: 760px\)[\s\S]*?\.sound-toggle\s*\{[^}]*top: calc\(max\(8px, env\(safe-area-inset-top\)\) \+ 82px\);/s,
+      /\.game-page \.game-select-menu > button > span\s*\{[^}]*text-overflow: ellipsis;/s,
     );
   });
 
@@ -161,7 +212,8 @@ describe("frontend design foundations", () => {
     const roomClient = await readFile("src/client/components/room-client.tsx", "utf8");
     expect(roomClient).toContain("Choose any whole number from 5 to 240 minutes.");
     expect(roomClient).toContain("Evidence visibility");
-    expect(roomClient).toContain("Task needed to call a meeting");
+    expect(roomClient).toContain("Impostor task needed to call a meeting");
+    expect(roomClient).toContain("Crew members always need one completed task");
     expect(roomClient).toContain("Meeting cooldown");
     expect(roomClient).toContain("The caller’s identity is never shown.");
     expect(roomClient).not.toContain("Submitted by {meeting.reviewItem");
@@ -188,8 +240,24 @@ describe("frontend design foundations", () => {
       'game.phase === "game_over" && <FinalEvidenceSection onError={onError} />',
     );
     expect(roomClient).toContain("Open final evidence photo");
+    expect(roomClient).toContain('className="final-evidence-toggle"');
+    expect(roomClient).toContain("aria-expanded={open}");
+    expect(roomClient).toContain("if (nextOpen && !hasLoaded && !loading) void load()");
     expect(css).toContain(".final-evidence-grid");
     expect(css).toContain("grid-template-columns: repeat(3, minmax(0, 1fr))");
+  });
+
+  it("keeps game feedback compact and exposes private elimination history", async () => {
+    const [roomClient, ui, css] = await Promise.all([
+      readFile("src/client/components/room-client.tsx", "utf8"),
+      readFile("src/client/components/ui.tsx", "utf8"),
+      readFile("app/game-command-center.css", "utf8"),
+    ]);
+    expect(ui).toContain('className="toast-icon"');
+    expect(css).toMatch(/\.game-page \.game-toast-region\s*\{[^}]*bottom: auto;/s);
+    expect(roomClient).toContain('className="elimination-history-card"');
+    expect(roomClient).toContain("game.self.knownEliminatedParticipantIds.map");
+    expect(roomClient).toContain("Eliminated by you");
   });
 
   it("ships the Signal Room semantic palette and locally bundled typography", async () => {

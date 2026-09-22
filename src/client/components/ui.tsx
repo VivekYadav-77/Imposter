@@ -9,6 +9,9 @@ import {
   type ReactNode,
 } from "react";
 import { BrandMark, Icon, type IconName } from "./icons";
+import { isSoundEnabled, playGameSound, setSoundEnabled } from "../audio/game-sounds";
+import { ThemeToggle } from "./theme-toggle";
+import type { GameShellProps, GamePhaseVisual } from "./game-ui-types";
 
 export { Icon, type IconName } from "./icons";
 
@@ -102,6 +105,98 @@ export function Field({
         {error ?? hint}
       </span>
     </label>
+  );
+}
+
+export function GameSelect({
+  label,
+  value,
+  placeholder,
+  options,
+  disabled,
+  className = "",
+  onChange,
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  options: Array<{ value: string; label: string }>;
+  disabled?: boolean;
+  className?: string;
+  onChange: (value: string) => void;
+}) {
+  const id = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = ReactUseState(false);
+  const selected = options.find((option) => option.value === value);
+  const menuOptions = [{ value: "", label: placeholder }, ...options];
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const closeWithEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      triggerRef.current?.focus();
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    document.addEventListener("keydown", closeWithEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      document.removeEventListener("keydown", closeWithEscape);
+    };
+  }, [open]);
+
+  return (
+    <div className={`field game-select ${className}`} ref={rootRef}>
+      <span className="field-label" id={`${id}-label`}>
+        {label}
+      </span>
+      <button
+        ref={triggerRef}
+        type="button"
+        className="game-select-trigger"
+        role="combobox"
+        aria-labelledby={`${id}-label ${id}-value`}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={`${id}-options`}
+        disabled={disabled}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span id={`${id}-value`}>{selected?.label ?? placeholder}</span>
+        <Icon name="chevron" size={18} aria-hidden="true" />
+      </button>
+      {open && (
+        <div
+          className="game-select-menu"
+          id={`${id}-options`}
+          role="listbox"
+          aria-labelledby={`${id}-label`}
+        >
+          {menuOptions.map((option) => (
+            <button
+              type="button"
+              role="option"
+              aria-selected={option.value === value}
+              className={option.value === value ? "selected" : ""}
+              key={option.value}
+              onClick={() => {
+                onChange(option.value);
+                setOpen(false);
+                triggerRef.current?.focus();
+              }}
+            >
+              <span>{option.label}</span>
+              {option.value === value && <Icon name="check" size={17} aria-hidden="true" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -350,30 +445,79 @@ export function PhaseBar({
 }) {
   return (
     <header className={`phase-bar phase-${phase}`}>
-      <div>
-        <span className="phase-label">
-          <Icon name={phaseIcon[phase]} size={20} />
-          {phase === "tasks" ? "TASKS" : phase.toUpperCase()}
-        </span>
-        {children}
+      <div className="phase-bar-inner">
+        <div className="phase-primary">
+          <span className="phase-label">
+            <span className="phase-icon" aria-hidden="true">
+              <Icon name={phaseIcon[phase]} size={20} />
+            </span>
+            {phase === "tasks" ? "TASKS" : phase.toUpperCase()}
+          </span>
+          {children}
+        </div>
+        <div className="phase-utilities">
+          {identity && (
+            <span className="phase-identity" title={identity}>
+              <IdentityToken name={identity} status="connected" />
+              <span>{identity}</span>
+            </span>
+          )}
+          <GameSoundToggle />
+          <ThemeToggle placement="game" />
+        </div>
       </div>
-      {identity && (
-        <span className="phase-identity" title={identity}>
-          {identity}
-        </span>
-      )}
     </header>
   );
 }
 
-export type PhaseVisual = "lobby" | "tasks" | "meeting" | "results";
+export type PhaseVisual = GamePhaseVisual;
 
 const phaseIcon: Record<PhaseVisual, IconName> = {
   lobby: "lobby",
+  role: "lock",
   tasks: "tasks",
   meeting: "meeting",
+  voting: "voteLock",
   results: "verdict",
 };
+
+export function GameSoundToggle() {
+  const [enabled, setEnabled] = ReactUseState(true);
+  useEffect(() => setEnabled(isSoundEnabled()), []);
+  const label = enabled ? "Mute game sounds" : "Enable game sounds";
+  return (
+    <button
+      className="game-utility-button game-sound-toggle"
+      type="button"
+      aria-pressed={enabled}
+      aria-label={label}
+      title={label}
+      onClick={() => {
+        const next = !enabled;
+        setEnabled(next);
+        setSoundEnabled(next);
+        if (next) playGameSound("ui");
+      }}
+    >
+      <Icon name={enabled ? "sound" : "soundOff"} size={20} />
+      <span className="utility-label">{enabled ? "Sound" : "Muted"}</span>
+    </button>
+  );
+}
+
+export function GameShell({ phase, identity, status, aside, children }: GameShellProps) {
+  return (
+    <>
+      <PhaseBar phase={phase} identity={identity}>
+        {status}
+      </PhaseBar>
+      <div className={`game-shell-body game-shell-${phase}`}>
+        {children}
+        {aside}
+      </div>
+    </>
+  );
+}
 
 export function Tabs({
   label,
@@ -435,13 +579,17 @@ export function Toast({
   children: ReactNode;
   tone?: "success" | "danger" | "info";
 }) {
+  const icon: IconName = tone === "success" ? "check" : tone === "danger" ? "warning" : "spark";
   return (
     <div
       className={`toast toast-${tone}`}
       role={tone === "danger" ? "alert" : "status"}
       aria-live={tone === "danger" ? "assertive" : "polite"}
     >
-      {children}
+      <span className="toast-icon" aria-hidden="true">
+        <Icon name={icon} size={18} />
+      </span>
+      <span className="toast-body">{children}</span>
     </div>
   );
 }

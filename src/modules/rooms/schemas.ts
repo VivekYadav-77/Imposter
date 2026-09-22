@@ -40,7 +40,7 @@ export const roomSettingsSchema = z
     meetingVotingMode: z.enum(["timed", "all_voted"]).optional(),
     voteVisibility: z.enum(["private", "public"]).optional(),
     evidenceVisibility: z.enum(["private", "public"]).optional(),
-    meetingTaskRequirement: z.enum(["none", "one"]).optional(),
+    imposterMeetingTaskRequirement: z.enum(["none", "one"]).optional(),
     meetingCooldownSeconds: z.number().int().min(10).max(1800).optional(),
     imposterCooldownSeconds: z.number().int().min(10).max(300).optional(),
     imposterCount: z.number().int().min(1).max(7).optional(),

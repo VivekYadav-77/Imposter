@@ -241,7 +241,7 @@ export class RoomService {
         meetingVotingMode: room.meeting_voting_mode,
         voteVisibility: room.vote_visibility,
         evidenceVisibility: room.evidence_visibility,
-        meetingTaskRequirement: room.meeting_task_requirement,
+        imposterMeetingTaskRequirement: room.meeting_task_requirement,
         meetingCooldownSeconds: room.meeting_cooldown_seconds,
         imposterCooldownSeconds: room.imposter_cooldown_seconds,
         estimatedMeetingCooldownSeconds: room.meeting_cooldown_seconds,
@@ -726,8 +726,8 @@ export class RoomService {
           ...(input.evidenceVisibility !== undefined
             ? { evidence_visibility: input.evidenceVisibility }
             : {}),
-          ...(input.meetingTaskRequirement !== undefined
-            ? { meeting_task_requirement: input.meetingTaskRequirement }
+          ...(input.imposterMeetingTaskRequirement !== undefined
+            ? { meeting_task_requirement: input.imposterMeetingTaskRequirement }
             : {}),
           ...(input.meetingCooldownSeconds !== undefined
             ? { meeting_cooldown_seconds: input.meetingCooldownSeconds }

@@ -3374,7 +3374,7 @@
               "public"
             ]
           },
-          "meetingTaskRequirement": {
+          "imposterMeetingTaskRequirement": {
             "type": "string",
             "enum": [
               "none",
@@ -3512,7 +3512,7 @@
               "meetingVotingMode",
               "voteVisibility",
               "evidenceVisibility",
-              "meetingTaskRequirement",
+              "imposterMeetingTaskRequirement",
               "meetingCooldownSeconds",
               "imposterCooldownSeconds",
               "estimatedMeetingCooldownSeconds",
@@ -3609,7 +3609,7 @@
                   "public"
                 ]
               },
-              "meetingTaskRequirement": {
+              "imposterMeetingTaskRequirement": {
                 "type": "string",
                 "enum": [
                   "none",

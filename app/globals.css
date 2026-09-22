@@ -2700,6 +2700,55 @@ select {
   background: var(--results-panel);
   text-align: left;
 }
+.final-evidence-toggle {
+  width: 100%;
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.final-evidence-toggle:hover,
+.final-evidence-toggle:focus-visible {
+  background: color-mix(in srgb, var(--amber) 9%, transparent);
+}
+.final-evidence-toggle > span:nth-child(2) {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.final-evidence-toggle small {
+  color: var(--muted);
+}
+.final-evidence-toggle > svg {
+  transition: transform 180ms ease;
+}
+.final-evidence-toggle[aria-expanded="true"] > svg {
+  transform: rotate(180deg);
+}
+.final-evidence-toggle-icon {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--amber) 14%, transparent);
+  color: var(--amber);
+}
+.final-evidence-content {
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.final-evidence-content[hidden] {
+  display: none;
+}
 .final-evidence-heading {
   display: flex;
   align-items: flex-start;
@@ -3031,7 +3080,8 @@ select {
   z-index: 1000;
   right: 24px;
   bottom: 96px;
-  width: min(420px, calc(100vw - 32px));
+  width: min(360px, calc(100vw - 32px));
+  pointer-events: none;
 }
 .admin-page .toast {
   color: #fffaf0;
@@ -3460,12 +3510,40 @@ select {
   transform: none;
 }
 .toast {
-  width: max-content;
+  width: min(100%, 360px);
   max-width: 100%;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   background: var(--elevated);
   border: 1px solid var(--brass);
-  border-radius: 6px;
-  padding: 12px 16px;
+  border-radius: 16px;
+  padding: 9px 10px;
+  box-shadow: 0 14px 38px rgb(0 0 0 / 24%);
+  pointer-events: auto;
+}
+.toast-icon {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: color-mix(in srgb, currentColor 11%, transparent);
+}
+.toast-body {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  line-height: 1.35;
+}
+.toast-body > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .game-toast-region {
   position: fixed;
@@ -3474,6 +3552,7 @@ select {
   bottom: max(22px, calc(env(safe-area-inset-bottom) + 18px));
   width: min(390px, calc(100vw - 32px));
   display: grid;
+  align-content: end;
   justify-items: end;
   gap: 9px;
   pointer-events: none;
@@ -3483,7 +3562,7 @@ select {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 10px;
   border-left-width: 4px;
   box-shadow: 0 16px 44px rgb(0 0 0 / 38%);
   pointer-events: auto;
@@ -3505,6 +3584,13 @@ select {
   background: transparent;
   color: var(--muted);
   font-size: 1.1rem;
+}
+.game-toast-region .toast-dismiss {
+  width: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  flex: 0 0 36px;
+  border-radius: 10px;
 }
 @keyframes toast-in {
   from {

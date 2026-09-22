@@ -8,6 +8,7 @@ import "@fontsource/barlow-condensed/800.css";
 import { ThemeToggle } from "@/client/components/theme-toggle";
 import "./globals.css";
 import "./signal-room.css";
+import "./game-command-center.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.PUBLIC_APP_URL ?? "http://localhost:3000"),

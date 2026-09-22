@@ -3,6 +3,9 @@ import type { ReactNode, SVGProps } from "react";
 export type IconName =
   | "arrow"
   | "camera"
+  | "cooldown"
+  | "difficulty"
+  | "ghost"
   | "check"
   | "chevron"
   | "close"
@@ -20,6 +23,11 @@ export type IconName =
   | "tasks"
   | "tool"
   | "spark"
+  | "timer"
+  | "trophy"
+  | "upload"
+  | "uploading"
+  | "voteLock"
   | "verdict"
   | "warning";
 
@@ -29,6 +37,19 @@ const paths: Record<IconName, ReactNode> = {
     <>
       <path d="M4 8.5h3l1.4-2h7.2l1.4 2h3v10H4z" />
       <circle cx="12" cy="13.5" r="3.2" />
+    </>
+  ),
+  cooldown: (
+    <>
+      <path d="M12 5a7 7 0 1 1-6.1 3.6M4 5v4h4" />
+      <path d="M12 8v4l2.8 1.8" />
+    </>
+  ),
+  difficulty: <path d="M4 18h3V13H4Zm6 0h3V9h-3Zm6 0h3V5h-3Z" />,
+  ghost: (
+    <>
+      <path d="M6 20V10a6 6 0 0 1 12 0v10l-3-2-3 2-3-2Z" />
+      <path d="M9.5 11h.01M14.5 11h.01" />
     </>
   ),
   check: <path d="m5 12 4.2 4.2L19 6.8" />,
@@ -93,6 +114,31 @@ const paths: Record<IconName, ReactNode> = {
   ),
   spark: (
     <path d="m12 2 1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8ZM19 17l.7 2.3L22 20l-2.3.7L19 23l-.7-2.3L16 20l2.3-.7Z" />
+  ),
+  timer: (
+    <>
+      <circle cx="12" cy="13" r="8" />
+      <path d="M9 3h6M12 9v4l3 2" />
+    </>
+  ),
+  trophy: (
+    <>
+      <path d="M8 4h8v5a4 4 0 0 1-8 0Z" />
+      <path d="M8 6H4v2a4 4 0 0 0 4 4m8-6h4v2a4 4 0 0 1-4 4M12 13v5m-4 2h8" />
+    </>
+  ),
+  upload: <path d="M12 16V4m-4 4 4-4 4 4M5 14v5h14v-5" />,
+  uploading: (
+    <>
+      <path d="M12 15V5m-4 4 4-4 4 4" />
+      <path d="M5 17a7 7 0 0 0 14 0" />
+    </>
+  ),
+  voteLock: (
+    <>
+      <rect x="5" y="10" width="14" height="10" rx="2" />
+      <path d="M8 10V7a4 4 0 0 1 8 0v3m-6 5 1.5 1.5L15 13" />
+    </>
   ),
   tasks: (
     <>

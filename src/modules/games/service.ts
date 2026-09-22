@@ -480,6 +480,7 @@ export class GameService {
     const elapsedSeconds = Math.max(0, (Date.now() - new Date(game.started_at).getTime()) / 1000);
     const timeProgress = Math.min(1, elapsedSeconds / game.task_phase_seconds);
     const configuredMeetingCooldown = game.meeting_cooldown_seconds;
+    const requiresCompletedTask = game.role === "crew" || game.meeting_task_requirement === "one";
     const dynamicKillCooldown = killCooldownSeconds(
       game.imposter_cooldown_seconds,
       taskProgress,
@@ -494,7 +495,7 @@ export class GameService {
     }).filter((capability) => {
       if (capability !== "call_meeting") return true;
       return (
-        (game.meeting_task_requirement === "none" || completedBySelf.count > 0) &&
+        (!requiresCompletedTask || completedBySelf.count > 0) &&
         meetingsCalled.count < game.meetings_per_player &&
         (!game.meeting_available_at || new Date(game.meeting_available_at).getTime() <= Date.now())
       );
@@ -563,7 +564,7 @@ export class GameService {
         durationSeconds: game.meeting_duration_seconds,
         votingMode: game.meeting_voting_mode,
         voteVisibility: game.vote_visibility,
-        requiresCompletedTask: game.meeting_task_requirement === "one",
+        requiresCompletedTask,
         maxPerPlayer: game.meetings_per_player,
         calledBySelf: meetingsCalled.count,
         remainingForSelf: Math.max(0, game.meetings_per_player - meetingsCalled.count),
@@ -1145,7 +1146,7 @@ export class GameService {
       const [actor, settings, completed, called] = await Promise.all([
         trx
           .selectFrom("app.game_participants")
-          .select(["life_status"])
+          .select(["life_status", "role"])
           .where("game_id", "=", game.id)
           .where("participant_id", "=", principal.participantId)
           .executeTakeFirst(),
@@ -1179,11 +1180,16 @@ export class GameService {
           "PLAYER_NOT_ELIGIBLE",
           "Dead or ejected players cannot call meetings.",
         );
-      if (settings.meeting_task_requirement === "one" && completed.count < 1)
+      if (
+        (actor.role === "crew" || settings.meeting_task_requirement === "one") &&
+        completed.count < 1
+      )
         throw new ApplicationError(
           403,
           "TASK_REQUIRED",
-          "Complete at least one task before calling a meeting.",
+          actor.role === "crew"
+            ? "Crew members must complete at least one task before calling a meeting."
+            : "Complete at least one task before calling a meeting.",
         );
       if (called.count >= settings.meetings_per_player)
         throw new ApplicationError(

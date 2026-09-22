@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { parseTaskCsv, sampleTaskCsv } from "../admin/csv";
+import { downloadableTaskCsv, parseTaskCsv } from "../admin/csv";
 import { adminApi, ApiError, errorMessage } from "../api/client";
 import type { AdminPack, AdminPackSummary, PackStatus } from "../api/types";
 import {
@@ -495,7 +495,7 @@ export function AdminEditor({ packId }: { packId?: string }) {
       }
       setItems((current) => {
         const existing = current.filter((item) => item.description.trim());
-        const imported = parsed.tasks.map((item) => ({ ...item, difficulty: "medium" as const }));
+        const imported = parsed.tasks;
         return (importMode === "append" ? [...existing, ...imported] : imported).slice(0, 15);
       });
       const notes = [
@@ -513,13 +513,15 @@ export function AdminEditor({ packId }: { packId?: string }) {
     }
   };
   const downloadSample = () => {
-    const url = URL.createObjectURL(new Blob([sampleTaskCsv], { type: "text/csv;charset=utf-8" }));
+    const url = URL.createObjectURL(
+      new Blob([downloadableTaskCsv], { type: "text/csv;charset=utf-8" }),
+    );
     const link = document.createElement("a");
     link.href = url;
     link.download = "map-tasks-template.csv";
     link.click();
     URL.revokeObjectURL(url);
-    setToast("Sample CSV downloaded.");
+    setToast("Task CSV template downloaded. Replace the examples, save, and import it here.");
   };
   if (loading) return <SkeletonList count={6} />;
   return (
@@ -589,9 +591,9 @@ export function AdminEditor({ packId }: { packId?: string }) {
             <p className="eyebrow">Bulk entry</p>
             <h2>Import tasks from CSV</h2>
             <p className="muted">
-              Choose a CSV and its rows are added to the table immediately. Headers such as
-              <code> task</code>, <code>description</code>, <code>active</code>, and
-              <code> status</code> are detected automatically.
+              Fill the template and import it to populate the task table automatically. Use
+              <code> task_description</code>, <code>difficulty</code> (easy, medium, or hard), and
+              <code> active</code> (true or false).
             </p>
           </div>
           <div className="csv-import-actions">
@@ -618,7 +620,7 @@ export function AdminEditor({ packId }: { packId?: string }) {
               />
             </label>
             <Button type="button" variant="secondary" onClick={downloadSample}>
-              Download sample
+              Download CSV template
             </Button>
           </div>
         </section>

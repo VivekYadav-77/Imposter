@@ -1,6 +1,9 @@
+import type { TaskDifficulty } from "../api/types";
+
 export interface ImportedTask {
   description: string;
   isActive: boolean;
+  difficulty: TaskDifficulty;
 }
 
 export interface CsvImportResult {
@@ -18,7 +21,17 @@ const DESCRIPTION_HEADERS = new Set([
   "name",
 ]);
 const ACTIVE_HEADERS = new Set(["active", "is active", "is_active", "enabled", "status"]);
+const DIFFICULTY_HEADERS = new Set(["difficulty", "task difficulty", "task_difficulty", "level"]);
 const FALSE_VALUES = new Set(["false", "no", "n", "0", "inactive", "disabled"]);
+const EASY_VALUES = new Set(["easy", "low", "beginner"]);
+const HARD_VALUES = new Set(["hard", "high", "difficult"]);
+
+function taskDifficulty(value: string): TaskDifficulty {
+  const normalized = value.trim().toLowerCase();
+  if (EASY_VALUES.has(normalized)) return "easy";
+  if (HARD_VALUES.has(normalized)) return "hard";
+  return "medium";
+}
 
 function rowsFromCsv(source: string): string[][] {
   const rows: string[][] = [];
@@ -57,7 +70,8 @@ export function parseTaskCsv(source: string, limit = 15): CsvImportResult {
   const normalizedHeaders = rows[0].map((value) => value.trim().toLowerCase());
   const descriptionColumn = normalizedHeaders.findIndex((value) => DESCRIPTION_HEADERS.has(value));
   const activeColumn = normalizedHeaders.findIndex((value) => ACTIVE_HEADERS.has(value));
-  const hasHeader = descriptionColumn >= 0 || activeColumn >= 0;
+  const difficultyColumn = normalizedHeaders.findIndex((value) => DIFFICULTY_HEADERS.has(value));
+  const hasHeader = descriptionColumn >= 0 || activeColumn >= 0 || difficultyColumn >= 0;
   const descriptionIndex = descriptionColumn >= 0 ? descriptionColumn : 0;
   const dataRows = hasHeader ? rows.slice(1) : rows;
   let ignoredRows = 0;
@@ -73,6 +87,7 @@ export function parseTaskCsv(source: string, limit = 15): CsvImportResult {
     parsed.push({
       description: description.slice(0, 280),
       isActive: !FALSE_VALUES.has(activeValue),
+      difficulty: taskDifficulty(difficultyColumn >= 0 ? (row[difficultyColumn] ?? "") : "medium"),
     });
   }
 
@@ -84,8 +99,13 @@ export function parseTaskCsv(source: string, limit = 15): CsvImportResult {
 }
 
 export const sampleTaskCsv = [
-  "task,active",
-  '"Take a photo beside the main entrance",true',
-  '"Find something red and photograph it",true',
-  '"Optional bonus task",false',
+  "task_description,difficulty,active",
+  '"Take a clear photo beside the main entrance",easy,true',
+  '"Find something red and photograph it",easy,true',
+  '"Recreate a pose shown by the host and take a photo",medium,true',
+  '"Find two matching objects and photograph them together",medium,true',
+  '"Complete a team challenge and capture the final result",hard,true',
+  '"Optional bonus task (set active to false to exclude it)",hard,false',
 ].join("\n");
+
+export const downloadableTaskCsv = `\uFEFF${sampleTaskCsv.replace(/\n/g, "\r\n")}`;

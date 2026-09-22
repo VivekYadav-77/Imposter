@@ -208,10 +208,8 @@ describeWithDatabase("private evidence lifecycle", () => {
       .execute();
     const finalEvidence = await evidence.list(viewer, false, 10, 0);
     expect(finalEvidence).toHaveLength(1);
-    expect(finalEvidence[0]).toMatchObject({
-      processingStatus: "accepted",
-      image: { url: expect.stringContaining("https://storage.invalid/read/") },
-    });
+    expect(finalEvidence[0].processingStatus).toBe("accepted");
+    expect(finalEvidence[0].image?.url).toContain("https://storage.invalid/read/");
   });
 
   it("authorizes, normalizes, views, and flags one submission per player", async () => {

@@ -74,7 +74,7 @@ describeWithDatabase("meetings and terminal outcomes", () => {
     await closeDatabase(dependencies);
   });
 
-  it("allows task-free anonymous meetings and applies the host cooldown", async () => {
+  it("allows only impostors to use the task-free meeting rule", async () => {
     const issued = [
       await rooms.createRoom({ nickname: "Rule Host" }, randomUUID(), `rules:${randomUUID()}`),
     ];
@@ -95,20 +95,36 @@ describeWithDatabase("meetings and terminal outcomes", () => {
       principals[0],
       {
         selectedTaskPackId: packId,
-        meetingTaskRequirement: "none",
+        imposterMeetingTaskRequirement: "none",
         meetingCooldownSeconds: 45,
         meetingDurationSeconds: 30,
       },
       randomUUID(),
     );
-    const started = await games.start(principals[0], randomUUID());
-    expect(started.meetingRules).toMatchObject({
+    await games.start(principals[0], randomUUID());
+    const snapshots = await Promise.all(principals.map((principal) => games.snapshot(principal)));
+    const imposterIndex = snapshots.findIndex((snapshot) => snapshot.self.role === "imposter");
+    const crewIndex = snapshots.findIndex((snapshot) => snapshot.self.role === "crew");
+    const imposterSnapshot = snapshots[imposterIndex];
+    const crewSnapshot = snapshots[crewIndex];
+    expect(imposterSnapshot.meetingRules).toMatchObject({
       requiresCompletedTask: false,
       hasCompletedTask: false,
     });
+    expect(crewSnapshot.meetingRules).toMatchObject({
+      requiresCompletedTask: true,
+      hasCompletedTask: false,
+    });
+    await expect(
+      games.callMeeting(
+        principals[crewIndex],
+        { expectedStateVersion: crewSnapshot.stateVersion },
+        randomUUID(),
+      ),
+    ).rejects.toMatchObject({ code: "TASK_REQUIRED" });
     const voting = await games.callMeeting(
-      principals[0],
-      { expectedStateVersion: started.stateVersion },
+      principals[imposterIndex],
+      { expectedStateVersion: imposterSnapshot.stateVersion },
       randomUUID(),
     );
     expect(voting.meeting).toMatchObject({ triggerType: "user_called" });

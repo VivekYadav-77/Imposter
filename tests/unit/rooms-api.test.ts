@@ -35,7 +35,7 @@ describe("host gameplay settings", () => {
     expect(
       roomSettingsSchema.safeParse({
         evidenceVisibility: "private",
-        meetingTaskRequirement: "none",
+        imposterMeetingTaskRequirement: "none",
         meetingCooldownSeconds: 180,
       }).success,
     ).toBe(true);

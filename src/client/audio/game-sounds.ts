@@ -4,6 +4,10 @@ export type GameSound =
   | "role-imposter"
   | "meeting"
   | "vote"
+  | "vote-select"
+  | "vote-lock"
+  | "upload-start"
+  | "upload-failure"
   | "upload"
   | "task-complete"
   | "kill"
@@ -13,6 +17,8 @@ export type GameSound =
   | "victory"
   | "defeat"
   | "easter-egg";
+
+export type GameSoundEvent = GameSound;
 
 const STORAGE_KEY = "imposter-game-sound-enabled";
 let context: AudioContext | null = null;
@@ -25,6 +31,10 @@ export const gameSoundLabels: Record<GameSound, string> = {
   "role-imposter": "Imposter role reveal",
   meeting: "Meeting alert",
   vote: "Ballot confirmation",
+  "vote-select": "Ballot selection",
+  "vote-lock": "Ballot locked",
+  "upload-start": "Evidence upload started",
+  "upload-failure": "Evidence upload failed",
   upload: "Evidence uploaded",
   "task-complete": "Task completed",
   kill: "Elimination",
@@ -152,6 +162,20 @@ export function playGameSound(sound: GameSound): void {
     case "vote":
       tone(190, 0, 0.12, { endFrequency: 120, gain: 0.2, type: "triangle" });
       tone(760, 0.07, 0.09, { gain: 0.08 });
+      break;
+    case "vote-select":
+      tone(520, 0, 0.08, { endFrequency: 650, gain: 0.07, type: "triangle" });
+      break;
+    case "vote-lock":
+      tone(180, 0, 0.11, { endFrequency: 120, gain: 0.13, type: "triangle" });
+      tone(680, 0.08, 0.13, { endFrequency: 880, gain: 0.1, type: "sine" });
+      break;
+    case "upload-start":
+      tone(280, 0, 0.1, { endFrequency: 420, gain: 0.07, type: "triangle" });
+      break;
+    case "upload-failure":
+      tone(210, 0, 0.18, { endFrequency: 130, gain: 0.12, type: "sawtooth" });
+      tone(145, 0.13, 0.2, { gain: 0.08, type: "triangle" });
       break;
     case "upload":
       [330, 440, 660].forEach((frequency, index) =>
