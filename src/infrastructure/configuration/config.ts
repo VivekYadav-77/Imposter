@@ -68,6 +68,7 @@ const configSchema = z
     EVIDENCE_S3_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(500).max(30000).default(5000),
     REALTIME_PING_INTERVAL_MS: z.coerce.number().int().min(5000).max(60000).default(25000),
     REALTIME_PING_TIMEOUT_MS: z.coerce.number().int().min(5000).max(60000).default(20000),
+    REALTIME_DISCONNECT_GRACE_MS: z.coerce.number().int().min(0).max(60000).default(5000),
   })
   .superRefine((values, context) => {
     if (values.HTTP_HEADERS_TIMEOUT_MS > values.HTTP_REQUEST_TIMEOUT_MS) {
@@ -191,6 +192,7 @@ const configSchema = z
     evidenceS3RequestTimeoutMs: values.EVIDENCE_S3_REQUEST_TIMEOUT_MS,
     realtimePingIntervalMs: values.REALTIME_PING_INTERVAL_MS,
     realtimePingTimeoutMs: values.REALTIME_PING_TIMEOUT_MS,
+    realtimeDisconnectGraceMs: values.REALTIME_DISCONNECT_GRACE_MS,
   }));
 
 export type AppConfig = z.output<typeof configSchema>;

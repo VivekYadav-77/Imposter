@@ -1172,6 +1172,7 @@ export const openApiDocument: OpenAPIObject = {
           "ownEjectionTargetParticipantId",
           "hasCastEjectionVote",
           "votesCast",
+          "requiredVotes",
           "publicVotes",
           "result",
           "capabilities",
@@ -1195,6 +1196,7 @@ export const openApiDocument: OpenAPIObject = {
           ownEjectionTargetParticipantId: { type: ["string", "null"], format: "uuid" },
           hasCastEjectionVote: { type: "boolean" },
           votesCast: { type: "integer", minimum: 0 },
+          requiredVotes: { type: "integer", minimum: 0 },
           publicVotes: {
             type: "array",
             items: {

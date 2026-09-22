@@ -25,6 +25,7 @@ interface RealtimeRoomProvider extends ParticipantSessionAuthenticator {
 
 interface RealtimeGameProvider {
   snapshot(principal: ParticipantPrincipal): Promise<GameSnapshotDto>;
+  handleParticipantDisconnected?(roomId: string, participantId: string): Promise<void>;
   events: {
     on(
       event: "game.changed",
@@ -41,6 +42,7 @@ export function attachRealtimeServer(
   games?: RealtimeGameProvider,
   metrics?: Metrics,
 ): Server {
+  const pendingDisconnects = new Map<string, NodeJS.Timeout>();
   const io = new Server(httpServer, {
     path: "/realtime",
     serveClient: false,
@@ -111,6 +113,12 @@ export function attachRealtimeServer(
     metrics?.set("realtime.active_connections", io.engine.clientsCount);
     const socketData = socket.data as Record<string, unknown>;
     const principal = socketData.principal as ParticipantPrincipal;
+    const presenceKey = `${principal.roomId}:${principal.participantId}`;
+    const pendingDisconnect = pendingDisconnects.get(presenceKey);
+    if (pendingDisconnect) {
+      clearTimeout(pendingDisconnect);
+      pendingDisconnects.delete(presenceKey);
+    }
     void socket.join(`room:${principal.roomId}`);
     void socket.join(`session:${principal.sessionId}`);
     void socket.join(`participant:${principal.participantId}`);
@@ -149,18 +157,38 @@ export function attachRealtimeServer(
     socket.on("disconnect", () => {
       metrics?.increment("realtime.disconnects");
       metrics?.set("realtime.active_connections", Math.max(0, io.engine.clientsCount));
-      const remaining =
-        io.sockets.adapter.rooms.get(`participant:${principal.participantId}`)?.size ?? 0;
-      if (remaining === 0)
+      if ((io.sockets.adapter.rooms.get(`participant:${principal.participantId}`)?.size ?? 0) > 0)
+        return;
+
+      const previous = pendingDisconnects.get(presenceKey);
+      if (previous) clearTimeout(previous);
+      const timer = setTimeout(() => {
+        pendingDisconnects.delete(presenceKey);
+        const participantRoom = `participant:${principal.participantId}`;
+        if ((io.sockets.adapter.rooms.get(participantRoom)?.size ?? 0) > 0) return;
         void authenticator
           .markDisconnected?.(principal)
+          .then(async () => {
+            // A reconnect can arrive while the durable disconnect write is in flight.
+            // Reassert connected last so presence can never finish in the stale state.
+            if ((io.sockets.adapter.rooms.get(participantRoom)?.size ?? 0) > 0)
+              await authenticator.markConnected?.(principal);
+          })
           .catch((error: unknown) =>
             logger.warn(
               { err: error, roomId: principal.roomId },
               "Realtime disconnect persistence failed",
             ),
           );
+      }, config.realtimeDisconnectGraceMs);
+      timer.unref();
+      pendingDisconnects.set(presenceKey, timer);
     });
+  });
+
+  io.engine.on("close", () => {
+    for (const timer of pendingDisconnects.values()) clearTimeout(timer);
+    pendingDisconnects.clear();
   });
 
   authenticator.events?.on("room.changed", (roomId) => {
@@ -179,6 +207,15 @@ export function attachRealtimeServer(
       occurredAt: update.occurredAt,
       data: { participantId: update.participantId, presence: update.presence },
     });
+    if (update.presence === "away")
+      void games
+        ?.handleParticipantDisconnected?.(update.roomId, update.participantId)
+        .catch((error: unknown) =>
+          logger.warn(
+            { err: error, roomId: update.roomId, participantId: update.participantId },
+            "Disconnected-player meeting reconciliation failed",
+          ),
+        );
   });
   authenticator.events?.on("session.revoked", (sessionId, reason) => {
     io.to(`session:${sessionId}`).emit("session.revoked", {

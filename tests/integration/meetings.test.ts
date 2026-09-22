@@ -391,4 +391,67 @@ describeWithDatabase("meetings and terminal outcomes", () => {
       meeting: { phase: "resolved", votesCast: 4 },
     });
   });
+
+  it("resolves wait-for-everyone voting when an unvoted player stays disconnected", async () => {
+    const issued = [
+      await rooms.createRoom({ nickname: "Quorum Host" }, randomUUID(), `quorum:${randomUUID()}`),
+    ];
+    roomIds.push(issued[0].room.id);
+    for (let index = 1; index < 5; index += 1)
+      issued.push(
+        await rooms.joinRoom(
+          issued[0].room.code,
+          { nickname: `Quorum ${index}` },
+          randomUUID(),
+          `quorum:${randomUUID()}`,
+        ),
+      );
+    const principals = await Promise.all(
+      issued.map(async (entry) => (await rooms.authenticate(entry.sessionToken))!),
+    );
+    await rooms.updateSettings(
+      principals[0],
+      { selectedTaskPackId: packId, meetingVotingMode: "all_voted" },
+      randomUUID(),
+    );
+    const started = await games.start(principals[0], randomUUID());
+    const assignment = await dependencies.db
+      .selectFrom("app.task_assignments")
+      .select("id")
+      .where("game_id", "=", started.id)
+      .where("participant_id", "=", principals[0].participantId)
+      .executeTakeFirstOrThrow();
+    await dependencies.db
+      .updateTable("app.task_assignments")
+      .set({ status: "completed", completed_at: new Date() })
+      .where("id", "=", assignment.id)
+      .execute();
+    const ready = await games.snapshot(principals[0]);
+    const voting = await games.callMeeting(
+      principals[0],
+      { expectedStateVersion: ready.stateVersion },
+      randomUUID(),
+    );
+    expect(voting.meeting).toMatchObject({ votesCast: 0, requiredVotes: 5 });
+
+    for (const voter of principals.slice(0, 4)) {
+      const current = await games.snapshot(voter);
+      await games.ejectionVote(
+        voter,
+        current.meeting!.id,
+        { expectedStateVersion: current.stateVersion, targetParticipantId: null },
+        randomUUID(),
+      );
+    }
+    expect((await games.snapshot(principals[0])).phase).toBe("voting");
+
+    const absent = principals[4];
+    await rooms.markDisconnected(absent);
+    await games.handleParticipantDisconnected(absent.roomId, absent.participantId);
+
+    expect(await games.snapshot(principals[0])).toMatchObject({
+      phase: "result",
+      meeting: { phase: "resolved", votesCast: 4 },
+    });
+  });
 });

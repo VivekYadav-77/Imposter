@@ -969,11 +969,15 @@ export class RoomService {
 
   async markConnected(principal: ParticipantPrincipal): Promise<void> {
     const now = new Date();
-    await this.database
+    const updated = await this.database
       .updateTable("app.participants")
       .set({ disconnected_at: null, last_seen_at: now })
       .where("id", "=", principal.participantId)
-      .execute();
+      .where("room_id", "=", principal.roomId)
+      .where("membership_status", "=", "joined")
+      .returning("id")
+      .executeTakeFirst();
+    if (!updated) return;
     this.events.presenceChanged({
       roomId: principal.roomId,
       participantId: principal.participantId,
@@ -984,11 +988,15 @@ export class RoomService {
 
   async markDisconnected(principal: ParticipantPrincipal): Promise<void> {
     const now = new Date();
-    await this.database
+    const updated = await this.database
       .updateTable("app.participants")
       .set({ disconnected_at: now, last_seen_at: now })
       .where("id", "=", principal.participantId)
-      .execute();
+      .where("room_id", "=", principal.roomId)
+      .where("membership_status", "=", "joined")
+      .returning("id")
+      .executeTakeFirst();
+    if (!updated) return;
     this.events.presenceChanged({
       roomId: principal.roomId,
       participantId: principal.participantId,

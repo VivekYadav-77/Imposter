@@ -8,6 +8,8 @@ For retryable mutations, generate one `Idempotency-Key` and reuse that same key 
 
 Connect Socket.IO with WebSocket transport at `/realtime` using `auth.token` on native or the participant cookie on web. Replace local state on `room.snapshot` or `game.snapshot`. If state versions skip, emit `game.resync` or fetch `GET /api/v1/games/current/snapshot`. Stop reconnecting on `session.revoked`.
 
+Treat navigation, a backgrounded tab, and transport loss as a soft disconnect, never as an implicit leave. Keep the participant credential, offer **Resume** when `/api/v1/rooms/current` succeeds, and restore the latest server snapshot. This also restores the terminal result if the game ended while the player was away. Only the explicit leave command removes the participant; active games reject permanent leave so an accidental Back press cannot destroy a seat or leak a replacement identity into the game.
+
 Compatibility policy:
 
 - `/api/v1` and realtime `schemaVersion: 1` are frozen as of backend `1.0.0`.

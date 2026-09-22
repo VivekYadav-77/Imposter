@@ -76,6 +76,59 @@ export class GameService {
     return determineWinner({ ...life, ...tasks });
   }
 
+  private async eligiblePresence(executor: Executor, meetingId: string) {
+    return executor
+      .selectFrom("app.meeting_eligible_voters as eligible")
+      .innerJoin("app.participants as participant", "participant.id", "eligible.participant_id")
+      .select(["eligible.participant_id", "participant.disconnected_at"])
+      .where("eligible.meeting_id", "=", meetingId)
+      .execute();
+  }
+
+  private requiredVotes(
+    eligible: Array<{ participant_id: string; disconnected_at: Date | string | null }>,
+    castParticipantIds: string[],
+    dynamic: boolean,
+  ): number {
+    if (!dynamic) return eligible.length;
+    const cast = new Set(castParticipantIds);
+    return eligible.filter((voter) => !voter.disconnected_at || cast.has(voter.participant_id))
+      .length;
+  }
+
+  private async ejectionQuorum(executor: Executor, meetingId: string, dynamic: boolean) {
+    const [eligible, votes] = await Promise.all([
+      this.eligiblePresence(executor, meetingId),
+      executor
+        .selectFrom("app.ejection_votes")
+        .select("voter_participant_id")
+        .where("meeting_id", "=", meetingId)
+        .execute(),
+    ]);
+    const castParticipantIds = votes.map((vote) => vote.voter_participant_id);
+    const required = this.requiredVotes(eligible, castParticipantIds, dynamic);
+    return { cast: votes.length, required, complete: votes.length > 0 && votes.length >= required };
+  }
+
+  private async reviewQuorum(
+    executor: Executor,
+    meetingId: string,
+    reviewItemId: string,
+    dynamic: boolean,
+  ) {
+    const [eligible, votes] = await Promise.all([
+      this.eligiblePresence(executor, meetingId),
+      executor
+        .selectFrom("app.evidence_review_votes")
+        .select("voter_participant_id")
+        .where("review_item_id", "=", reviewItemId)
+        .execute(),
+    ]);
+    const castParticipantIds = votes.map((vote) => vote.voter_participant_id);
+    const required = this.requiredVotes(eligible, castParticipantIds, dynamic);
+    return { cast: votes.length, required, complete: votes.length > 0 && votes.length >= required };
+  }
+
   private async meetingWith(
     executor: Executor,
     gameId: string,
@@ -88,7 +141,7 @@ export class GameService {
       .innerJoin("app.games as game", "game.id", "meeting.game_id")
       .innerJoin("app.rooms as room", "room.id", "game.room_id")
       .selectAll("meeting")
-      .select("room.vote_visibility")
+      .select(["room.vote_visibility", "room.meeting_voting_mode"])
       .where("meeting.game_id", "=", gameId)
       .orderBy("meeting.sequence_number", "desc")
       .executeTakeFirst();
@@ -96,7 +149,7 @@ export class GameService {
     const eligible = await executor
       .selectFrom("app.meeting_eligible_voters as eligible")
       .innerJoin("app.participants as participant", "participant.id", "eligible.participant_id")
-      .select(["participant.id", "participant.nickname"])
+      .select(["participant.id", "participant.nickname", "participant.disconnected_at"])
       .where("eligible.meeting_id", "=", meeting.id)
       .orderBy("participant.joined_at")
       .orderBy("participant.id")
@@ -147,10 +200,10 @@ export class GameService {
       review
         ? executor
             .selectFrom("app.evidence_review_votes")
-            .select(sql<number>`count(*)::int`.as("count"))
+            .select("voter_participant_id")
             .where("review_item_id", "=", review.id)
-            .executeTakeFirstOrThrow()
-        : Promise.resolve({ count: 0 }),
+            .execute()
+        : Promise.resolve([]),
       executor
         .selectFrom("app.ejection_votes")
         .select("target_participant_id")
@@ -164,6 +217,13 @@ export class GameService {
         .execute(),
     ]);
     const eligibleSelf = eligible.some((entry) => entry.id === participantId);
+    const dynamicQuorum =
+      meeting.meeting_voting_mode === "all_voted" &&
+      (gamePhase === "voting" || gamePhase === "review");
+    const ejectionVoters = new Set(ejectionVotes.map((vote) => vote.voter_participant_id));
+    const requiredVotes = eligible.filter(
+      (entry) => !dynamicQuorum || !entry.disconnected_at || ejectionVoters.has(entry.id),
+    ).length;
     const result =
       meeting.phase === "resolved"
         ? resolveEjection(ejectionVotes.map((v) => v.target_participant_id))
@@ -189,7 +249,7 @@ export class GameService {
       reportedParticipantId: meeting.reported_participant_id,
       phase: meeting.phase,
       deadlineAt: meeting.deadline_at ? iso(meeting.deadline_at) : null,
-      eligibleParticipants: eligible,
+      eligibleParticipants: eligible.map(({ id, nickname }) => ({ id, nickname })),
       reviewItem: review
         ? {
             id: review.id,
@@ -199,12 +259,19 @@ export class GameService {
             uploader: { id: review.uploader_id, nickname: review.uploader_nickname },
             assignmentDescription: review.description_snapshot,
             ownDecision: ownReview?.decision ?? null,
-            votesCast: reviewVotes.count,
+            votesCast: reviewVotes.length,
+            requiredVotes: eligible.filter(
+              (entry) =>
+                !dynamicQuorum ||
+                !entry.disconnected_at ||
+                reviewVotes.some((vote) => vote.voter_participant_id === entry.id),
+            ).length,
           }
         : null,
       ownEjectionTargetParticipantId: ownEjection?.target_participant_id ?? null,
       hasCastEjectionVote: Boolean(ownEjection),
       votesCast: ejectionVotes.length,
+      requiredVotes,
       publicVotes,
       result: result
         ? {
@@ -1322,6 +1389,7 @@ export class GameService {
         .selectFrom("app.evidence_review_items as item")
         .innerJoin("app.meetings as meeting", "meeting.id", "item.meeting_id")
         .innerJoin("app.games as game", "game.id", "meeting.game_id")
+        .innerJoin("app.rooms as room", "room.id", "game.room_id")
         .select([
           "item.meeting_id",
           "item.resolution",
@@ -1329,6 +1397,7 @@ export class GameService {
           "game.id as game_id",
           "game.room_id",
           "game.state_version",
+          "room.meeting_voting_mode",
         ])
         .where("item.id", "=", reviewItemId)
         .executeTakeFirst();
@@ -1382,21 +1451,15 @@ export class GameService {
           }),
         )
         .execute();
-      const [cast, voters] = await Promise.all([
-        trx
-          .selectFrom("app.evidence_review_votes")
-          .select(sql<number>`count(*)::int`.as("count"))
-          .where("review_item_id", "=", reviewItemId)
-          .executeTakeFirstOrThrow(),
-        trx
-          .selectFrom("app.meeting_eligible_voters")
-          .select(sql<number>`count(*)::int`.as("count"))
-          .where("meeting_id", "=", item.meeting_id)
-          .executeTakeFirstOrThrow(),
-      ]);
+      const quorum = await this.reviewQuorum(
+        trx,
+        item.meeting_id,
+        reviewItemId,
+        item.meeting_voting_mode === "all_voted",
+      );
       let phase: "review" | "voting" = "review";
       let resolution: "valid" | "invalid" | null = null;
-      if (cast.count === voters.count) {
+      if (quorum.complete) {
         const resolved = await this.resolveCurrentReview(
           trx,
           game,
@@ -1429,7 +1492,7 @@ export class GameService {
       const response = {
         reviewItemId,
         decision: input.decision,
-        votesCast: cast.count,
+        votesCast: quorum.cast,
         resolution,
         phase,
         stateVersion: nextVersion,
@@ -1538,12 +1601,14 @@ export class GameService {
       const meeting = await trx
         .selectFrom("app.meetings as meeting")
         .innerJoin("app.games as game", "game.id", "meeting.game_id")
+        .innerJoin("app.rooms as room", "room.id", "game.room_id")
         .select([
           "meeting.phase as meeting_phase",
           "meeting.resolved_at",
           "game.id as game_id",
           "game.room_id",
           "game.state_version",
+          "room.meeting_voting_mode",
         ])
         .where("meeting.id", "=", meetingId)
         .executeTakeFirst();
@@ -1608,21 +1673,13 @@ export class GameService {
           updated_at: now,
         })
         .execute();
-      const [cast, voters] = await Promise.all([
-        trx
-          .selectFrom("app.ejection_votes")
-          .select(sql<number>`count(*)::int`.as("count"))
-          .where("meeting_id", "=", meetingId)
-          .executeTakeFirstOrThrow(),
-        trx
-          .selectFrom("app.meeting_eligible_voters")
-          .select(sql<number>`count(*)::int`.as("count"))
-          .where("meeting_id", "=", meetingId)
-          .executeTakeFirstOrThrow(),
-      ]);
+      const quorum = await this.ejectionQuorum(
+        trx,
+        meetingId,
+        meeting.meeting_voting_mode === "all_voted",
+      );
       let resolution: Awaited<ReturnType<GameService["resolveVoting"]>> | null = null;
-      if (cast.count === voters.count)
-        resolution = await this.resolveVoting(trx, game, meetingId, now);
+      if (quorum.complete) resolution = await this.resolveVoting(trx, game, meetingId, now);
       const stateVersion = Number(game.state_version) + 1;
       if (!resolution)
         await trx
@@ -1655,7 +1712,7 @@ export class GameService {
       const response = {
         meetingId,
         targetParticipantId: input.targetParticipantId,
-        votesCast: cast.count,
+        votesCast: quorum.cast,
         resolved: Boolean(resolution),
         winner: resolution?.winner ?? null,
         stateVersion,
@@ -1666,6 +1723,105 @@ export class GameService {
     if (result.changed)
       this.events.gameChanged(result.roomId, result.gameId, Number(result.response.stateVersion));
     return result.response;
+  }
+
+  async handleParticipantDisconnected(roomId: string, participantId: string): Promise<void> {
+    const changed = await inTransaction(this.database, async (trx) => {
+      const game = await trx
+        .selectFrom("app.games as game")
+        .innerJoin("app.rooms as room", "room.id", "game.room_id")
+        .selectAll("game")
+        .select("room.meeting_voting_mode")
+        .where("game.room_id", "=", roomId)
+        .where("game.phase", "in", ["review", "voting"])
+        .where("room.meeting_voting_mode", "=", "all_voted")
+        .orderBy("game.started_at", "desc")
+        .forUpdate()
+        .executeTakeFirst();
+      if (!game) return null;
+      const participant = await trx
+        .selectFrom("app.participants")
+        .select("disconnected_at")
+        .where("id", "=", participantId)
+        .where("room_id", "=", roomId)
+        .executeTakeFirst();
+      if (!participant?.disconnected_at) return null;
+      const meeting = await trx
+        .selectFrom("app.meetings")
+        .select("id")
+        .where("game_id", "=", game.id)
+        .where("resolved_at", "is", null)
+        .executeTakeFirst();
+      if (!meeting) return null;
+      const eligible = await trx
+        .selectFrom("app.meeting_eligible_voters")
+        .select("participant_id")
+        .where("meeting_id", "=", meeting.id)
+        .where("participant_id", "=", participantId)
+        .executeTakeFirst();
+      if (!eligible) return null;
+
+      const now = new Date();
+      const nextVersion = Number(game.state_version) + 1;
+      if (game.phase === "voting") {
+        const quorum = await this.ejectionQuorum(trx, meeting.id, true);
+        if (!quorum.complete) return { gameId: game.id, stateVersion: Number(game.state_version) };
+        const resolution = await this.resolveVoting(trx, game, meeting.id, now);
+        await trx
+          .insertInto("app.game_events")
+          .values({
+            game_id: game.id,
+            state_version: nextVersion,
+            type: resolution.winner ? "game.ended" : "meeting.resolved",
+            actor_participant_id: null,
+            visibility: "public",
+            payload: {
+              schemaVersion: 1,
+              meetingId: meeting.id,
+              reason: "connected_voters_complete",
+              ejectedParticipantId: resolution.ejectedParticipantId,
+              winner: resolution.winner,
+            },
+          })
+          .execute();
+      } else {
+        const review = await trx
+          .selectFrom("app.evidence_review_items")
+          .select("id")
+          .where("meeting_id", "=", meeting.id)
+          .where("resolution", "is", null)
+          .orderBy("position")
+          .executeTakeFirst();
+        if (!review) return null;
+        const quorum = await this.reviewQuorum(trx, meeting.id, review.id, true);
+        if (!quorum.complete) return { gameId: game.id, stateVersion: Number(game.state_version) };
+        const resolution = await this.resolveCurrentReview(trx, game, meeting.id, review.id, now);
+        await trx
+          .updateTable("app.games")
+          .set({ state_version: nextVersion })
+          .where("id", "=", game.id)
+          .execute();
+        await trx
+          .insertInto("app.game_events")
+          .values({
+            game_id: game.id,
+            state_version: nextVersion,
+            type: "review.resolved",
+            actor_participant_id: null,
+            visibility: "public",
+            payload: {
+              schemaVersion: 1,
+              meetingId: meeting.id,
+              reviewItemId: review.id,
+              reason: "connected_voters_complete",
+              resolution: resolution.resolution,
+            },
+          })
+          .execute();
+      }
+      return { gameId: game.id, stateVersion: nextVersion };
+    });
+    if (changed) this.events.gameChanged(roomId, changed.gameId, changed.stateVersion);
   }
 
   async runDueTransitions(limit = 25): Promise<number> {

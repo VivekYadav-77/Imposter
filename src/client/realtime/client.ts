@@ -20,10 +20,18 @@ export class RealtimeClient {
       transports: ["websocket"],
       withCredentials: true,
       reconnection: true,
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 10_000,
+      randomizationFactor: 0.5,
     });
     this.socket = socket;
     socket.on("connect", () => this.handlers.onTransport("connected"));
     socket.io.on("reconnect_attempt", () => this.handlers.onTransport("reconnecting"));
+    socket.on("connect_error", (error: Error & { data?: { code?: string } }) =>
+      this.handlers.onTransport(
+        error.data?.code === "SESSION_INVALID" ? "revoked" : "reconnecting",
+      ),
+    );
     socket.on("disconnect", (reason) =>
       this.handlers.onTransport(reason === "io server disconnect" ? "offline" : "reconnecting"),
     );

@@ -101,6 +101,7 @@ export interface MeetingReviewItem {
   uploader?: { id?: string; nickname?: string };
   description?: string;
   votesCast?: number;
+  requiredVotes?: number;
   ownDecision?: "valid" | "invalid" | null;
 }
 
@@ -133,6 +134,7 @@ export interface Meeting {
   ownEjectionTargetParticipantId: string | null;
   hasCastEjectionVote: boolean;
   votesCast: number;
+  requiredVotes: number;
   publicVotes: PublicBallot[];
   result: MeetingResult | null;
   capabilities: string[];

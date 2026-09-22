@@ -7,6 +7,7 @@ describe("loadConfig", () => {
     const config = loadConfig({ DATABASE_URL: "postgresql://user:pass@localhost:5432/game" });
     expect(config.port).toBe(3000);
     expect(config.databaseSsl).toBe(false);
+    expect(config.realtimeDisconnectGraceMs).toBe(5000);
   });
 
   it("fails startup configuration without a database URL", () => {

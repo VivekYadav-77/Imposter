@@ -19,4 +19,6 @@ Clients may emit `heartbeat` with an acknowledgement callback. The acknowledgeme
 
 Clients may emit `game.resync` to request their current authorized game snapshot. A client that observes a version gap must use `game.resync` or `GET /api/v1/games/current/snapshot`; realtime delivery is only a committed-state hint.
 
-Presence is intentionally approximate. The final socket disconnect for a participant records `disconnected_at`; reconnection clears it. After the configured grace period, durable maintenance deterministically transfers a disconnected lobby host to the earliest joined participant, preferring a connected participant.
+Presence is intentionally approximate. The final socket disconnect for a participant starts a short, configurable grace window; reconnecting during that window cancels the transition to `away`. After the window, `disconnected_at` is recorded, while any concurrent reconnect is reasserted last to avoid stale presence. After the host grace period, durable maintenance deterministically transfers a disconnected lobby host to the earliest joined participant, preferring a connected participant.
+
+For `all_voted` meetings, the server uses a dynamic quorum: every connected eligible voter plus any away voter whose ballot is already locked. A brief transport loss remains covered by the presence grace window. Once a player is durably `away`, their missing ballot no longer blocks evidence review or ejection voting. At least one ballot is required, and the persisted phase deadline remains a last-resort recovery mechanism.

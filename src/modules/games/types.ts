@@ -90,10 +90,12 @@ export interface MeetingDto {
     assignmentDescription: string;
     ownDecision: "valid" | "invalid" | null;
     votesCast: number;
+    requiredVotes: number;
   };
   ownEjectionTargetParticipantId: string | null;
   hasCastEjectionVote: boolean;
   votesCast: number;
+  requiredVotes: number;
   result: null | {
     ejectedParticipantId: string | null;
     totals: Array<{ participantId: string; votes: number }>;

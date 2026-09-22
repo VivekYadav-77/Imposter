@@ -4245,6 +4245,7 @@
           "ownEjectionTargetParticipantId",
           "hasCastEjectionVote",
           "votesCast",
+          "requiredVotes",
           "publicVotes",
           "result",
           "capabilities"
@@ -4326,6 +4327,10 @@
             "type": "boolean"
           },
           "votesCast": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "requiredVotes": {
             "type": "integer",
             "minimum": 0
           },

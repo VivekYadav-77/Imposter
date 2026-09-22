@@ -19,6 +19,24 @@
   --tasks: #c9a227;
   --meeting: #a63f2b;
   --results: #426d48;
+  --results-panel: #13130f;
+  --vote-feed-panel: #171611;
+  --vote-feed-row: #201f1a;
+  --vote-feed-line: #625027;
+  --vote-feed-direction: #d98e3b;
+  --vote-feed-direction-surface: #2d291d;
+  --covert-surface: #121311;
+  --covert-cover: linear-gradient(120deg, #1b1d1a, #10110f);
+  --covert-ink: #ede7d8;
+  --covert-muted: #a69e86;
+  --covert-border: #3a3934;
+  --covert-open-border: #7f2b21;
+  --covert-open-surface: radial-gradient(circle at top right, #3a1712, #151412 48%);
+  --covert-glow: rgb(125 33 22 / 12%);
+  --covert-lock-border: #704139;
+  --covert-lock-surface: #251814;
+  --covert-lock-ink: #e9b0a3;
+  --covert-divider: #48302b;
   --shadow: rgb(0 0 0 / 28%);
   --button-ink: #17120c;
   --body:
@@ -46,6 +64,24 @@ html[data-theme="light"] {
   --tasks: #c19a1c;
   --meeting: #9c3928;
   --results: #3e7047;
+  --results-panel: #f1eadc;
+  --vote-feed-panel: #f7f1e5;
+  --vote-feed-row: #fffdf7;
+  --vote-feed-line: #c5ae7d;
+  --vote-feed-direction: #8c480c;
+  --vote-feed-direction-surface: #efe3cb;
+  --covert-surface: #fffaf1;
+  --covert-cover: linear-gradient(120deg, #fffdf7, #eee5d4);
+  --covert-ink: #2b211c;
+  --covert-muted: #6b5e54;
+  --covert-border: #c9bea8;
+  --covert-open-border: #b5523f;
+  --covert-open-surface: radial-gradient(circle at top right, #f4dcd5, #fffaf1 52%);
+  --covert-glow: rgb(168 60 41 / 10%);
+  --covert-lock-border: #bd7567;
+  --covert-lock-surface: #f7e4df;
+  --covert-lock-ink: #7d2d21;
+  --covert-divider: #d8b9b1;
   --shadow: rgb(64 49 25 / 18%);
   --button-ink: #fffaf1;
 }
@@ -868,10 +904,10 @@ select {
   border-radius: 0 0 6px 6px;
 }
 .sound-toggle {
-  position: absolute;
+  position: fixed;
   z-index: 45;
   top: calc(max(12px, env(safe-area-inset-top)) + 96px);
-  left: 14px;
+  left: max(14px, env(safe-area-inset-left));
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -2050,11 +2086,11 @@ select {
 }
 .covert-console {
   margin-top: 34px;
-  border: 1px solid #3a3934;
+  border: 1px solid var(--covert-border);
   border-radius: 12px;
   overflow: hidden;
-  background: #121311;
-  color: #ede7d8;
+  background: var(--covert-surface);
+  color: var(--covert-ink);
 }
 .covert-cover {
   width: 100%;
@@ -2065,23 +2101,23 @@ select {
   column-gap: 14px;
   padding: 18px;
   border: 0;
-  background: linear-gradient(120deg, #1b1d1a, #10110f);
-  color: #ede7d8;
+  background: var(--covert-cover);
+  color: var(--covert-ink);
   text-align: left;
 }
 .covert-cover > span {
   grid-row: span 2;
-  color: #a69e86;
+  color: var(--covert-muted);
   font-size: 2rem;
 }
 .covert-cover small {
-  color: #a69e86;
+  color: var(--covert-muted);
 }
 .covert-console.is-open {
   padding: 20px;
-  border-color: #7f2b21;
-  background: radial-gradient(circle at top right, #3a1712, #151412 48%);
-  box-shadow: inset 0 0 40px rgb(125 33 22 / 12%);
+  border-color: var(--covert-open-border);
+  background: var(--covert-open-surface);
+  box-shadow: inset 0 0 40px var(--covert-glow);
 }
 .covert-console-heading {
   display: flex;
@@ -2091,14 +2127,14 @@ select {
 }
 .covert-console-heading h2 {
   margin: 0 0 16px;
-  color: #ede7d8;
+  color: var(--covert-ink);
 }
 .covert-lock {
-  border: 1px solid #704139;
+  border: 1px solid var(--covert-lock-border);
   border-radius: 999px;
   padding: 7px 12px;
-  background: #251814;
-  color: #e9b0a3;
+  background: var(--covert-lock-surface);
+  color: var(--covert-lock-ink);
 }
 .target-select-field {
   margin-top: 16px;
@@ -2110,8 +2146,8 @@ select {
   gap: 12px;
   margin-top: 16px;
   padding-top: 14px;
-  border-top: 1px solid #48302b;
-  color: #a69e86;
+  border-top: 1px solid var(--covert-divider);
+  color: var(--covert-muted);
   font-size: 0.76rem;
 }
 .elimination-ledger > div {
@@ -2476,15 +2512,27 @@ select {
 .public-vote-feed {
   margin-top: 22px;
   padding: 16px;
-  border: 1px solid #625027;
+  border: 1px solid var(--vote-feed-line);
   border-radius: 10px;
-  background: #171611;
+  background: var(--vote-feed-panel);
+  color: var(--ink);
+  box-shadow: 0 10px 28px var(--shadow);
   text-align: left;
 }
 .public-vote-feed > div:first-child {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+.public-vote-feed > div:first-child > span {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 30px;
+  border-radius: 50%;
+  background: var(--vote-feed-direction-surface);
+  color: var(--vote-feed-direction);
 }
 .public-vote-feed strong,
 .public-vote-feed small {
@@ -2503,13 +2551,47 @@ select {
 }
 .public-vote-feed li {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--vote-feed-line) 62%, transparent);
+  border-radius: 7px;
+  background: var(--vote-feed-row);
+  animation: ballot-arrive 280ms ease-out both;
+}
+.ballot-party {
+  min-width: 0;
+  display: flex;
   align-items: center;
   gap: 9px;
-  padding: 9px;
-  border-radius: 7px;
-  background: #201f1a;
-  animation: ballot-arrive 280ms ease-out both;
+}
+.ballot-copy {
+  min-width: 0;
+}
+.ballot-copy small {
+  color: var(--muted);
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.ballot-copy strong {
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ballot-direction {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--vote-feed-line);
+  border-radius: 50%;
+  background: var(--vote-feed-direction-surface);
+  color: var(--vote-feed-direction);
+  font-weight: 900;
 }
 .public-vote-feed .identity-token {
   width: 30px;
@@ -2590,7 +2672,7 @@ select {
   padding: clamp(16px, 3vw, 24px);
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: #13130f;
+  background: var(--results-panel);
   text-align: left;
   animation: results-reveal 260ms ease-out;
 }

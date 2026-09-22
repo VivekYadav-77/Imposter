@@ -116,4 +116,62 @@ describe("realtime authentication boundary", () => {
     client.close();
     await new Promise<void>((resolve) => realtime.close(() => resolve()));
   });
+
+  it("cancels a pending away transition when the same participant reconnects", async () => {
+    const httpServer = createServer();
+    const config = loadConfig({
+      APP_ENV: "test",
+      DATABASE_URL: "postgresql://test:test@localhost:5432/test",
+      CORS_ALLOWED_ORIGINS: "http://localhost",
+      REALTIME_DISCONNECT_GRACE_MS: "100",
+    });
+    const roomId = "00000000-0000-4000-8000-000000000011";
+    const participantId = "00000000-0000-4000-8000-000000000012";
+    let connected = 0;
+    let disconnected = 0;
+    const realtime = attachRealtimeServer(httpServer, config, pino({ enabled: false }), {
+      authenticate: () =>
+        Promise.resolve({
+          roomId,
+          participantId,
+          sessionId: "00000000-0000-4000-8000-000000000013",
+        }),
+      markConnected: () => {
+        connected += 1;
+        return Promise.resolve();
+      },
+      markDisconnected: () => {
+        disconnected += 1;
+        return Promise.resolve();
+      },
+    });
+    await new Promise<void>((resolve) => httpServer.listen(0, "127.0.0.1", resolve));
+    const { port } = httpServer.address() as AddressInfo;
+    const connect = () => {
+      const client = createClient(`http://127.0.0.1:${port}`, {
+        path: "/realtime",
+        transports: ["websocket"],
+        auth: { token: "valid" },
+        reconnection: false,
+      });
+      clients.push(client);
+      return new Promise<ClientSocket>((resolve, reject) => {
+        client.once("connect", () => resolve(client));
+        client.once("connect_error", reject);
+      });
+    };
+
+    const first = await connect();
+    await new Promise<void>((resolve) => {
+      first.once("disconnect", () => resolve());
+      first.close();
+    });
+    const second = await connect();
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
+    expect(connected).toBe(2);
+    expect(disconnected).toBe(0);
+    second.close();
+    await new Promise<void>((resolve) => realtime.close(() => resolve()));
+  });
 });

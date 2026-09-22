@@ -94,6 +94,15 @@ export function RoomClient() {
     void load();
   }, [load]);
   useEffect(() => {
+    if (!game || game.phase === "game_over" || game.phase === "abandoned") return;
+    const warnBeforeExit = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = true;
+    };
+    window.addEventListener("beforeunload", warnBeforeExit);
+    return () => window.removeEventListener("beforeunload", warnBeforeExit);
+  }, [game]);
+  useEffect(() => {
     const receive = (event: Event) => {
       const detail = (event as CustomEvent<GameToastDetail>).detail;
       const id = Date.now() + Math.random();
@@ -167,7 +176,9 @@ export function RoomClient() {
       <SoundToggle />
       {transport !== "connected" && (
         <div className="connection-banner" role="status">
-          {transport === "revoked" ? "Session ended" : "Reconnecting you to the room…"}
+          {transport === "revoked"
+            ? "This saved seat is no longer available."
+            : "Connection lost. Your seat is saved; restoring the latest game state…"}
         </div>
       )}
       <div className="game-toast-region" aria-label="Game notifications">
@@ -772,7 +783,7 @@ function MeetingVotingControl({
             ◷
           </span>
           <strong>Timed vote</strong>
-          <small>Ends when everyone votes or time runs out.</small>
+          <small>Ends when everyone votes or the selected time runs out.</small>
         </button>
         <button
           type="button"
@@ -786,58 +797,64 @@ function MeetingVotingControl({
             ✓
           </span>
           <strong>Wait for everyone</strong>
-          <small>Ends when everyone votes, with a safety time limit.</small>
+          <small>Ends when every connected eligible player has voted.</small>
         </button>
       </div>
-      <div className="meeting-duration-editor">
-        <div className="field-label-row">
-          <span className="field-label">
-            {mode === "all_voted" ? "Maximum wait" : "Voting time"}
-          </span>
-          <strong>{formatDuration(duration)}</strong>
-        </div>
-        <div className="duration-presets" aria-label="Quick voting time choices">
-          {presets.map((seconds) => (
-            <button
-              type="button"
-              key={seconds}
-              className={duration === seconds ? "selected" : ""}
+      {mode === "timed" && (
+        <div className="meeting-duration-editor">
+          <div className="field-label-row">
+            <span className="field-label">Maximum voting time</span>
+            <strong>{formatDuration(duration)}</strong>
+          </div>
+          <div className="duration-presets" aria-label="Quick voting time choices">
+            {presets.map((seconds) => (
+              <button
+                type="button"
+                key={seconds}
+                className={duration === seconds ? "selected" : ""}
+                disabled={busy}
+                onClick={() => onDurationChange(seconds)}
+              >
+                {seconds < 60 ? `${seconds}s` : `${seconds / 60}m`}
+              </button>
+            ))}
+          </div>
+          <label className="meeting-custom-time">
+            <span>Custom</span>
+            <input
+              type="number"
+              min={30}
+              max={1800}
+              step={5}
+              value={draft}
               disabled={busy}
-              onClick={() => onDurationChange(seconds)}
+              aria-invalid={!valid}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && valid && parsed !== duration) {
+                  event.preventDefault();
+                  onDurationChange(parsed);
+                }
+              }}
+            />
+            <span>seconds</span>
+            <Button
+              variant="secondary"
+              disabled={busy || !valid || parsed === duration}
+              onClick={() => onDurationChange(parsed)}
             >
-              {seconds < 60 ? `${seconds}s` : `${seconds / 60}m`}
-            </button>
-          ))}
+              Set
+            </Button>
+          </label>
+          <small className="field-hint">Choose a preset or enter 30–1800 seconds.</small>
         </div>
-        <label className="meeting-custom-time">
-          <span>Custom</span>
-          <input
-            type="number"
-            min={30}
-            max={1800}
-            step={5}
-            value={draft}
-            disabled={busy}
-            aria-invalid={!valid}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && valid && parsed !== duration) {
-                event.preventDefault();
-                onDurationChange(parsed);
-              }
-            }}
-          />
-          <span>seconds</span>
-          <Button
-            variant="secondary"
-            disabled={busy || !valid || parsed === duration}
-            onClick={() => onDurationChange(parsed)}
-          >
-            Set
-          </Button>
-        </label>
-        <small className="field-hint">Choose a preset or enter 30–1800 seconds.</small>
-      </div>
+      )}
+      {mode === "all_voted" && (
+        <p className="field-hint meeting-quorum-hint">
+          Brief connection drops are ignored. If a player stays offline, their missing ballot stops
+          being required and the meeting continues automatically.
+        </p>
+      )}
     </div>
   );
 }
@@ -1357,7 +1374,7 @@ function TaskView({
         onClose={() => setConfirmMeeting(false)}
         onConfirm={() => void callMeeting()}
         title="Call a meeting?"
-        description={`${game.meetingRules.votingMode === "all_voted" ? `Voting ends when everyone votes or after ${formatDuration(game.meetingRules.durationSeconds)}.` : `Voting will open for ${formatDuration(game.meetingRules.durationSeconds)}.`} You will have ${Math.max(0, game.meetingRules.remainingForSelf - 1)} meeting calls left.`}
+        description={`${game.meetingRules.votingMode === "all_voted" ? "Voting ends when every connected eligible player has voted." : `Voting will open for up to ${formatDuration(game.meetingRules.durationSeconds)}.`} You will have ${Math.max(0, game.meetingRules.remainingForSelf - 1)} meeting calls left.`}
         confirmLabel="Open meeting"
         loading={meetingBusy}
       />
@@ -1818,13 +1835,20 @@ function MeetingView({
         phase={game.phase === "result" ? "results" : "meeting"}
         identity={room.self.nickname}
       >
-        {game.phaseDeadlineAt || meeting.deadlineAt ? (
+        {!(
+          game.meetingRules.votingMode === "all_voted" && ["review", "voting"].includes(game.phase)
+        ) &&
+        (game.phaseDeadlineAt || meeting.deadlineAt) ? (
           <Timer
             deadline={game.phaseDeadlineAt ?? meeting.deadlineAt}
             label={game.phase === "result" ? "Returning soon" : "Meeting time"}
           />
         ) : (
-          <Badge tone="info">Waiting for every vote</Badge>
+          <Badge tone="info">
+            {game.meetingRules.votingMode === "all_voted"
+              ? "Waiting for connected voters"
+              : "Meeting in progress"}
+          </Badge>
         )}
       </PhaseBar>
       <div className="game-content narrow meeting-view">
@@ -1885,8 +1909,8 @@ function MeetingView({
           <>
             {game.meetingRules.votingMode === "all_voted" && (
               <Banner tone="info">
-                This meeting resolves after every eligible living player votes, or when the safety
-                timer expires.
+                This meeting resolves after every connected eligible player votes. Players who
+                remain offline after the reconnect grace period no longer block the result.
               </Banner>
             )}
             <p className="lead">
@@ -1925,12 +1949,12 @@ function MeetingView({
             <div className="vote-progress-line">
               <span
                 style={{
-                  width: `${Math.round((meeting.votesCast / Math.max(1, meeting.eligibleParticipants.length)) * 100)}%`,
+                  width: `${Math.round((meeting.votesCast / Math.max(1, meeting.requiredVotes)) * 100)}%`,
                 }}
               />
             </div>
             <p className="vote-count">
-              {meeting.votesCast} of {meeting.eligibleParticipants.length} ballots locked
+              {meeting.votesCast} of {meeting.requiredVotes} required ballots locked
             </p>
             {game.meetingRules.voteVisibility === "public" && (
               <PublicVoteFeed votes={meeting.publicVotes} />
@@ -1986,10 +2010,21 @@ function PublicVoteFeed({ votes }: { votes: NonNullable<GameSnapshot["meeting"]>
         <ul>
           {votes.map((ballot) => (
             <li key={ballot.voterParticipantId}>
-              <IdentityToken name={ballot.voterNickname} />
-              <strong>{ballot.voterNickname}</strong>
-              <span aria-hidden="true">→</span>
-              <span>{ballot.targetNickname ?? "Skipped"}</span>
+              <div className="ballot-party ballot-voter">
+                <IdentityToken name={ballot.voterNickname} />
+                <span className="ballot-copy">
+                  <small>Voter</small>
+                  <strong>{ballot.voterNickname}</strong>
+                </span>
+              </div>
+              <span className="ballot-direction">
+                <span aria-hidden="true">→</span>
+                <span className="sr-only">voted for</span>
+              </span>
+              <span className="ballot-copy ballot-target">
+                <small>Voted for</small>
+                <strong>{ballot.targetNickname ?? "Skipped"}</strong>
+              </span>
             </li>
           ))}
         </ul>

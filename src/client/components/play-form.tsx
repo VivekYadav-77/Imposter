@@ -1,8 +1,9 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ApiError, createIdempotencyKey, errorMessage, participantApi } from "../api/client";
+import type { RoomSnapshot } from "../api/types";
 import { Banner, Button, Field } from "./ui";
 
 type Mode = "create" | "join";
@@ -16,7 +17,30 @@ export function PlayForm() {
   const [accepted, setAccepted] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [resumeRoom, setResumeRoom] = useState<RoomSnapshot | null>(null);
+  const [checkingSession, setCheckingSession] = useState(true);
   const key = useRef(createIdempotencyKey());
+  useEffect(() => {
+    let active = true;
+    participantApi
+      .room()
+      .then((response) => {
+        if (active) setResumeRoom(response.data);
+      })
+      .catch((cause: unknown) => {
+        if (
+          active &&
+          !(cause instanceof ApiError && (cause.status === 401 || cause.status === 404))
+        )
+          setError(errorMessage(cause));
+      })
+      .finally(() => {
+        if (active) setCheckingSession(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
   const nicknameError =
     nickname.length > 24
       ? "Use 24 characters or fewer."
@@ -46,6 +70,61 @@ export function PlayForm() {
       setBusy(false);
     }
   };
+  if (checkingSession)
+    return (
+      <div className="play-panel resume-panel" role="status">
+        <p className="eyebrow">Checking your seat</p>
+        <h2>Looking for an active room…</h2>
+      </div>
+    );
+  if (resumeRoom) {
+    const activeGame = resumeRoom.status === "active";
+    const completedGame = resumeRoom.status === "completed" || resumeRoom.status === "abandoned";
+    return (
+      <div className="play-panel resume-panel">
+        <p className="eyebrow">
+          {activeGame ? "Game in progress" : completedGame ? "Results are ready" : "Seat saved"}
+        </p>
+        <h2>Welcome back, {resumeRoom.self.nickname}</h2>
+        <p>
+          Your place in room <strong>{resumeRoom.code}</strong> is still yours. We’ll restore the
+          latest server state{completedGame ? " and show what happened while you were away" : ""}.
+        </p>
+        <div className="dialog-actions">
+          <Button onClick={() => router.replace("/room")}>
+            {activeGame ? "Resume game" : completedGame ? "View results" : "Return to room"}
+          </Button>
+          {!activeGame && (
+            <Button
+              variant="secondary"
+              loading={busy}
+              onClick={async () => {
+                setBusy(true);
+                setError("");
+                try {
+                  await participantApi.leave();
+                  setResumeRoom(null);
+                } catch (cause) {
+                  setError(errorMessage(cause));
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              Leave this room
+            </Button>
+          )}
+        </div>
+        {activeGame && (
+          <p className="field-hint">
+            To protect the match, an active seat can’t be replaced by joining again with a new
+            identity.
+          </p>
+        )}
+        {error && <Banner tone="danger">{error}</Banner>}
+      </div>
+    );
+  }
   return (
     <div className="play-panel">
       <div className="mode-picker" role="group" aria-label="Choose how to play">
