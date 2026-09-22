@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Icon } from "./icons";
 
-type Theme = "light" | "dark";
+export type Theme = "light" | "dark";
 
 const STORAGE_KEY = "imposter-game-theme";
 
@@ -60,7 +61,7 @@ export function ThemeToggle() {
       }}
     >
       <span className="theme-toggle-icon" aria-hidden="true">
-        {theme === "light" ? "☾" : "☀"}
+        <Icon name={theme === "light" ? "moon" : "sun"} size={20} />
       </span>
       <span className="sr-only">{label}</span>
     </button>

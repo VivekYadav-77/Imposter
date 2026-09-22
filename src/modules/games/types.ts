@@ -51,6 +51,7 @@ export interface GameSnapshotDto {
     durationSeconds: number;
     votingMode: "timed" | "all_voted";
     voteVisibility: "private" | "public";
+    requiresCompletedTask: boolean;
     maxPerPlayer: number;
     calledBySelf: number;
     remainingForSelf: number;

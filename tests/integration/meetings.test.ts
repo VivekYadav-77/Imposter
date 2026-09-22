@@ -74,6 +74,54 @@ describeWithDatabase("meetings and terminal outcomes", () => {
     await closeDatabase(dependencies);
   });
 
+  it("allows task-free anonymous meetings and applies the host cooldown", async () => {
+    const issued = [
+      await rooms.createRoom({ nickname: "Rule Host" }, randomUUID(), `rules:${randomUUID()}`),
+    ];
+    roomIds.push(issued[0].room.id);
+    for (let index = 1; index < 3; index += 1)
+      issued.push(
+        await rooms.joinRoom(
+          issued[0].room.code,
+          { nickname: `Rule Player ${index}` },
+          randomUUID(),
+          `rules:${randomUUID()}`,
+        ),
+      );
+    const principals = await Promise.all(
+      issued.map(async (entry) => (await rooms.authenticate(entry.sessionToken))!),
+    );
+    await rooms.updateSettings(
+      principals[0],
+      {
+        selectedTaskPackId: packId,
+        meetingTaskRequirement: "none",
+        meetingCooldownSeconds: 45,
+        meetingDurationSeconds: 30,
+      },
+      randomUUID(),
+    );
+    const started = await games.start(principals[0], randomUUID());
+    expect(started.meetingRules).toMatchObject({
+      requiresCompletedTask: false,
+      hasCompletedTask: false,
+    });
+    const voting = await games.callMeeting(
+      principals[0],
+      { expectedStateVersion: started.stateVersion },
+      randomUUID(),
+    );
+    expect(voting.meeting).toMatchObject({ triggerType: "user_called" });
+    expect(voting.meeting).not.toHaveProperty("triggerActorParticipantId");
+    expect(
+      Math.round(
+        (new Date(voting.cooldowns.meetingAvailableAt!).getTime() -
+          new Date(voting.phaseDeadlineAt!).getTime()) /
+          1000,
+      ),
+    ).toBe(45);
+  });
+
   it("keeps a kill private until an eligible player manually calls a meeting", async () => {
     const issued = [
       await rooms.createRoom({ nickname: "Host" }, randomUUID(), `meeting:${randomUUID()}`),

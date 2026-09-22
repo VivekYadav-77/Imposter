@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteFooter, SiteHeader } from "@/client/components/site-shell";
+import { Icon } from "@/client/components/ui";
+import { SignalSceneArt } from "@/client/components/signal-visuals";
 export const metadata: Metadata = {
   title: "Privacy and photos",
   description: "Photo consent, age, visibility, and retention information for Imposter Game.",
@@ -10,14 +12,46 @@ export default function Privacy() {
     <div className="marketing-page">
       <SiteHeader />
       <main id="main-content" className="article-page">
-        <header>
-          <p className="eyebrow">Privacy briefing</p>
-          <h1>Photos stay inside the room.</h1>
-          <p className="lead">
-            Imposter Game is for adults aged 18 and over. Everyone should understand and agree
-            before a room starts.
-          </p>
+        <header className="article-hero">
+          <div>
+            <p className="eyebrow">Privacy briefing</p>
+            <h1>Photos stay inside the room.</h1>
+            <p className="lead">
+              Imposter Game is for adults aged 18 and over. Everyone should understand and agree
+              before a room starts.
+            </p>
+          </div>
+          <SignalSceneArt scene="verdict" compact />
         </header>
+        <section className="privacy-lifecycle" aria-labelledby="photo-lifecycle">
+          <div>
+            <Icon name="camera" />
+            <span>1</span>
+            <strong>Capture</strong>
+            <small>Only the proof the task needs.</small>
+          </div>
+          <div>
+            <Icon name="room" />
+            <span>2</span>
+            <strong>Share privately</strong>
+            <small>Authorized room members only.</small>
+          </div>
+          <div>
+            <Icon name="evidence" />
+            <span>3</span>
+            <strong>Review</strong>
+            <small>Short-lived links during the game.</small>
+          </div>
+          <div>
+            <Icon name="check" />
+            <span>4</span>
+            <strong>Delete</strong>
+            <small>Scheduled automatically after play.</small>
+          </div>
+          <h2 id="photo-lifecycle" className="sr-only">
+            Photo lifecycle
+          </h2>
+        </section>
         <section>
           <h2>Before you upload</h2>
           <ul className="plain-list">

@@ -17,6 +17,24 @@ export type GameSound =
 const STORAGE_KEY = "imposter-game-sound-enabled";
 let context: AudioContext | null = null;
 let master: GainNode | null = null;
+const lastPlayed = new Map<GameSound, number>();
+
+export const gameSoundLabels: Record<GameSound, string> = {
+  ui: "Interface confirmation",
+  "role-crew": "Crew role reveal",
+  "role-imposter": "Imposter role reveal",
+  meeting: "Meeting alert",
+  vote: "Ballot confirmation",
+  upload: "Evidence uploaded",
+  "task-complete": "Task completed",
+  kill: "Elimination",
+  eliminated: "Player eliminated",
+  "cooldown-ready": "Ability ready",
+  result: "Meeting result",
+  victory: "Victory",
+  defeat: "Defeat",
+  "easter-egg": "Hidden interaction",
+};
 
 export function isSoundEnabled(): boolean {
   if (typeof window === "undefined") return true;
@@ -94,6 +112,9 @@ function noise(start: number, duration: number, gain = 0.13, lowpass = 1200): vo
 }
 
 export function playGameSound(sound: GameSound): void {
+  const now = typeof performance === "undefined" ? Date.now() : performance.now();
+  if (now - (lastPlayed.get(sound) ?? -Infinity) < (sound === "ui" ? 70 : 180)) return;
+  lastPlayed.set(sound, now);
   switch (sound) {
     case "ui":
       tone(420, 0, 0.07, { endFrequency: 620, gain: 0.08, type: "triangle" });

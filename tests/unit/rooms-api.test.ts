@@ -10,7 +10,11 @@ import { InMemoryMetrics } from "../../src/infrastructure/observability/metrics.
 import type { RoomService } from "../../src/modules/rooms/service.js";
 import type { GameService } from "../../src/modules/games/service.js";
 import type { EvidenceService } from "../../src/modules/evidence/service.js";
-import { normalizeNickname, roomMembershipSchema } from "../../src/modules/rooms/schemas.js";
+import {
+  normalizeNickname,
+  roomMembershipSchema,
+  roomSettingsSchema,
+} from "../../src/modules/rooms/schemas.js";
 
 const servers: ReturnType<typeof createServer>[] = [];
 afterEach(async () =>
@@ -20,6 +24,24 @@ afterEach(async () =>
       .map((server) => new Promise<void>((resolve) => server.close(() => resolve()))),
   ),
 );
+
+describe("host gameplay settings", () => {
+  it("accepts a 240 minute game and rejects anything longer", () => {
+    expect(roomSettingsSchema.safeParse({ taskPhaseSeconds: 14_400 }).success).toBe(true);
+    expect(roomSettingsSchema.safeParse({ taskPhaseSeconds: 14_401 }).success).toBe(false);
+  });
+
+  it("validates evidence, meeting prerequisite, and cooldown choices", () => {
+    expect(
+      roomSettingsSchema.safeParse({
+        evidenceVisibility: "private",
+        meetingTaskRequirement: "none",
+        meetingCooldownSeconds: 180,
+      }).success,
+    ).toBe(true);
+    expect(roomSettingsSchema.safeParse({ meetingCooldownSeconds: 1_801 }).success).toBe(false);
+  });
+});
 
 const snapshot = {
   id: "00000000-0000-4000-8000-000000000001",

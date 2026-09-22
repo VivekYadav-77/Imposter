@@ -33,6 +33,9 @@ export interface RoomSnapshotDto {
     meetingDurationSeconds?: number;
     meetingVotingMode?: "timed" | "all_voted";
     voteVisibility?: "private" | "public";
+    evidenceVisibility?: "private" | "public";
+    meetingTaskRequirement?: "none" | "one";
+    meetingCooldownSeconds?: number;
     imposterCooldownSeconds?: number;
     estimatedMeetingCooldownSeconds?: number;
     imposterCount?: number;

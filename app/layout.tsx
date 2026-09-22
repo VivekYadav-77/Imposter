@@ -1,7 +1,13 @@
 import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
+import "@fontsource-variable/public-sans";
+import "@fontsource/barlow-condensed/400.css";
+import "@fontsource/barlow-condensed/600.css";
+import "@fontsource/barlow-condensed/700.css";
+import "@fontsource/barlow-condensed/800.css";
 import { ThemeToggle } from "@/client/components/theme-toggle";
 import "./globals.css";
+import "./signal-room.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.PUBLIC_APP_URL ?? "http://localhost:3000"),

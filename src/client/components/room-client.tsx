@@ -26,6 +26,8 @@ import {
   ConfirmDialog,
   Dialog,
   EmptyState,
+  Icon,
+  IconButton,
   IdentityToken,
   PhaseBar,
   Progress,
@@ -185,13 +187,11 @@ export function RoomClient() {
         {toasts.map((toast) => (
           <Toast key={toast.id} tone={toast.tone}>
             <span>{toast.message}</span>
-            <button
-              type="button"
-              aria-label="Dismiss notification"
+            <IconButton
+              icon="close"
+              label="Dismiss notification"
               onClick={() => setToasts((current) => current.filter((item) => item.id !== toast.id))}
-            >
-              ×
-            </button>
+            />
           </Toast>
         ))}
       </div>
@@ -242,7 +242,9 @@ function SoundToggle() {
         if (next) playGameSound("ui");
       }}
     >
-      <span aria-hidden="true">{enabled ? "♪" : "×"}</span>
+      <span aria-hidden="true">
+        <Icon name={enabled ? "sound" : "soundOff"} size={18} />
+      </span>
       <small>{enabled ? "Sound on" : "Muted"}</small>
     </button>
   );
@@ -448,11 +450,10 @@ function LobbyView({
                   ))}
                 </select>
               </label>
-              <TimerSelect
-                label="Game time"
+              <GameDurationControl
                 value={room.settings.taskPhaseSeconds}
-                values={[300, 600, 900, 1200, 1800, 3600]}
                 onChange={(value) => void update({ taskPhaseSeconds: value })}
+                busy={busy}
               />
             </section>
             <section className="settings-section meeting-settings-section">
@@ -481,7 +482,9 @@ function LobbyView({
                     disabled={busy}
                     onClick={() => void update({ voteVisibility: "private" })}
                   >
-                    <span aria-hidden="true">🔒</span>
+                    <span aria-hidden="true">
+                      <Icon name="lock" size={20} />
+                    </span>
                     <strong>Private</strong>
                     <small>Only totals appear after voting.</small>
                   </button>
@@ -493,9 +496,44 @@ function LobbyView({
                     disabled={busy}
                     onClick={() => void update({ voteVisibility: "public" })}
                   >
-                    <span aria-hidden="true">👁</span>
+                    <span aria-hidden="true">
+                      <Icon name="eye" size={20} />
+                    </span>
                     <strong>Public</strong>
                     <small>Everyone sees who voted for whom.</small>
+                  </button>
+                </div>
+              </div>
+              <div className="vote-visibility-control">
+                <span className="field-label">Evidence visibility</span>
+                <div role="radiogroup" aria-label="Evidence visibility">
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={room.settings.evidenceVisibility === "public"}
+                    className={room.settings.evidenceVisibility === "public" ? "selected" : ""}
+                    disabled={busy}
+                    onClick={() => void update({ evidenceVisibility: "public" })}
+                  >
+                    <span aria-hidden="true">
+                      <Icon name="eye" size={20} />
+                    </span>
+                    <strong>Shared</strong>
+                    <small>Everyone can view accepted task photos.</small>
+                  </button>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={room.settings.evidenceVisibility === "private"}
+                    className={room.settings.evidenceVisibility === "private" ? "selected" : ""}
+                    disabled={busy}
+                    onClick={() => void update({ evidenceVisibility: "private" })}
+                  >
+                    <span aria-hidden="true">
+                      <Icon name="lock" size={20} />
+                    </span>
+                    <strong>Private</strong>
+                    <small>Players can view only their own task photos.</small>
                   </button>
                 </div>
               </div>
@@ -516,6 +554,14 @@ function LobbyView({
                 onApply={(value) => void update({ imposterCooldownSeconds: value })}
                 hint="The live cooldown subtracts the average game-time and crew-task completion from this base."
               />
+              <CustomDurationField
+                label="Meeting cooldown"
+                value={room.settings.meetingCooldownSeconds}
+                min={10}
+                max={1800}
+                onApply={(value) => void update({ meetingCooldownSeconds: value })}
+                hint="Time after a meeting ends before another meeting can be called."
+              />
               <label className="field">
                 <span className="field-label">Meetings per player</span>
                 <select
@@ -531,12 +577,35 @@ function LobbyView({
                     </option>
                   ))}
                 </select>
-                <span className="field-hint">
-                  Initial cooldown estimate:{" "}
-                  {formatDuration(room.settings.estimatedMeetingCooldownSeconds)}. It adapts to
-                  elapsed time and task progress.
-                </span>
               </label>
+              <div className="vote-visibility-control">
+                <span className="field-label">Task needed to call a meeting</span>
+                <div role="radiogroup" aria-label="Task requirement for calling a meeting">
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={room.settings.meetingTaskRequirement === "one"}
+                    className={room.settings.meetingTaskRequirement === "one" ? "selected" : ""}
+                    disabled={busy}
+                    onClick={() => void update({ meetingTaskRequirement: "one" })}
+                  >
+                    <strong>One task</strong>
+                    <small>Complete at least one task before calling.</small>
+                  </button>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={room.settings.meetingTaskRequirement === "none"}
+                    className={room.settings.meetingTaskRequirement === "none" ? "selected" : ""}
+                    disabled={busy}
+                    onClick={() => void update({ meetingTaskRequirement: "none" })}
+                  >
+                    <strong>No task</strong>
+                    <small>Meetings can be called immediately when ready.</small>
+                  </button>
+                </div>
+                <span className="field-hint">The caller’s identity is never shown.</span>
+              </div>
               <label className="field">
                 <span className="field-label">Impostors</span>
                 <select
@@ -571,7 +640,7 @@ function LobbyView({
                     </small>
                   </span>
                 </span>
-                <span aria-hidden="true">⌄</span>
+                <Icon name="chevron" size={18} />
               </summary>
               <div className="difficulty-settings">
                 {(["easy", "medium", "hard"] as const).map((difficulty) => (
@@ -630,7 +699,7 @@ function LobbyView({
                       <small>Optional specialist allocation</small>
                     </span>
                   </span>
-                  <span aria-hidden="true">⌄</span>
+                  <Icon name="chevron" size={18} />
                 </summary>
                 <div className="role-settings">
                   {room.settings.selectedTaskPack.roles.map((role) => (
@@ -725,28 +794,64 @@ function LobbyView({
   );
 }
 
-function TimerSelect({
-  label,
+function GameDurationControl({
   value,
-  values,
   onChange,
+  busy,
 }: {
-  label: string;
   value: number;
-  values: number[];
   onChange: (value: number) => void;
+  busy: boolean;
 }) {
+  const presets = [300, 600, 900, 1200, 1800, 3600, 7200, 14400];
+  const [draftMinutes, setDraftMinutes] = useState(String(value / 60));
+  useEffect(() => setDraftMinutes(String(value / 60)), [value]);
+  const parsedMinutes = Number(draftMinutes);
+  const valid = Number.isInteger(parsedMinutes) && parsedMinutes >= 5 && parsedMinutes <= 240;
   return (
-    <label className="field">
-      <span className="field-label">{label}</span>
-      <select value={value} onChange={(e) => onChange(Number(e.target.value))}>
-        {values.map((seconds) => (
+    <div className="field custom-duration-field">
+      <span className="field-label">Game time</span>
+      <select
+        value={value}
+        disabled={busy}
+        onChange={(event) => onChange(Number(event.target.value))}
+      >
+        {!presets.includes(value) && <option value={value}>{value / 60} min (custom)</option>}
+        {presets.map((seconds) => (
           <option value={seconds} key={seconds}>
-            {seconds >= 60 ? `${seconds / 60} min` : `${seconds} sec`}
+            {seconds / 60} min
           </option>
         ))}
       </select>
-    </label>
+      <span className="duration-input-row">
+        <input
+          type="number"
+          min={5}
+          max={240}
+          step={1}
+          value={draftMinutes}
+          disabled={busy}
+          aria-label="Custom game time in minutes"
+          aria-invalid={!valid}
+          onChange={(event) => setDraftMinutes(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && valid && parsedMinutes * 60 !== value) {
+              event.preventDefault();
+              onChange(parsedMinutes * 60);
+            }
+          }}
+        />
+        <span>minutes</span>
+        <Button
+          variant="secondary"
+          disabled={busy || !valid || parsedMinutes * 60 === value}
+          onClick={() => onChange(parsedMinutes * 60)}
+        >
+          Set custom
+        </Button>
+      </span>
+      <span className="field-hint">Choose any whole number from 5 to 240 minutes.</span>
+    </div>
   );
 }
 
@@ -1015,7 +1120,7 @@ function RoleReveal({
       <p className="eyebrow">Private briefing</p>
       <div className={`role-card ${revealed ? "revealed" : "sealed"}`}>
         <span className="seal-mark" aria-hidden="true">
-          ◉
+          <Icon name="eye" size={32} />
         </span>
         {revealed ? (
           <div>
@@ -1116,7 +1221,7 @@ function TaskView({
   const meetingReady =
     (!game.cooldowns.meetingAvailableAt ||
       new Date(game.cooldowns.meetingAvailableAt).getTime() <= now) &&
-    game.meetingRules.hasCompletedTask &&
+    (!game.meetingRules.requiresCompletedTask || game.meetingRules.hasCompletedTask) &&
     game.meetingRules.remainingForSelf > 0 &&
     game.self.lifeStatus === "alive";
   const kill = async () => {
@@ -1223,12 +1328,12 @@ function TaskView({
                     </small>
                     <small>
                       {task.status === "completed"
-                        ? "Proof submitted · processing may still reopen this task"
+                        ? "Done · processing may still reopen this task"
                         : "Open to add photo proof"}
                     </small>
                   </span>
                   <Badge tone={task.status === "completed" ? "success" : "warning"}>
-                    {task.status === "completed" ? "Submitted" : "To do"}
+                    {task.status === "completed" ? "Done" : "To do"}
                   </Badge>
                 </button>
                 <button
@@ -1330,7 +1435,7 @@ function TaskView({
           disabled={!meetingReady}
           onClick={() => setConfirmMeeting(true)}
           title={
-            !game.meetingRules.hasCompletedTask
+            game.meetingRules.requiresCompletedTask && !game.meetingRules.hasCompletedTask
               ? "Complete one task first"
               : game.meetingRules.remainingForSelf === 0
                 ? "No meetings remaining"
@@ -1409,31 +1514,22 @@ function UploadDialog({
   onClose: () => void;
   onError: (message: string) => void;
 }) {
-  const [file, setFile] = useState<File | null>(null);
   const [state, setState] = useState<"idle" | "uploading" | "processing" | "done">("idle");
-  const [policy, setPolicy] = useState("");
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  useEffect(() => {
-    if (!file) {
-      setPreviewUrl(null);
-      return;
-    }
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [file]);
+  const closeTimer = useRef<number | undefined>(undefined);
   useEffect(() => {
     if (!open) {
-      setFile(null);
       setState("idle");
-      setPolicy("");
-      setPreviewOpen(false);
     }
+    return () => {
+      if (closeTimer.current !== undefined) window.clearTimeout(closeTimer.current);
+    };
   }, [open]);
   if (!assignment) return null;
-  const upload = async () => {
-    if (!file) return;
+  const upload = async (file: File) => {
+    if (file.size > 5_242_880) {
+      onError("Choose an image smaller than 5 MB.");
+      return;
+    }
     setState("uploading");
     try {
       const intent = (
@@ -1444,7 +1540,6 @@ function UploadDialog({
           createIdempotencyKey(),
         )
       ).data;
-      setPolicy(intent.policy.notice);
       const response = await fetch(intent.url, {
         method: intent.method,
         headers: intent.headers,
@@ -1463,75 +1558,46 @@ function UploadDialog({
       playGameSound("upload");
       gameToast("Photo uploaded to this task.");
       setState("done");
+      closeTimer.current = window.setTimeout(onClose, 650);
     } catch (e) {
       onError(errorMessage(e));
       setState("idle");
     }
   };
   return (
-    <Dialog open={open} title="Submit task evidence" onClose={onClose}>
+    <Dialog open={open} title="Upload task photo" onClose={onClose}>
       <p className="task-description">{assignment.description}</p>
-      <p className="muted">
-        Get the whole task in frame. Confirmation completes it provisionally; processing can reject
-        the image and reopen the task.
-      </p>
-      {file && previewUrl && (
-        <div className="selected-file-preview">
-          <button
-            type="button"
-            className="preview-thumbnail-button"
-            aria-label="Preview selected task photo full screen"
-            onClick={() => setPreviewOpen(true)}
-          >
-            <img className="upload-preview" src={previewUrl} alt="Selected evidence thumbnail" />
-            <span>↗ Preview full screen</span>
-          </button>
-        </div>
-      )}
-      {policy && <Banner tone="info">{policy}</Banner>}
-      {state === "processing" || state === "done" ? (
+      {state !== "idle" ? (
         <div className="processing-state">
           <span className="scan-line" />
-          <h3>{state === "done" ? "Proof submitted" : "Confirming proof…"}</h3>
+          <h3>
+            {state === "done"
+              ? "Done"
+              : state === "uploading"
+                ? "Uploading photo…"
+                : "Finishing task…"}
+          </h3>
           <p>
             {state === "done"
-              ? "It remains provisional until media processing finishes."
-              : "Keep this page open for a moment."}
+              ? "Your task is complete."
+              : "This will close automatically when the upload is ready."}
           </p>
         </div>
       ) : (
-        <>
-          <label className="file-picker">
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              capture="environment"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            />
-            <span>{file ? "Choose another photo" : "Take or choose a photo"}</span>
-            <small>JPEG, PNG or WebP · maximum 5 MB</small>
-          </label>
-          <div className="dialog-actions">
-            <Button variant="secondary" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => void upload()}
-              loading={state === "uploading"}
-              disabled={!file || (file?.size ?? 0) > 5_242_880}
-            >
-              Upload proof
-            </Button>
-          </div>
-        </>
+        <label className="file-picker">
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            capture="environment"
+            onChange={(event) => {
+              const selectedFile = event.target.files?.[0];
+              if (selectedFile) void upload(selectedFile);
+            }}
+          />
+          <span>Upload photo</span>
+          <small>Choose or take one image · JPEG, PNG or WebP · max 5 MB</small>
+        </label>
       )}
-      {state === "done" && <Button onClick={onClose}>Back to tasks</Button>}
-      <ImagePreview
-        open={previewOpen}
-        src={previewUrl}
-        alt="Selected task evidence"
-        onClose={() => setPreviewOpen(false)}
-      />
     </Dialog>
   );
 }
@@ -1596,25 +1662,22 @@ function EvidenceGallery({
                 <button
                   type="button"
                   className="evidence-image-button"
-                  aria-label={`Preview evidence submitted by ${item.uploader.nickname}`}
+                  aria-label="Preview task evidence"
                   onClick={() =>
                     setPreview({
                       src: item.image!.url,
-                      alt: `Evidence submitted by ${item.uploader.nickname}`,
+                      alt: "Task evidence",
                     })
                   }
                 >
-                  <img
-                    src={item.image.url}
-                    alt={`Evidence submitted by ${item.uploader.nickname}`}
-                  />
+                  <img src={item.image.url} alt="Task evidence" />
                   <span>↗ View full screen</span>
                 </button>
               ) : (
                 <div className="image-placeholder">{item.processingStatus}</div>
               )}
               <div>
-                <strong>{item.uploader.nickname}</strong>
+                <strong>Task evidence</strong>
                 <Badge
                   tone={
                     item.processingStatus === "accepted"
@@ -1654,6 +1717,102 @@ function EvidenceGallery({
         onClose={() => setPreview(null)}
       />
     </Dialog>
+  );
+}
+
+function FinalEvidenceSection({ onError }: { onError: (message: string) => void }) {
+  const [items, setItems] = useState<Submission[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+  const [preview, setPreview] = useState<{ src: string; alt: string } | null>(null);
+  const load = useCallback(async () => {
+    setLoading(true);
+    setFailed(false);
+    try {
+      const collected: Submission[] = [];
+      let cursor: string | undefined;
+      do {
+        const response = await participantApi.submissions(cursor);
+        collected.push(...response.data.filter((item) => item.image));
+        cursor = response.meta.nextCursor;
+      } while (cursor);
+      setItems(collected);
+    } catch (error) {
+      setFailed(true);
+      onError(errorMessage(error));
+    } finally {
+      setLoading(false);
+    }
+  }, [onError]);
+  useEffect(() => {
+    void load();
+  }, [load]);
+  return (
+    <section className="final-evidence" aria-labelledby="final-evidence-title">
+      <div className="final-evidence-heading">
+        <div>
+          <p className="eyebrow">Case archive</p>
+          <h2 id="final-evidence-title">Final evidence</h2>
+          <p>With the result declared, every player can review the accepted task photos.</p>
+        </div>
+        {!loading && !failed && (
+          <Badge tone="info">
+            {items.length} {items.length === 1 ? "photo" : "photos"}
+          </Badge>
+        )}
+      </div>
+      {loading ? (
+        <SkeletonList />
+      ) : failed ? (
+        <div className="final-evidence-empty" role="alert">
+          <Icon name="warning" size={24} />
+          <div>
+            <strong>Evidence could not be loaded</strong>
+            <small>Your result is safe. Try loading the photo archive again.</small>
+          </div>
+          <Button variant="secondary" onClick={() => void load()}>
+            Try again
+          </Button>
+        </div>
+      ) : items.length === 0 ? (
+        <div className="final-evidence-empty">
+          <Icon name="evidence" size={24} />
+          <div>
+            <strong>No accepted evidence</strong>
+            <small>This game ended without any task photos in the final archive.</small>
+          </div>
+        </div>
+      ) : (
+        <div className="final-evidence-grid">
+          {items.map((item, index) => (
+            <button
+              type="button"
+              className="final-evidence-item"
+              key={item.id}
+              aria-label={`Open final evidence photo ${index + 1} of ${items.length}`}
+              onClick={() =>
+                setPreview({
+                  src: item.image!.url,
+                  alt: `Final task evidence ${index + 1}`,
+                })
+              }
+            >
+              <img src={item.image!.url} alt="" />
+              <span>
+                <strong>Evidence {String(index + 1).padStart(2, "0")}</strong>
+                <small>View full screen</small>
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+      <ImagePreview
+        open={Boolean(preview)}
+        src={preview?.src ?? null}
+        alt={preview?.alt ?? "Final task evidence"}
+        onClose={() => setPreview(null)}
+      />
+    </section>
   );
 }
 
@@ -1720,14 +1879,12 @@ function ImagePreview({
             >
               Full size
             </button>
-            <button
-              type="button"
+            <IconButton
+              icon="close"
               className="image-preview-close"
               onClick={onClose}
-              aria-label="Close image preview"
-            >
-              ×
-            </button>
+              label="Close image preview"
+            />
           </div>
         </header>
         <div className={`image-preview-canvas image-preview-${displayMode}`}>
@@ -1871,7 +2028,9 @@ function MeetingView({
             <p className="lead">
               {meeting.triggerType === "kill"
                 ? `${reported?.nickname ?? "A player"} is out. Gather and talk face to face.`
-                : "The task window closed. Gather and talk face to face."}
+                : meeting.triggerType === "user_called"
+                  ? "A player called an anonymous meeting. Gather and talk face to face."
+                  : "The task window closed. Gather and talk face to face."}
             </p>
             <Banner tone="info">This app does not record or carry your conversation.</Banner>
           </>
@@ -1884,9 +2043,6 @@ function MeetingView({
               <div className="image-placeholder">Evidence under review</div>
             )}
             <h2>{meeting.reviewItem?.description ?? "Is this evidence valid?"}</h2>
-            <p className="muted">
-              Submitted by {meeting.reviewItem?.uploader?.nickname ?? "a room participant"}
-            </p>
             {meeting.capabilities.includes("participate_in_meeting") && (
               <div className="choice-grid">
                 <button
@@ -1941,7 +2097,9 @@ function MeetingView({
                 disabled={!canVote}
                 onClick={() => setVote("skip")}
               >
-                <span className="skip-icon">🤷</span>
+                <span className="skip-icon">
+                  <Icon name="close" size={22} />
+                </span>
                 <strong>Skip</strong>
                 <small>{vote === "skip" ? "Selected" : "No ejection"}</small>
               </button>
@@ -2000,7 +2158,9 @@ function PublicVoteFeed({ votes }: { votes: NonNullable<GameSnapshot["meeting"]>
   return (
     <section className="public-vote-feed" aria-live="polite">
       <div>
-        <span aria-hidden="true">👁</span>
+        <span aria-hidden="true">
+          <Icon name="eye" size={18} />
+        </span>
         <div>
           <strong>Public ballot feed</strong>
           <small>New ballots appear as they lock.</small>
@@ -2018,7 +2178,7 @@ function PublicVoteFeed({ votes }: { votes: NonNullable<GameSnapshot["meeting"]>
                 </span>
               </div>
               <span className="ballot-direction">
-                <span aria-hidden="true">→</span>
+                <Icon name="arrow" size={17} />
                 <span className="sr-only">voted for</span>
               </span>
               <span className="ballot-copy ballot-target">
@@ -2129,7 +2289,9 @@ function TerminalView({
             aria-expanded={showResults}
             onClick={() => setShowResults((current) => !current)}
           >
-            <span aria-hidden="true">{showResults ? "⌃" : "⌄"}</span>
+            <span className={showResults ? "is-open" : ""} aria-hidden="true">
+              <Icon name="chevron" size={18} />
+            </span>
             {showResults ? "Hide full results" : "See full results"}
           </Button>
           {showResults && summary && (
@@ -2151,10 +2313,11 @@ function TerminalView({
                     <IdentityToken name={player.nickname} />
                     <div>
                       <strong>{player.nickname}</strong>
-                      <span>
+                      <span className="result-role-label">
+                        <Icon name={player.role === "imposter" ? "warning" : "tool"} size={16} />
                         {player.role === "imposter"
-                          ? "🔪 Imposter"
-                          : `🛠 ${player.crewRole?.name ?? "Crewmate"}`}
+                          ? "Imposter"
+                          : (player.crewRole?.name ?? "Crewmate")}
                       </span>
                       {player.crewRole && <small>{player.crewRole.specialization}</small>}
                     </div>
@@ -2182,6 +2345,7 @@ function TerminalView({
               )}
             </section>
           )}
+          {game.phase === "game_over" && <FinalEvidenceSection onError={onError} />}
           <button
             className={`orbit-crewmate ${easterEgg >= 3 ? "hatched" : ""}`}
             aria-label="A suspicious tiny crewmate"
@@ -2193,11 +2357,12 @@ function TerminalView({
               })
             }
           >
-            {easterEgg >= 3 ? "ඞ" : "◒"}
+            <Icon name={easterEgg >= 3 ? "spark" : "eye"} size={22} />
           </button>
           {easterEgg >= 3 && (
             <div className="easter-egg" role="status">
-              <span>✦</span> The smallest crewmate was suspicious all along. <span>✦</span>
+              <Icon name="spark" size={17} /> The smallest crewmate was suspicious all along.{" "}
+              <Icon name="spark" size={17} />
             </div>
           )}
           <div className="replay-panel">

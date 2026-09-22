@@ -137,7 +137,7 @@ describeWithDatabase("private evidence lifecycle", () => {
     await closeDatabase(dependencies);
   });
 
-  async function startedRoom() {
+  async function startedRoom(settings: { evidenceVisibility?: "private" | "public" } = {}) {
     const issued = [
       await rooms.createRoom({ nickname: "Host" }, randomUUID(), `ev:${randomUUID()}`),
     ];
@@ -154,9 +154,65 @@ describeWithDatabase("private evidence lifecycle", () => {
     const principals = await Promise.all(
       issued.map(async (entry) => (await rooms.authenticate(entry.sessionToken))!),
     );
-    await rooms.updateSettings(principals[0], { selectedTaskPackId: packId }, randomUUID());
+    await rooms.updateSettings(
+      principals[0],
+      { selectedTaskPackId: packId, ...settings },
+      randomUUID(),
+    );
     return { principals, snapshot: await games.start(principals[0], randomUUID()) };
   }
+
+  it("keeps photos private during play and unlocks them for everyone after the result", async () => {
+    const { principals, snapshot } = await startedRoom({ evidenceVisibility: "private" });
+    const owner = principals.find((p) => p.participantId === snapshot.self.participantId)!;
+    const viewer = principals.find((p) => p.participantId !== owner.participantId)!;
+    const jpeg = await sharp({ create: { width: 8, height: 8, channels: 3, background: "blue" } })
+      .jpeg()
+      .toBuffer();
+    const intent = await evidence.createUploadIntent(
+      owner,
+      snapshot.assignments[0].id,
+      {
+        expectedStateVersion: snapshot.stateVersion,
+        contentType: "image/jpeg",
+        byteSize: jpeg.byteLength,
+      },
+      randomUUID(),
+    );
+    storage.seed(jpeg, "image/jpeg");
+    await evidence.confirm(
+      owner,
+      snapshot.assignments[0].id,
+      { expectedStateVersion: snapshot.stateVersion, uploadId: intent.uploadId },
+      randomUUID(),
+    );
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      expect(await evidence.runNextJob("private-evidence-worker")).toBe(true);
+      const ownEvidence = await evidence.list(owner, false, 10, 0);
+      if (ownEvidence.some((item) => item.processingStatus === "accepted")) break;
+    }
+    expect(await evidence.list(owner, false, 10, 0)).toMatchObject([
+      { processingStatus: "accepted" },
+    ]);
+    expect(await evidence.list(viewer, false, 10, 0)).toEqual([]);
+
+    await dependencies.db
+      .updateTable("app.games")
+      .set({
+        phase: "game_over",
+        winner: "crew",
+        end_reason: "tasks_completed",
+        ended_at: new Date(),
+      })
+      .where("id", "=", snapshot.id)
+      .execute();
+    const finalEvidence = await evidence.list(viewer, false, 10, 0);
+    expect(finalEvidence).toHaveLength(1);
+    expect(finalEvidence[0]).toMatchObject({
+      processingStatus: "accepted",
+      image: { url: expect.stringContaining("https://storage.invalid/read/") },
+    });
+  });
 
   it("authorizes, normalizes, views, and flags one submission per player", async () => {
     const { principals, snapshot } = await startedRoom();

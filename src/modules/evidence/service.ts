@@ -592,10 +592,11 @@ export class EvidenceService {
     offset: number,
   ): Promise<SubmissionDto[]> {
     const game = await this.database
-      .selectFrom("app.games")
-      .select("id")
-      .where("room_id", "=", principal.roomId)
-      .orderBy("started_at", "desc")
+      .selectFrom("app.games as g")
+      .innerJoin("app.rooms as r", "r.id", "g.room_id")
+      .select(["g.id", "g.phase", "r.evidence_visibility"])
+      .where("g.room_id", "=", principal.roomId)
+      .orderBy("g.started_at", "desc")
       .executeTakeFirst();
     if (!game) throw new ApplicationError(404, "GAME_NOT_FOUND", "No current game was found.");
     const member = await this.database
@@ -631,6 +632,10 @@ export class EvidenceService {
       )
       .where("s.deleted_at", "is", null);
     if (flaggedOnly) query = query.where("s.review_status", "=", "flagged");
+    // Private evidence stays owner-only during play. Once a winner is declared,
+    // the final gallery becomes part of the shared game record for every member.
+    if (game.evidence_visibility === "private" && game.phase !== "game_over")
+      query = query.where("s.uploader_participant_id", "=", principal.participantId);
     const rows = await query
       .orderBy("s.created_at")
       .orderBy("s.id")

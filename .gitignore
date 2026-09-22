@@ -8,3 +8,5 @@ coverage/
 *.log
 openapi/.generated-openapi.json
 .data/
+.playwright-results/
+playwright-report/

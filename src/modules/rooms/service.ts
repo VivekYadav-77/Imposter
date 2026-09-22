@@ -7,7 +7,7 @@ import type { Database, DatabaseSchema } from "../../infrastructure/database/dat
 import { inTransaction } from "../../infrastructure/database/transaction.js";
 import { ApplicationError } from "../../shared/errors/application-error.js";
 import { hashSecret } from "../../shared/security/tokens.js";
-import { maximumImposterCount, meetingCooldownSeconds } from "../games/domain.js";
+import { maximumImposterCount } from "../games/domain.js";
 import {
   normalizeNickname,
   type RoomCreationInput,
@@ -171,6 +171,9 @@ export class RoomService {
         "rooms.meeting_duration_seconds",
         "rooms.meeting_voting_mode",
         "rooms.vote_visibility",
+        "rooms.evidence_visibility",
+        "rooms.meeting_task_requirement",
+        "rooms.meeting_cooldown_seconds",
         "rooms.imposter_cooldown_seconds",
         "rooms.discussion_seconds",
         "rooms.review_seconds",
@@ -237,12 +240,11 @@ export class RoomService {
         meetingDurationSeconds: room.meeting_duration_seconds,
         meetingVotingMode: room.meeting_voting_mode,
         voteVisibility: room.vote_visibility,
+        evidenceVisibility: room.evidence_visibility,
+        meetingTaskRequirement: room.meeting_task_requirement,
+        meetingCooldownSeconds: room.meeting_cooldown_seconds,
         imposterCooldownSeconds: room.imposter_cooldown_seconds,
-        estimatedMeetingCooldownSeconds: meetingCooldownSeconds(
-          room.meeting_duration_seconds,
-          0,
-          0,
-        ),
+        estimatedMeetingCooldownSeconds: room.meeting_cooldown_seconds,
         imposterCount: room.imposter_count,
         allowedImposterCounts: Array.from(
           { length: maximumImposterCount(Math.max(3, participants.length)) },
@@ -382,6 +384,9 @@ export class RoomService {
               meeting_duration_seconds: 90,
               meeting_voting_mode: "timed",
               vote_visibility: "private",
+              evidence_visibility: "public",
+              meeting_task_requirement: "one",
+              meeting_cooldown_seconds: 90,
               imposter_cooldown_seconds: 60,
               last_activity_at: now,
               expires_at: expiresAt,
@@ -718,6 +723,15 @@ export class RoomService {
             ? { meeting_voting_mode: input.meetingVotingMode }
             : {}),
           ...(input.voteVisibility !== undefined ? { vote_visibility: input.voteVisibility } : {}),
+          ...(input.evidenceVisibility !== undefined
+            ? { evidence_visibility: input.evidenceVisibility }
+            : {}),
+          ...(input.meetingTaskRequirement !== undefined
+            ? { meeting_task_requirement: input.meetingTaskRequirement }
+            : {}),
+          ...(input.meetingCooldownSeconds !== undefined
+            ? { meeting_cooldown_seconds: input.meetingCooldownSeconds }
+            : {}),
           ...(input.imposterCooldownSeconds !== undefined
             ? { imposter_cooldown_seconds: input.imposterCooldownSeconds }
             : {}),

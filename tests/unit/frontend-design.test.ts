@@ -156,4 +156,78 @@ describe("frontend design foundations", () => {
     expect(roomClient).toContain("every connected eligible player has voted");
     expect(roomClient).toContain("meeting.requiredVotes");
   });
+
+  it("exposes the host gameplay controls and keeps evidence identities anonymous", async () => {
+    const roomClient = await readFile("src/client/components/room-client.tsx", "utf8");
+    expect(roomClient).toContain("Choose any whole number from 5 to 240 minutes.");
+    expect(roomClient).toContain("Evidence visibility");
+    expect(roomClient).toContain("Task needed to call a meeting");
+    expect(roomClient).toContain("Meeting cooldown");
+    expect(roomClient).toContain("The caller’s identity is never shown.");
+    expect(roomClient).not.toContain("Submitted by {meeting.reviewItem");
+    expect(roomClient).toContain('{task.status === "completed" ? "Done" : "To do"}');
+  });
+
+  it("uploads a selected task photo immediately and closes after the success sound", async () => {
+    const roomClient = await readFile("src/client/components/room-client.tsx", "utf8");
+    expect(roomClient).toContain("if (selectedFile) void upload(selectedFile)");
+    expect(roomClient).toContain('playGameSound("upload")');
+    expect(roomClient).toContain("window.setTimeout(onClose, 650)");
+    expect(roomClient).toContain("This will close automatically when the upload is ready.");
+  });
+
+  it("shows a responsive shared evidence archive after the final result", async () => {
+    const [roomClient, css] = await Promise.all([
+      readFile("src/client/components/room-client.tsx", "utf8"),
+      readFile("app/globals.css", "utf8"),
+    ]);
+    expect(roomClient).toContain("function FinalEvidenceSection");
+    expect(roomClient).toContain("With the result declared, every player can review");
+    expect(roomClient).toContain("participantApi.submissions(cursor)");
+    expect(roomClient).toContain(
+      'game.phase === "game_over" && <FinalEvidenceSection onError={onError} />',
+    );
+    expect(roomClient).toContain("Open final evidence photo");
+    expect(css).toContain(".final-evidence-grid");
+    expect(css).toContain("grid-template-columns: repeat(3, minmax(0, 1fr))");
+  });
+
+  it("ships the Signal Room semantic palette and locally bundled typography", async () => {
+    const [layout, css, manifest] = await Promise.all([
+      readFile("app/layout.tsx", "utf8"),
+      readFile("app/signal-room.css", "utf8"),
+      readFile("package.json", "utf8"),
+    ]);
+    expect(layout).toContain('import "./signal-room.css"');
+    expect(layout).toContain("@fontsource-variable/public-sans");
+    expect(layout).toContain("@fontsource/barlow-condensed");
+    expect(manifest).toContain('"@fontsource-variable/public-sans"');
+    expect(css).toContain('html[data-theme="dark"]');
+    expect(css).toContain('html[data-theme="light"]');
+    expect(css).toContain("--surface-1:");
+    expect(css).toContain("--text-1:");
+    expect(css).toContain("--motion-fast:");
+  });
+
+  it("uses original vector identity and scene assets instead of emoji UI", async () => {
+    const [icons, scenes, home, room] = await Promise.all([
+      readFile("src/client/components/icons.tsx", "utf8"),
+      readFile("src/client/components/signal-visuals.tsx", "utf8"),
+      readFile("app/page.tsx", "utf8"),
+      readFile("src/client/components/room-client.tsx", "utf8"),
+    ]);
+    expect(icons).toContain("export function BrandMark");
+    expect(icons).toContain("export type IconName");
+    expect(scenes).toContain("SignalSceneArt");
+    expect(home).toContain('<SignalSceneArt scene="meeting"');
+    expect(room).not.toContain("🤷");
+    expect(room).not.toContain("👁");
+  });
+
+  it("gives shared navigation and controls accessible touch targets", async () => {
+    const css = await readFile("app/signal-room.css", "utf8");
+    expect(css).toMatch(/\.site-header nav > a:not\(\.button\)[\s\S]*?min-height: 44px;/);
+    expect(css).toMatch(/\.site-footer a[\s\S]*?min-height: 44px;/);
+    expect(css).toMatch(/\.room-code,[\s\S]*?min-height: 44px;/);
+  });
 });

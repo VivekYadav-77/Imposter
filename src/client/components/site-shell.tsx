@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Brand, Button } from "./ui";
+import { Brand, Icon } from "./ui";
 
 export function SiteHeader({ minimal = false }: { minimal?: boolean }) {
   const [open, setOpen] = useState(false);
@@ -19,13 +19,14 @@ export function SiteHeader({ minimal = false }: { minimal?: boolean }) {
             aria-expanded={open}
             aria-controls="site-nav"
           >
-            Menu
+            <span>Menu</span>
+            <Icon name={open ? "close" : "chevron"} size={18} />
           </button>
           <nav id="site-nav" className={open ? "nav-open" : ""} aria-label="Main navigation">
             <Link href="/how-to-play">How to play</Link>
             <Link href="/privacy-and-photos">Privacy & photos</Link>
-            <Link href="/play">
-              <Button tabIndex={-1}>Start a room</Button>
+            <Link className="button button-primary" href="/play">
+              Start a room <Icon name="arrow" size={17} />
             </Link>
           </nav>
         </>
@@ -38,7 +39,9 @@ export function SiteFooter() {
   return (
     <footer className="site-footer">
       <Brand compact />
-      <p>Trust no one. Prove everything.</p>
+      <p>
+        Trust no one. <span>Prove everything.</span>
+      </p>
       <nav aria-label="Footer">
         <Link href="/how-to-play">How to play</Link>
         <Link href="/privacy-and-photos">Privacy & photos</Link>

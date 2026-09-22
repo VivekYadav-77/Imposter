@@ -3341,7 +3341,7 @@
           "taskPhaseSeconds": {
             "type": "integer",
             "minimum": 300,
-            "maximum": 3600
+            "maximum": 14400
           },
           "meetingsPerPlayer": {
             "type": "integer",
@@ -3366,6 +3366,25 @@
               "private",
               "public"
             ]
+          },
+          "evidenceVisibility": {
+            "type": "string",
+            "enum": [
+              "private",
+              "public"
+            ]
+          },
+          "meetingTaskRequirement": {
+            "type": "string",
+            "enum": [
+              "none",
+              "one"
+            ]
+          },
+          "meetingCooldownSeconds": {
+            "type": "integer",
+            "minimum": 10,
+            "maximum": 1800
           },
           "imposterCooldownSeconds": {
             "type": "integer",
@@ -3492,6 +3511,9 @@
               "meetingDurationSeconds",
               "meetingVotingMode",
               "voteVisibility",
+              "evidenceVisibility",
+              "meetingTaskRequirement",
+              "meetingCooldownSeconds",
               "imposterCooldownSeconds",
               "estimatedMeetingCooldownSeconds",
               "imposterCount",
@@ -3579,6 +3601,23 @@
                   "private",
                   "public"
                 ]
+              },
+              "evidenceVisibility": {
+                "type": "string",
+                "enum": [
+                  "private",
+                  "public"
+                ]
+              },
+              "meetingTaskRequirement": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "one"
+                ]
+              },
+              "meetingCooldownSeconds": {
+                "type": "integer"
               },
               "imposterCooldownSeconds": {
                 "type": "integer"
@@ -4174,6 +4213,7 @@
               "durationSeconds",
               "votingMode",
               "voteVisibility",
+              "requiresCompletedTask",
               "maxPerPlayer",
               "calledBySelf",
               "remainingForSelf",
@@ -4196,6 +4236,9 @@
                   "private",
                   "public"
                 ]
+              },
+              "requiresCompletedTask": {
+                "type": "boolean"
               },
               "maxPerPlayer": {
                 "type": "integer"

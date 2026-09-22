@@ -101,6 +101,9 @@ export interface RoomsTable {
   meeting_duration_seconds: number;
   meeting_voting_mode: "timed" | "all_voted";
   vote_visibility: "private" | "public";
+  evidence_visibility: "private" | "public";
+  meeting_task_requirement: "none" | "one";
+  meeting_cooldown_seconds: number;
   imposter_cooldown_seconds: number;
   created_at: Timestamp;
   last_activity_at: Timestamp;

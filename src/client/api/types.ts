@@ -42,6 +42,9 @@ export interface RoomSnapshot {
     meetingDurationSeconds: number;
     meetingVotingMode: "timed" | "all_voted";
     voteVisibility: "private" | "public";
+    evidenceVisibility: "private" | "public";
+    meetingTaskRequirement: "none" | "one";
+    meetingCooldownSeconds: number;
     imposterCooldownSeconds: number;
     estimatedMeetingCooldownSeconds: number;
     imposterCount: number;
@@ -184,6 +187,7 @@ export interface GameSnapshot {
     durationSeconds: number;
     votingMode: "timed" | "all_voted";
     voteVisibility: "private" | "public";
+    requiresCompletedTask: boolean;
     maxPerPlayer: number;
     calledBySelf: number;
     remainingForSelf: number;

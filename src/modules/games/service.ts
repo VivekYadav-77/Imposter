@@ -11,7 +11,6 @@ import {
   determineWinner,
   killCooldownSeconds,
   maximumImposterCount,
-  meetingCooldownSeconds,
   resolveEjection,
   resolveReview,
 } from "./domain.js";
@@ -378,6 +377,8 @@ export class GameService {
         "rooms.meeting_duration_seconds",
         "rooms.meeting_voting_mode",
         "rooms.vote_visibility",
+        "rooms.meeting_task_requirement",
+        "rooms.meeting_cooldown_seconds",
         "rooms.imposter_cooldown_seconds",
         "rooms.meetings_per_player",
         "self.role",
@@ -478,11 +479,7 @@ export class GameService {
     const taskProgress = progress.total ? progress.completed / progress.total : 0;
     const elapsedSeconds = Math.max(0, (Date.now() - new Date(game.started_at).getTime()) / 1000);
     const timeProgress = Math.min(1, elapsedSeconds / game.task_phase_seconds);
-    const dynamicMeetingCooldown = meetingCooldownSeconds(
-      game.meeting_duration_seconds,
-      taskProgress,
-      timeProgress,
-    );
+    const configuredMeetingCooldown = game.meeting_cooldown_seconds;
     const dynamicKillCooldown = killCooldownSeconds(
       game.imposter_cooldown_seconds,
       taskProgress,
@@ -497,7 +494,7 @@ export class GameService {
     }).filter((capability) => {
       if (capability !== "call_meeting") return true;
       return (
-        completedBySelf.count > 0 &&
+        (game.meeting_task_requirement === "none" || completedBySelf.count > 0) &&
         meetingsCalled.count < game.meetings_per_player &&
         (!game.meeting_available_at || new Date(game.meeting_available_at).getTime() <= Date.now())
       );
@@ -559,13 +556,14 @@ export class GameService {
       cooldowns: {
         killAvailableAt: game.kill_available_at ? iso(game.kill_available_at) : null,
         meetingAvailableAt: game.meeting_available_at ? iso(game.meeting_available_at) : null,
-        meetingCooldownSeconds: dynamicMeetingCooldown,
+        meetingCooldownSeconds: configuredMeetingCooldown,
         killCooldownSeconds: dynamicKillCooldown,
       },
       meetingRules: {
         durationSeconds: game.meeting_duration_seconds,
         votingMode: game.meeting_voting_mode,
         voteVisibility: game.vote_visibility,
+        requiresCompletedTask: game.meeting_task_requirement === "one",
         maxPerPlayer: game.meetings_per_player,
         calledBySelf: meetingsCalled.count,
         remainingForSelf: Math.max(0, game.meetings_per_player - meetingsCalled.count),
@@ -1144,7 +1142,7 @@ export class GameService {
         );
 
       const now = new Date();
-      const [actor, settings, completed, called, progress] = await Promise.all([
+      const [actor, settings, completed, called] = await Promise.all([
         trx
           .selectFrom("app.game_participants")
           .select(["life_status"])
@@ -1153,7 +1151,12 @@ export class GameService {
           .executeTakeFirst(),
         trx
           .selectFrom("app.rooms")
-          .select(["meeting_duration_seconds", "meetings_per_player", "task_phase_seconds"])
+          .select([
+            "meeting_duration_seconds",
+            "meeting_cooldown_seconds",
+            "meeting_task_requirement",
+            "meetings_per_player",
+          ])
           .where("id", "=", game.room_id)
           .executeTakeFirstOrThrow(),
         trx
@@ -1169,15 +1172,6 @@ export class GameService {
           .where("trigger_type", "=", "user_called")
           .where("trigger_actor_participant_id", "=", principal.participantId)
           .executeTakeFirstOrThrow(),
-        trx
-          .selectFrom("app.task_assignments")
-          .select([
-            sql<number>`count(*)::int`.as("total"),
-            sql<number>`count(*) filter (where status = 'completed')::int`.as("completed"),
-          ])
-          .where("game_id", "=", game.id)
-          .where("counts_toward_progress", "=", true)
-          .executeTakeFirstOrThrow(),
       ]);
       if (!actor || actor.life_status !== "alive")
         throw new ApplicationError(
@@ -1185,7 +1179,7 @@ export class GameService {
           "PLAYER_NOT_ELIGIBLE",
           "Dead or ejected players cannot call meetings.",
         );
-      if (completed.count < 1)
+      if (settings.meeting_task_requirement === "one" && completed.count < 1)
         throw new ApplicationError(
           403,
           "TASK_REQUIRED",
@@ -1207,17 +1201,6 @@ export class GameService {
           },
         );
 
-      const taskProgress = progress.total ? progress.completed / progress.total : 0;
-      const timeProgress = Math.min(
-        1,
-        Math.max(0, (now.getTime() - new Date(game.started_at).getTime()) / 1000) /
-          settings.task_phase_seconds,
-      );
-      const cooldownSeconds = meetingCooldownSeconds(
-        settings.meeting_duration_seconds,
-        taskProgress,
-        timeProgress,
-      );
       const meeting = await this.createMeeting(
         trx,
         game,
@@ -1236,7 +1219,8 @@ export class GameService {
           phase_started_at: now,
           phase_deadline_at: meeting.deadline,
           meeting_available_at: new Date(
-            now.getTime() + (settings.meeting_duration_seconds + cooldownSeconds) * 1000,
+            now.getTime() +
+              (settings.meeting_duration_seconds + settings.meeting_cooldown_seconds) * 1000,
           ),
         })
         .where("id", "=", game.id)
@@ -1958,6 +1942,11 @@ export class GameService {
           eventType = "game.ended";
           payload = { schemaVersion: 1, winner: "imposters", reason: "time_expired" };
         } else {
+          const settings = await trx
+            .selectFrom("app.rooms")
+            .select("meeting_cooldown_seconds")
+            .where("id", "=", game.room_id)
+            .executeTakeFirstOrThrow();
           await trx
             .updateTable("app.games")
             .set({
@@ -1965,6 +1954,9 @@ export class GameService {
               state_version: nextVersion,
               phase_started_at: now,
               phase_deadline_at: deadline,
+              meeting_available_at: new Date(
+                now.getTime() + settings.meeting_cooldown_seconds * 1000,
+              ),
             })
             .where("id", "=", game.id)
             .execute();

@@ -1,5 +1,6 @@
 "use client";
-import { Button } from "@/client/components/ui";
+import { Button, Icon } from "@/client/components/ui";
+import { SignalSceneArt } from "@/client/components/signal-visuals";
 export default function ErrorPage({
   reset,
 }: {
@@ -8,7 +9,12 @@ export default function ErrorPage({
 }) {
   return (
     <main className="route-state">
-      <span className="empty-seal">!</span>
+      <div className="route-state-art">
+        <SignalSceneArt scene="meeting" compact />
+      </div>
+      <span className="empty-seal">
+        <Icon name="warning" />
+      </span>
       <h1>That page hit a snag.</h1>
       <p>The issue was contained. You can safely try again.</p>
       <Button onClick={reset}>Try again</Button>

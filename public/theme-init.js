@@ -1,15 +1,15 @@
 (() => {
   try {
-    const saved = localStorage.getItem("imposter-game-theme");
+    const saved = globalThis.localStorage.getItem("imposter-game-theme");
     const theme =
       saved === "light" || saved === "dark"
         ? saved
-        : matchMedia("(prefers-color-scheme: light)").matches
+        : globalThis.matchMedia("(prefers-color-scheme: light)").matches
           ? "light"
           : "dark";
-    document.documentElement.dataset.theme = theme;
-    document.documentElement.style.colorScheme = theme;
+    globalThis.document.documentElement.dataset.theme = theme;
+    globalThis.document.documentElement.style.colorScheme = theme;
   } catch {
-    document.documentElement.dataset.theme = "dark";
+    globalThis.document.documentElement.dataset.theme = "dark";
   }
 })();

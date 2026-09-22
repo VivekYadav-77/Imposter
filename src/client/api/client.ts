@@ -221,7 +221,10 @@ export const participantApi = {
       body: json({ expectedStateVersion, uploadId }),
       idempotencyKey: key,
     }),
-  submissions: () => apiRequest<Submission[]>("/api/v1/games/current/submissions?limit=50"),
+  submissions: (cursor?: string) =>
+    apiRequest<Submission[]>(
+      `/api/v1/games/current/submissions?limit=50${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
+    ),
   flag: (
     id: string,
     expectedStateVersion: number,

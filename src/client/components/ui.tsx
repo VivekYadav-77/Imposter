@@ -8,13 +8,14 @@ import {
   type InputHTMLAttributes,
   type ReactNode,
 } from "react";
+import { BrandMark, Icon, type IconName } from "./icons";
+
+export { Icon, type IconName } from "./icons";
 
 export function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <span className="brand">
-      <span className="brand-mark" aria-hidden="true">
-        <span />
-      </span>
+      <BrandMark />
       <span>
         {compact ? (
           "IMPOSTER"
@@ -25,6 +26,28 @@ export function Brand({ compact = false }: { compact?: boolean }) {
         )}
       </span>
     </span>
+  );
+}
+
+export function IconButton({
+  icon,
+  label,
+  className = "",
+  ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  icon: IconName;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      className={`icon-button ${className}`}
+      aria-label={label}
+      title={label}
+      {...props}
+    >
+      <Icon name={icon} size={20} />
+    </button>
   );
 }
 
@@ -170,7 +193,7 @@ export function EmptyState({
   return (
     <section className="empty-state">
       <span className="empty-seal" aria-hidden="true">
-        ×
+        <Icon name="warning" size={28} />
       </span>
       <h2>{title}</h2>
       <p>{description}</p>
@@ -220,9 +243,7 @@ export function Dialog({
     >
       <div className="dialog-head">
         <h2 id="dialog-title">{title}</h2>
-        <button className="icon-button" onClick={onClose} aria-label="Close dialog">
-          ×
-        </button>
+        <IconButton icon="close" onClick={onClose} label="Close dialog" />
       </div>
       {children}
     </dialog>
@@ -323,14 +344,17 @@ export function PhaseBar({
   identity,
   children,
 }: {
-  phase: "lobby" | "tasks" | "meeting" | "results";
+  phase: PhaseVisual;
   identity?: string;
   children?: ReactNode;
 }) {
   return (
     <header className={`phase-bar phase-${phase}`}>
       <div>
-        <span className="phase-label">{phase === "tasks" ? "TASKS" : phase.toUpperCase()}</span>
+        <span className="phase-label">
+          <Icon name={phaseIcon[phase]} size={20} />
+          {phase === "tasks" ? "TASKS" : phase.toUpperCase()}
+        </span>
         {children}
       </div>
       {identity && (
@@ -341,6 +365,15 @@ export function PhaseBar({
     </header>
   );
 }
+
+export type PhaseVisual = "lobby" | "tasks" | "meeting" | "results";
+
+const phaseIcon: Record<PhaseVisual, IconName> = {
+  lobby: "lobby",
+  tasks: "tasks",
+  meeting: "meeting",
+  results: "verdict",
+};
 
 export function Tabs({
   label,
@@ -387,9 +420,7 @@ export function Drawer({
       <aside className="drawer" aria-label={title}>
         <div className="dialog-head">
           <h2>{title}</h2>
-          <button className="icon-button" onClick={onClose} aria-label="Close drawer">
-            ×
-          </button>
+          <IconButton icon="close" onClick={onClose} label="Close drawer" />
         </div>
         {children}
       </aside>
