@@ -14,6 +14,10 @@ import type {
 } from "../api/types";
 import { RealtimeClient } from "../realtime/client";
 import { playGameSound, playMeetingAlert } from "../audio/game-sounds";
+import {
+  evidenceImageErrorMessage,
+  normalizeEvidenceImage,
+} from "../image/normalize-evidence-image";
 import { avatarById, type AvatarId } from "../../shared/avatars";
 import { PlayerAvatar } from "./player-avatar";
 import {
@@ -1577,37 +1581,47 @@ function UploadDialog({
   onClose: () => void;
   onError: (message: string) => void;
 }) {
-  const [state, setState] = useState<"idle" | "uploading" | "processing" | "done">("idle");
+  const [state, setState] = useState<"idle" | "optimizing" | "uploading" | "processing" | "done">(
+    "idle",
+  );
   const closeTimer = useRef<number | undefined>(undefined);
+  const activeUpload = useRef<AbortController | null>(null);
   useEffect(() => {
     if (!open) {
+      activeUpload.current?.abort();
+      activeUpload.current = null;
       setState("idle");
     }
     return () => {
       if (closeTimer.current !== undefined) window.clearTimeout(closeTimer.current);
+      activeUpload.current?.abort();
     };
   }, [open]);
   if (!assignment) return null;
   const upload = async (file: File) => {
-    if (file.size > 5_242_880) {
-      onError("Choose an image smaller than 5 MB.");
-      return;
-    }
-    setState("uploading");
-    playGameSound("upload-start");
+    activeUpload.current?.abort();
+    const controller = new AbortController();
+    activeUpload.current = controller;
+    setState("optimizing");
     try {
+      const preparedFile = await normalizeEvidenceImage(file, controller.signal);
+      if (controller.signal.aborted) return;
+      setState("uploading");
+      playGameSound("upload-start");
       const intent = (
         await participantApi.uploadIntent(
           assignment.id,
-          file,
+          preparedFile,
           game.stateVersion,
           createIdempotencyKey(),
+          controller.signal,
         )
       ).data;
       const response = await fetch(intent.url, {
         method: intent.method,
         headers: intent.headers,
-        body: file,
+        body: preparedFile,
+        signal: controller.signal,
       });
       if (!response.ok) throw new Error("Storage upload failed");
       setState("processing");
@@ -1616,16 +1630,24 @@ function UploadDialog({
         intent.uploadId,
         game.stateVersion,
         createIdempotencyKey(),
+        controller.signal,
       );
       const latest = await participantApi.snapshot();
       setGame(latest.data);
       playGameSound("upload");
       gameToast("Photo uploaded to this task.");
       setState("done");
+      activeUpload.current = null;
       closeTimer.current = window.setTimeout(onClose, 650);
     } catch (e) {
+      if (e instanceof Error && e.name === "AbortError") return;
       playGameSound("upload-failure");
-      onError(errorMessage(e));
+      onError(
+        e instanceof Error && e.name === "EvidenceImageError"
+          ? evidenceImageErrorMessage(e)
+          : errorMessage(e),
+      );
+      activeUpload.current = null;
       setState("idle");
     }
   };
@@ -1638,9 +1660,11 @@ function UploadDialog({
           <h3>
             {state === "done"
               ? "Done"
-              : state === "uploading"
-                ? "Uploading photo…"
-                : "Finishing task…"}
+              : state === "optimizing"
+                ? "Optimizing photo…"
+                : state === "uploading"
+                  ? "Uploading photo…"
+                  : "Finishing task…"}
           </h3>
           <p>
             {state === "done"
@@ -1660,7 +1684,7 @@ function UploadDialog({
             }}
           />
           <span>Upload photo</span>
-          <small>Choose or take one image · JPEG, PNG or WebP · max 5 MB</small>
+          <small>Choose or take one image · large photos are optimized automatically</small>
         </label>
       )}
     </Dialog>

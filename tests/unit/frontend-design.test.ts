@@ -254,6 +254,8 @@ describe("frontend design foundations", () => {
   it("uploads a selected task photo immediately and closes after the success sound", async () => {
     const roomClient = await readFile("src/client/components/room-client.tsx", "utf8");
     expect(roomClient).toContain("if (selectedFile) void upload(selectedFile)");
+    expect(roomClient).toContain("await normalizeEvidenceImage(file, controller.signal)");
+    expect(roomClient).toContain("Optimizing photo…");
     expect(roomClient).toContain('playGameSound("upload")');
     expect(roomClient).toContain("window.setTimeout(onClose, 650)");
     expect(roomClient).toContain("This will close automatically when the upload is ready.");

@@ -212,22 +212,26 @@ export const participantApi = {
     file: File,
     expectedStateVersion: number,
     key = createIdempotencyKey(),
+    signal?: AbortSignal,
   ) =>
     apiRequest<UploadIntent>(`/api/v1/task-assignments/${assignmentId}/upload-intents`, {
       method: "POST",
       body: json({ expectedStateVersion, contentType: file.type, byteSize: file.size }),
       idempotencyKey: key,
+      signal,
     }),
   confirmUpload: (
     assignmentId: string,
     uploadId: string,
     expectedStateVersion: number,
     key = createIdempotencyKey(),
+    signal?: AbortSignal,
   ) =>
     apiRequest(`/api/v1/task-assignments/${assignmentId}/submissions`, {
       method: "POST",
       body: json({ expectedStateVersion, uploadId }),
       idempotencyKey: key,
+      signal,
     }),
   submissions: (cursor?: string) =>
     apiRequest<Submission[]>(
