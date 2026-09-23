@@ -15,7 +15,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --exclude tests/integration/** --exclude tests/browser/**",
+    "test": "vitest run --exclude \"tests/integration/**\" --exclude \"tests/browser/**\"",
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:browser": "playwright test",
