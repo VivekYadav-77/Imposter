@@ -1,11 +1,5 @@
 export type GamePhase =
-  | "task"
-  | "discussion"
-  | "review"
-  | "voting"
-  | "result"
-  | "game_over"
-  | "abandoned";
+  "task" | "discussion" | "review" | "voting" | "result" | "game_over" | "abandoned";
 export type GameRole = "crew" | "imposter";
 export type LifeStatus = "alive" | "killed" | "ejected";
 export type Winner = "crew" | "imposters";

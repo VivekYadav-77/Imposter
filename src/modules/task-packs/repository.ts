@@ -56,15 +56,13 @@ async function loadPack(
     createdAt: iso(pack.created_at),
     updatedAt: iso(pack.updated_at),
     roles: pack.roles,
-    items: items.map(
-      (item): PackItemDto => ({
-        id: item.id,
-        position: item.position,
-        description: item.description,
-        isActive: item.is_active,
-        difficulty: item.difficulty,
-      }),
-    ),
+    items: items.map((item): PackItemDto => ({
+      id: item.id,
+      position: item.position,
+      description: item.description,
+      isActive: item.is_active,
+      difficulty: item.difficulty,
+    })),
   };
 }
 

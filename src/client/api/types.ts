@@ -98,13 +98,7 @@ export interface MapRole {
 
 export type LifeStatus = "alive" | "killed" | "ejected";
 export type GamePhase =
-  | "task"
-  | "discussion"
-  | "review"
-  | "voting"
-  | "result"
-  | "game_over"
-  | "abandoned";
+  "task" | "discussion" | "review" | "voting" | "result" | "game_over" | "abandoned";
 
 export interface MeetingReviewItem {
   id?: string;
