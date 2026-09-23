@@ -3,3 +3,4 @@ dist/
 coverage/
 node_modules/
 openapi/openapi.json
+GIT_HISTORY_RECONSTRUCTION.md

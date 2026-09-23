@@ -13,12 +13,14 @@ The backend gameplay loop and production-readiness baseline are complete. HTTP `
 ## Local setup
 
 1. Copy `.env.example` to `.env` and set a local `DATABASE_URL`. Do not commit it.
-2. Optionally start PostgreSQL with `POSTGRES_PASSWORD` set in your shell: `docker compose up -d postgres`.
+2. Install PostgreSQL 16 or newer locally, start it, and create the database named in `DATABASE_URL`.
 3. Run `npm ci`.
 4. Run `npm run migrate:up`.
 5. Provision the initial owner using [the administrator runbook](docs/ADMIN_OPERATIONS.md).
 6. Run `npm run dev`.
 7. Check `GET http://127.0.0.1:3000/health/live` and `/health/ready`.
+
+Uploaded evidence is stored under `EVIDENCE_LOCAL_DIRECTORY` (default: `.data/evidence`). Keep that directory writable by the application and include it in your server backup policy if the files must survive a server loss.
 
 The application deliberately fails startup when required configuration is absent. Production API documentation is disabled unless `EXPOSE_API_DOCS=true` is explicitly set.
 
@@ -43,7 +45,8 @@ npm run build
 - [Security design](docs/SECURITY.md)
 - [Administrator operations](docs/ADMIN_OPERATIONS.md)
 - [Production operations](docs/PRODUCTION_OPERATIONS.md)
+- [AWS EC2 deployment](docs/AWS_EC2_DEPLOYMENT.md)
 
 ## Current boundary
 
-The launch topology is deliberately one persistent application process behind a TLS/WebSocket proxy, backed by managed PostgreSQL and private S3-compatible storage. Multiple replicas are unsupported until shared realtime coordination is introduced. Provider account setup, public domain approval, privacy/legal approval, and a witnessed restore drill remain launch-owner actions rather than repository code.
+The launch topology is deliberately simple: one persistent Node.js application process, one PostgreSQL database, and one private local evidence directory on the same server. A TLS/WebSocket reverse proxy is recommended for internet-facing use. Multiple application replicas are unsupported because realtime coordination and local evidence files are single-server resources.

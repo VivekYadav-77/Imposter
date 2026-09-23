@@ -33,7 +33,6 @@ describe("loadConfig", () => {
       SERVICE_VERSION: "sha-123",
       CORS_ALLOWED_ORIGINS: "https://game.example",
       CSP_IMAGE_SOURCES: "https://evidence.example",
-      EVIDENCE_S3_ENDPOINT: "https://storage.example",
       TRUST_PROXY: "true",
     });
     expect(config.appEnv).toBe("production");

@@ -28,7 +28,7 @@ flowchart LR
     end
     subgraph datastore ["Data Stores"]
         postgres[PostgreSQL]
-        objects[Private Object Storage]
+        objects[Private Evidence Directory]
     end
     subgraph external ["Operations"]
         monitoring[Error and Metrics Service]
@@ -155,7 +155,7 @@ Use PostgreSQL-backed job records only where retries/history are required. Do no
 - Task text is snapshotted into game-owned records.
 - Secret role and real/fake assignment fields are isolated in server-only records and DTOs.
 - The event table is an audit/debug aid, not event sourcing.
-- Object storage keys are references; signed URLs are short-lived transport capabilities, not stored data.
+- Evidence file keys are references; signed application URLs are short-lived transport capabilities, not stored data.
 
 See `DATABASE_DESIGN.md`.
 
@@ -170,7 +170,7 @@ TLS reverse proxy / managed ingress
    |
 One persistent Node process
    |--- PostgreSQL
-   |--- Private object storage
+   |--- Private local evidence directory
    `--- Monitoring/error service
 ```
 
@@ -196,7 +196,7 @@ Do not enable multiple instances merely by changing a replica count. First add a
 | Realtime publish fails         | HTTP command remains committed; clients recover through snapshot/version          |
 | Duplicate HTTP command         | Idempotency record returns original compatible result                             |
 | Database unavailable           | Reject writes with safe retryable error; do not invent local state                |
-| Object store unavailable       | Do not issue/confirm upload; preserve assignment as incomplete or provisional     |
+| Evidence directory unavailable | Do not issue/confirm upload; preserve assignment as incomplete or provisional     |
 | Image processing fails         | Quarantine/delete object, invalidate submission, reopen assignment, notify player |
 | Deadline and user command race | Game-row lock and expected version allow only one valid transition                |
 | Host disconnects               | Grace period, then deterministic host transfer                                    |
@@ -207,7 +207,7 @@ Do not enable multiple instances merely by changing a replica count. First add a
 - [ADR-002](adr/ADR-002-REALTIME.md): Socket.IO over WebSocket.
 - [ADR-003](adr/ADR-003-WEB-CREDENTIALS.md): HttpOnly web cookie and bearer native credential transports.
 - ADR-004: Image normalization/metadata stripping library and resource limits.
-- [ADR-005](adr/ADR-005-DEPLOYMENT-ARTIFACT.md): provider-neutral OCI artifact; provider selection deferred.
+- [ADR-005](adr/ADR-005-DEPLOYMENT-ARTIFACT.md): direct single-server Node.js deployment.
 - [ADR-006](adr/ADR-006-TEST-AND-CONTRACT-STACK.md): Vitest and generated OpenAPI 3.1 validation.
 
 The plan intentionally does not lock library versions before implementation begins. Exact versions must be selected from supported releases in Phase 1 and recorded with their operational constraints.
@@ -217,6 +217,5 @@ The plan intentionally does not lock library versions before implementation begi
 - [Next.js custom server guide](https://nextjs.org/docs/app/guides/custom-server)
 - [Next.js self-hosting guide](https://nextjs.org/docs/app/guides/self-hosting)
 - [OpenAPI specification](https://spec.openapis.org/oas/)
-- [Amazon S3 presigned URL guide](https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html)
 - [PostgreSQL transaction isolation](https://www.postgresql.org/docs/current/transaction-iso.html)
 - [PostgreSQL explicit locking](https://www.postgresql.org/docs/current/explicit-locking.html)

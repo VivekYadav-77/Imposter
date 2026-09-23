@@ -16,16 +16,16 @@ This is a party game, not a financial system, but role secrecy and photo privacy
 
 ## 2. Trust boundaries and threats
 
-| Boundary                 | Representative threat                  | Control                                                                                       |
-| ------------------------ | -------------------------------------- | --------------------------------------------------------------------------------------------- |
-| Untrusted client to API  | Forged role/action, malformed input    | Authentication, resource authorization, schema validation, phase checks                       |
-| Player to player         | Nickname impersonation, role leakage   | Opaque session token, player-specific DTOs, unique normalized nicknames                       |
-| Browser to API           | CSRF or token theft                    | SameSite HttpOnly cookie, origin checks, CSP, output encoding                                 |
-| Native client to API     | Stolen/replayed token                  | TLS, high-entropy scoped token, protected storage, expiry/revocation                          |
-| Client to object storage | Upload overwrite or arbitrary file     | Random key, single-purpose short-lived permission, type/size constraints, confirmation checks |
-| Admin interface          | Brute force or privilege escalation    | Separate auth realm, password hashing, rate limit, server-side admin authorization, audit     |
-| Concurrent commands      | Double vote/kill or stale phase action | Unique constraints, idempotency, expected state version, transaction and row lock             |
-| Logs/monitoring          | Secret or personal-data leakage        | Field allowlist/redaction and restricted access                                               |
+| Boundary                | Representative threat                  | Control                                                                                       |
+| ----------------------- | -------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Untrusted client to API | Forged role/action, malformed input    | Authentication, resource authorization, schema validation, phase checks                       |
+| Player to player        | Nickname impersonation, role leakage   | Opaque session token, player-specific DTOs, unique normalized nicknames                       |
+| Browser to API          | CSRF or token theft                    | SameSite HttpOnly cookie, origin checks, CSP, output encoding                                 |
+| Native client to API    | Stolen/replayed token                  | TLS, high-entropy scoped token, protected storage, expiry/revocation                          |
+| Client to evidence API  | Upload overwrite or arbitrary file     | Random key, single-purpose short-lived permission, type/size constraints, confirmation checks |
+| Admin interface         | Brute force or privilege escalation    | Separate auth realm, password hashing, rate limit, server-side admin authorization, audit     |
+| Concurrent commands     | Double vote/kill or stale phase action | Unique constraints, idempotency, expected state version, transaction and row lock             |
+| Logs/monitoring         | Secret or personal-data leakage        | Field allowlist/redaction and restricted access                                               |
 
 ## 3. Participant authentication
 
@@ -99,7 +99,7 @@ Host is a room capability, not a superuser role. It must not bypass game rules o
 - Configure CORS to known origins; do not combine wildcard origins with credentials.
 - Apply secure headers including a restrictive Content Security Policy on the web client.
 - Rate-limit by a combination of IP, room code, participant session, admin identity, and endpoint class.
-- Keep dependency and container scanning in CI; patch supported versions deliberately.
+- Keep dependency and secret scanning in CI; patch supported versions deliberately.
 
 Suggested endpoint classes:
 
@@ -115,7 +115,7 @@ Exact numbers must be load-tested rather than guessed into the contract.
 
 ## 8. File upload security
 
-- Store objects in a private bucket with public access blocked.
+- Store files outside publicly served directories and restrict filesystem access to the application user.
 - Generate server-owned random object keys under a game/participant namespace.
 - Accept only JPEG, PNG, and WebP. Reject SVG and other active/document formats.
 - Enforce a small maximum object size, initially proposed as 5 MiB.
@@ -133,9 +133,9 @@ The task may become provisionally complete immediately after confirmation. A pro
 
 - Separate migration and runtime database privileges where hosting permits.
 - Runtime role receives only required schema privileges.
-- Require encrypted network connections to managed PostgreSQL and object storage.
+- Require encrypted network connections to PostgreSQL when it is not on the same trusted server.
 - Store secrets in hosting secret management/environment injection, never source control.
-- Rotate database, storage, admin-bootstrap, and token-hash secrets.
+- Rotate database, admin-bootstrap, and token-hash secrets.
 - Automated backups must be encrypted; restore procedures must be tested.
 - Reverse proxy applies TLS, request/header limits, timeouts, and WebSocket upgrade rules.
 - Production debug endpoints and stack traces are disabled.
@@ -189,4 +189,3 @@ Forbidden examples:
 - [OWASP File Upload Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html)
 - [OWASP Authentication Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html)
 - [OWASP Authorization Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html)
-- [AWS presigned URL guidance](https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-presigned-url.html)

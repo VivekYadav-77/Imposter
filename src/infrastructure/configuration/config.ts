@@ -46,11 +46,7 @@ const configSchema = z
     ROOM_CODE_COOLDOWN_SECONDS: z.coerce.number().int().min(0).max(604800).default(86400),
     HOST_DISCONNECT_GRACE_SECONDS: z.coerce.number().int().min(5).max(600).default(30),
     ROOM_MAINTENANCE_INTERVAL_MS: z.coerce.number().int().min(1000).max(60000).default(10000),
-    EVIDENCE_BUCKET: z.string().min(1).default("imposter-game-private"),
     EVIDENCE_LOCAL_DIRECTORY: z.string().min(1).default(".data/evidence"),
-    EVIDENCE_S3_REGION: z.string().min(1).default("us-east-1"),
-    EVIDENCE_S3_ENDPOINT: z.string().url().optional(),
-    EVIDENCE_S3_FORCE_PATH_STYLE: booleanString,
     EVIDENCE_UPLOAD_TTL_SECONDS: z.coerce.number().int().min(60).max(900).default(300),
     EVIDENCE_VIEW_TTL_SECONDS: z.coerce.number().int().min(30).max(300).default(60),
     EVIDENCE_MAX_BYTES: z.coerce.number().int().min(1024).max(5242880).default(5242880),
@@ -64,8 +60,6 @@ const configSchema = z
     EVIDENCE_RETENTION_SECONDS: z.coerce.number().int().min(3600).max(86400).default(86400),
     EVIDENCE_ORPHAN_TTL_SECONDS: z.coerce.number().int().min(300).max(86400).default(3600),
     EVIDENCE_WORKER_INTERVAL_MS: z.coerce.number().int().min(1000).max(60000).default(5000),
-    EVIDENCE_S3_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(5).default(3),
-    EVIDENCE_S3_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(500).max(30000).default(5000),
     REALTIME_PING_INTERVAL_MS: z.coerce.number().int().min(5000).max(60000).default(25000),
     REALTIME_PING_TIMEOUT_MS: z.coerce.number().int().min(5000).max(60000).default(20000),
     REALTIME_DISCONNECT_GRACE_MS: z.coerce.number().int().min(0).max(60000).default(5000),
@@ -128,13 +122,6 @@ const configSchema = z
         });
       }
     }
-    if (values.EVIDENCE_S3_ENDPOINT && new URL(values.EVIDENCE_S3_ENDPOINT).protocol !== "https:") {
-      context.addIssue({
-        code: "custom",
-        path: ["EVIDENCE_S3_ENDPOINT"],
-        message: "production storage endpoints must use HTTPS",
-      });
-    }
   })
   .transform((values) => ({
     appEnv: values.APP_ENV,
@@ -175,11 +162,7 @@ const configSchema = z
     roomCodeCooldownSeconds: values.ROOM_CODE_COOLDOWN_SECONDS,
     hostDisconnectGraceSeconds: values.HOST_DISCONNECT_GRACE_SECONDS,
     roomMaintenanceIntervalMs: values.ROOM_MAINTENANCE_INTERVAL_MS,
-    evidenceBucket: values.EVIDENCE_BUCKET,
     evidenceLocalDirectory: values.EVIDENCE_LOCAL_DIRECTORY,
-    evidenceS3Region: values.EVIDENCE_S3_REGION,
-    evidenceS3Endpoint: values.EVIDENCE_S3_ENDPOINT,
-    evidenceS3ForcePathStyle: values.EVIDENCE_S3_FORCE_PATH_STYLE,
     evidenceUploadTtlSeconds: values.EVIDENCE_UPLOAD_TTL_SECONDS,
     evidenceViewTtlSeconds: values.EVIDENCE_VIEW_TTL_SECONDS,
     evidenceMaxBytes: values.EVIDENCE_MAX_BYTES,
@@ -188,8 +171,6 @@ const configSchema = z
     evidenceRetentionSeconds: values.EVIDENCE_RETENTION_SECONDS,
     evidenceOrphanTtlSeconds: values.EVIDENCE_ORPHAN_TTL_SECONDS,
     evidenceWorkerIntervalMs: values.EVIDENCE_WORKER_INTERVAL_MS,
-    evidenceS3MaxAttempts: values.EVIDENCE_S3_MAX_ATTEMPTS,
-    evidenceS3RequestTimeoutMs: values.EVIDENCE_S3_REQUEST_TIMEOUT_MS,
     realtimePingIntervalMs: values.REALTIME_PING_INTERVAL_MS,
     realtimePingTimeoutMs: values.REALTIME_PING_TIMEOUT_MS,
     realtimeDisconnectGraceMs: values.REALTIME_DISCONNECT_GRACE_MS,

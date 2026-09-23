@@ -95,4 +95,3 @@ Desktop.ini
 *.bak
 *.tmp
 *.temp
-docker-compose.override.yml
