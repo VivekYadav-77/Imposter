@@ -255,15 +255,26 @@ export class EvidenceService {
         .execute();
       const pendingIntent = await trx
         .selectFrom("app.evidence_upload_intents")
-        .select("id")
+        .selectAll()
         .where("assignment_id", "=", assignmentId)
         .where("status", "=", "pending")
         .executeTakeFirst();
+      if (
+        pendingIntent &&
+        pendingIntent.content_type === input.contentType &&
+        Number(pendingIntent.byte_size) === input.byteSize &&
+        pendingIntent.checksum === (input.checksum ?? null)
+      ) {
+        await this.remember(trx, principal.participantId, key, operation, input, {
+          uploadId: pendingIntent.id,
+        });
+        return pendingIntent;
+      }
       if (pendingIntent)
         throw new ApplicationError(
           409,
           "UPLOAD_ALREADY_PENDING",
-          "The assignment already has an active upload intent.",
+          "A different photo upload is already in progress. Retry that photo or wait a few minutes.",
         );
       const used = await trx
         .selectFrom("app.evidence_upload_intents as intent")

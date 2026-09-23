@@ -168,9 +168,10 @@ export const participantApi = {
       body: "{}",
       idempotencyKey: key,
     }),
-  snapshot: (knownStateVersion?: number) =>
+  snapshot: (knownStateVersion?: number, signal?: AbortSignal) =>
     apiRequest<GameSnapshot>(
       `/api/v1/games/current/snapshot${knownStateVersion === undefined ? "" : `?knownStateVersion=${knownStateVersion}`}`,
+      { signal },
     ),
   meeting: () => apiRequest<Meeting>("/api/v1/meetings/current"),
   kill: (targetParticipantId: string, expectedStateVersion: number, key = createIdempotencyKey()) =>

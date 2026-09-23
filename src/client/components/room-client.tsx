@@ -18,6 +18,7 @@ import {
   evidenceImageErrorMessage,
   normalizeEvidenceImage,
 } from "../image/normalize-evidence-image";
+import { uploadEvidenceObject } from "../image/upload-evidence-object";
 import { avatarById, type AvatarId } from "../../shared/avatars";
 import { PlayerAvatar } from "./player-avatar";
 import {
@@ -1608,31 +1609,46 @@ function UploadDialog({
       if (controller.signal.aborted) return;
       setState("uploading");
       playGameSound("upload-start");
-      const intent = (
-        await participantApi.uploadIntent(
+      let expectedStateVersion = game.stateVersion;
+      const refreshStateVersion = async () => {
+        const latest = await participantApi.snapshot(undefined, controller.signal);
+        setGame(latest.data);
+        return latest.data.stateVersion;
+      };
+      const createIntent = () =>
+        participantApi.uploadIntent(
           assignment.id,
           preparedFile,
-          game.stateVersion,
+          expectedStateVersion,
           createIdempotencyKey(),
           controller.signal,
-        )
-      ).data;
-      const response = await fetch(intent.url, {
-        method: intent.method,
-        headers: intent.headers,
-        body: preparedFile,
-        signal: controller.signal,
-      });
-      if (!response.ok) throw new Error("Storage upload failed");
+        );
+      let intent;
+      try {
+        intent = (await createIntent()).data;
+      } catch (error) {
+        if (!(error instanceof ApiError) || error.code !== "GAME_STATE_CONFLICT") throw error;
+        expectedStateVersion = await refreshStateVersion();
+        intent = (await createIntent()).data;
+      }
+      await uploadEvidenceObject(intent, preparedFile, controller.signal);
       setState("processing");
-      await participantApi.confirmUpload(
-        assignment.id,
-        intent.uploadId,
-        game.stateVersion,
-        createIdempotencyKey(),
-        controller.signal,
-      );
-      const latest = await participantApi.snapshot();
+      const confirm = () =>
+        participantApi.confirmUpload(
+          assignment.id,
+          intent.uploadId,
+          expectedStateVersion,
+          createIdempotencyKey(),
+          controller.signal,
+        );
+      try {
+        await confirm();
+      } catch (error) {
+        if (!(error instanceof ApiError) || error.code !== "GAME_STATE_CONFLICT") throw error;
+        expectedStateVersion = await refreshStateVersion();
+        await confirm();
+      }
+      const latest = await participantApi.snapshot(undefined, controller.signal);
       setGame(latest.data);
       playGameSound("upload");
       gameToast("Photo uploaded to this task.");

@@ -279,6 +279,34 @@ describeWithDatabase("private evidence lifecycle", () => {
     ).rejects.toMatchObject({ code: "ASSIGNMENT_NOT_FOUND" });
   });
 
+  it("reuses a matching pending upload intent after an interrupted attempt", async () => {
+    const { principals, snapshot } = await startedRoom();
+    const owner = principals[0];
+    const own = await games.snapshot(owner);
+    const assignmentId = own.assignments[0].id;
+    const input = {
+      expectedStateVersion: snapshot.stateVersion,
+      contentType: "image/jpeg" as const,
+      byteSize: 128_000,
+    };
+
+    const first = await evidence.createUploadIntent(owner, assignmentId, input, randomUUID());
+    const firstKey = storage.lastKey;
+    const retried = await evidence.createUploadIntent(owner, assignmentId, input, randomUUID());
+
+    expect(retried.uploadId).toBe(first.uploadId);
+    expect(storage.lastKey).toBe(firstKey);
+
+    await expect(
+      evidence.createUploadIntent(
+        owner,
+        assignmentId,
+        { ...input, byteSize: input.byteSize + 1 },
+        randomUUID(),
+      ),
+    ).rejects.toMatchObject({ code: "UPLOAD_ALREADY_PENDING" });
+  });
+
   it("rejects spoofed media and reopens provisional completion", async () => {
     const { principals, snapshot } = await startedRoom();
     const owner = principals[0];

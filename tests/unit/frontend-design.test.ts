@@ -255,6 +255,11 @@ describe("frontend design foundations", () => {
     const roomClient = await readFile("src/client/components/room-client.tsx", "utf8");
     expect(roomClient).toContain("if (selectedFile) void upload(selectedFile)");
     expect(roomClient).toContain("await normalizeEvidenceImage(file, controller.signal)");
+    expect(roomClient).toContain(
+      "await uploadEvidenceObject(intent, preparedFile, controller.signal)",
+    );
+    expect(roomClient).toContain('error.code !== "GAME_STATE_CONFLICT"');
+    expect(roomClient).toContain("expectedStateVersion = await refreshStateVersion()");
     expect(roomClient).toContain("Optimizing photo…");
     expect(roomClient).toContain('playGameSound("upload")');
     expect(roomClient).toContain("window.setTimeout(onClose, 650)");

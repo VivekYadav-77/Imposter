@@ -255,8 +255,8 @@ Joins an open lobby.
 ```
 
 - Validation: allowlisted type, positive size at or below limit, checksum syntax.
-- Response `201`: opaque upload ID, expiry, method, signed URL/form fields, exact required headers, and server-generated object key omitted unless the client transport needs it.
-- Errors: `403`; `409 ASSIGNMENT_ALREADY_COMPLETED`; `413`; `422 UPLOAD_INVALID`; `503 STORAGE_UNAVAILABLE`.
+- Response `201`: opaque upload ID, expiry, method, signed URL/form fields, exact required headers, and server-generated object key omitted unless the client transport needs it. A retry with matching type, size, and checksum reuses an unexpired pending intent and issues its upload capability again.
+- Errors: `403`; `409 ASSIGNMENT_ALREADY_COMPLETED` or `UPLOAD_ALREADY_PENDING` when a different file owns the active reservation; `413`; `422 UPLOAD_INVALID`; `503 STORAGE_UNAVAILABLE`.
 
 ### `POST /api/v1/task-assignments/{assignmentId}/submissions`
 
