@@ -1689,19 +1689,40 @@ function UploadDialog({
           </p>
         </div>
       ) : (
-        <label className="file-picker">
-          <input
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            capture="environment"
-            onChange={(event) => {
-              const selectedFile = event.target.files?.[0];
-              if (selectedFile) void upload(selectedFile);
-            }}
-          />
-          <span>Upload photo</span>
-          <small>Choose or take one image · large photos are optimized automatically</small>
-        </label>
+        <div className="file-picker-panel">
+          <div className="file-picker-options">
+            <label className="file-picker">
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                capture="environment"
+                onChange={(event) => {
+                  const selectedFile = event.target.files?.[0];
+                  if (selectedFile) void upload(selectedFile);
+                }}
+              />
+              <Icon name="camera" size={28} />
+              <span>Take photo</span>
+              <small>Open your camera</small>
+            </label>
+            <label className="file-picker">
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={(event) => {
+                  const selectedFile = event.target.files?.[0];
+                  if (selectedFile) void upload(selectedFile);
+                }}
+              />
+              <Icon name="upload" size={28} />
+              <span>Choose from gallery</span>
+              <small>Select an existing photo</small>
+            </label>
+          </div>
+          <small className="file-picker-note">
+            JPEG, PNG or WebP · large photos are optimized automatically
+          </small>
+        </div>
       )}
     </Dialog>
   );
