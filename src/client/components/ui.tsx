@@ -10,7 +10,12 @@ import {
   type ReactNode,
 } from "react";
 import { BrandMark, Icon, type IconName } from "./icons";
-import { isSoundEnabled, playGameSound, setSoundEnabled } from "../audio/game-sounds";
+import {
+  initializeGameAudio,
+  isSoundEnabled,
+  playGameSound,
+  setSoundEnabled,
+} from "../audio/game-sounds";
 import { ThemeToggle } from "./theme-toggle";
 import type { GameShellProps, GamePhaseVisual } from "./game-ui-types";
 import { avatarById, type AvatarId } from "../../shared/avatars";
@@ -580,7 +585,10 @@ const phaseIcon: Record<PhaseVisual, IconName> = {
 
 export function GameSoundToggle() {
   const [enabled, setEnabled] = ReactUseState(true);
-  useEffect(() => setEnabled(isSoundEnabled()), []);
+  useEffect(() => {
+    setEnabled(isSoundEnabled());
+    return initializeGameAudio();
+  }, []);
   const label = enabled ? "Mute game sounds" : "Enable game sounds";
   return (
     <button

@@ -210,6 +210,24 @@ test("mobile primary controls meet the minimum touch target", async ({ page }) =
   expect(undersized).toEqual([]);
 });
 
+test("game sound control can mute and reliably re-enable browser audio", async ({ page }) => {
+  await page.goto("/dev/showcase?fixture=tasks");
+  const sound = page.locator(".game-sound-toggle");
+
+  await expect(sound).toHaveAttribute("aria-pressed", "true");
+  await sound.click();
+  await expect(sound).toHaveAttribute("aria-pressed", "false");
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem("imposter-game-sound-enabled")))
+    .toBe("false");
+
+  await sound.click();
+  await expect(sound).toHaveAttribute("aria-pressed", "true");
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem("imposter-game-sound-enabled")))
+    .toBe("true");
+});
+
 test("mobile game confirmations are vertically centered", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/dev/showcase?fixture=dialog");

@@ -133,6 +133,8 @@ export function RoomClient() {
     null,
   );
   const gameRef = useRef<GameSnapshot | null>(null);
+  const previousLobbyParticipants = useRef<Set<string> | null>(null);
+  const gameWasActive = useRef(false);
   const reportError = useCallback((message: string) => {
     setError(message);
     gameToast(message, "danger");
@@ -158,6 +160,27 @@ export function RoomClient() {
   useEffect(() => {
     void load();
   }, [load]);
+  useEffect(() => {
+    if (!room || room.status !== "lobby" || game) {
+      previousLobbyParticipants.current = null;
+      return;
+    }
+    const current = new Set(room.participants.map((participant) => participant.id));
+    const previous = previousLobbyParticipants.current;
+    if (
+      previous &&
+      room.participants.some(
+        (participant) =>
+          participant.id !== room.self.participantId && !previous.has(participant.id),
+      )
+    )
+      playGameSound("player-join");
+    previousLobbyParticipants.current = current;
+  }, [game, room]);
+  useEffect(() => {
+    if (game && !gameWasActive.current) playGameSound("game-start");
+    gameWasActive.current = Boolean(game);
+  }, [game]);
   useEffect(() => {
     if (!game || game.phase === "game_over" || game.phase === "abandoned") return;
     const warnBeforeExit = (event: BeforeUnloadEvent) => {
@@ -1072,6 +1095,7 @@ function GameView({
   const [roleAcknowledged, setRoleAcknowledged] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const previousPhase = useRef(game.phase);
+  const previousMeetingId = useRef(game.meeting?.id ?? null);
   const previousLifeStatus = useRef(game.self.lifeStatus);
   const previousProgress = useRef(game.progress.percent);
   const terminalSoundPlayed = useRef(false);
@@ -1089,9 +1113,11 @@ function GameView({
   useEffect(() => {
     const phaseChanged = previousPhase.current !== game.phase;
 
-    // Meeting alerts must not depend on the role card being acknowledged. A meeting can
-    // begin while a player is still looking at that card or while their tab is backgrounded.
-    if (phaseChanged && ["discussion", "review"].includes(game.phase)) playMeetingAlert();
+    // Meeting alerts must not depend on a particular phase or on the role card being
+    // acknowledged. The server meeting id changes exactly once for every new meeting.
+    const meetingId = game.meeting?.id ?? null;
+    if (meetingId && meetingId !== previousMeetingId.current) playMeetingAlert();
+    previousMeetingId.current = meetingId;
 
     if (!roleAcknowledged) {
       previousPhase.current = game.phase;
