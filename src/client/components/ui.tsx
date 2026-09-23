@@ -652,12 +652,62 @@ export function Drawer({
   children: ReactNode;
   onClose: () => void;
 }) {
+  const drawerRef = useRef<HTMLElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  const titleId = useId();
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+  useEffect(() => {
+    if (!open) return;
+    returnFocusRef.current = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const drawer = drawerRef.current;
+    window.requestAnimationFrame(() =>
+      drawer
+        ?.querySelector<HTMLElement>("button, [href], input, [tabindex]:not([tabindex='-1'])")
+        ?.focus(),
+    );
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onCloseRef.current();
+      if (event.key !== "Tab" || !drawer) return;
+      const focusable = Array.from(
+        drawer.querySelectorAll<HTMLElement>(
+          "button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex='-1'])",
+        ),
+      );
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+      returnFocusRef.current?.focus();
+    };
+  }, [open]);
   return (
     <div className={open ? "drawer-wrap open" : "drawer-wrap"} aria-hidden={!open}>
       <button className="drawer-scrim" aria-label="Close drawer" onClick={onClose} />
-      <aside className="drawer" aria-label={title}>
+      <aside
+        ref={drawerRef}
+        className="drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+      >
         <div className="dialog-head">
-          <h2>{title}</h2>
+          <h2 id={titleId}>{title}</h2>
           <IconButton icon="close" onClick={onClose} label="Close drawer" />
         </div>
         {children}

@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { ApiError, createIdempotencyKey, errorMessage, participantApi } from "../api/client";
@@ -27,6 +34,7 @@ import {
   Button,
   ConfirmDialog,
   Dialog,
+  Drawer,
   EmptyState,
   GameShell,
   GameSelect,
@@ -69,6 +77,48 @@ function initialTaskDistribution(counts: { easy: number; medium: number; hard: n
     if (result.easy + result.medium + result.hard === before) break;
   }
   return result;
+}
+
+function ResponsiveSettingsDetails({
+  index,
+  title,
+  description,
+  className = "",
+  children,
+}: {
+  index: string;
+  title: string;
+  description: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(true);
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 760px)");
+    const sync = () => setOpen(!media.matches);
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, []);
+  return (
+    <details
+      className={`settings-section settings-collapsible responsive-settings ${className}`}
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
+      <summary>
+        <span className="settings-section-heading">
+          <span>{index}</span>
+          <span>
+            <strong>{title}</strong>
+            <small>{description}</small>
+          </span>
+        </span>
+        <Icon name="chevron" size={18} />
+      </summary>
+      <div className="responsive-settings-content">{children}</div>
+    </details>
+  );
 }
 
 export function RoomClient() {
@@ -449,14 +499,12 @@ function LobbyView({
                 busy={busy}
               />
             </section>
-            <section className="settings-section meeting-settings-section">
-              <div className="settings-section-heading">
-                <span>02</span>
-                <div>
-                  <strong>Meeting voting</strong>
-                  <small>Pick one clear rule for ending a vote.</small>
-                </div>
-              </div>
+            <ResponsiveSettingsDetails
+              index="02"
+              title="Meeting voting"
+              description="Pick one clear rule for ending a vote."
+              className="meeting-settings-section"
+            >
               <MeetingVotingControl
                 mode={room.settings.meetingVotingMode}
                 duration={room.settings.meetingDurationSeconds}
@@ -530,15 +578,12 @@ function LobbyView({
                   </button>
                 </div>
               </div>
-            </section>
-            <section className="settings-section">
-              <div className="settings-section-heading">
-                <span>03</span>
-                <div>
-                  <strong>Game balance</strong>
-                  <small>Control actions, meetings, and impostors.</small>
-                </div>
-              </div>
+            </ResponsiveSettingsDetails>
+            <ResponsiveSettingsDetails
+              index="03"
+              title="Game balance"
+              description="Control actions, meetings, and impostors."
+            >
               <CustomDurationField
                 label="Impostor cooldown base"
                 value={room.settings.imposterCooldownSeconds}
@@ -610,7 +655,7 @@ function LobbyView({
                 hint="Options keep crewmates in the majority at game start."
                 onChange={(value) => void update({ imposterCount: Number(value) })}
               />
-            </section>
+            </ResponsiveSettingsDetails>
             <details className="settings-section settings-collapsible" open>
               <summary>
                 <span className="settings-section-heading">
@@ -726,15 +771,6 @@ function LobbyView({
                 <strong>{startDisabled ? "Complete setup" : "Ready to launch"}</strong>
                 <small aria-live="polite">{startMessage}</small>
               </div>
-              <Button
-                className="settings-start-button"
-                loading={busy}
-                disabled={startDisabled}
-                title={startDisabled ? startMessage : "Start the configured game"}
-                onClick={() => void start()}
-              >
-                Start game
-              </Button>
             </div>
           </aside>
         )}
@@ -749,6 +785,17 @@ function LobbyView({
               : "Choose a map before starting."
             : "Waiting for the host to start…"}
         </span>
+        {canStart && (
+          <Button
+            className="settings-start-button"
+            loading={busy}
+            disabled={startDisabled}
+            title={startDisabled ? startMessage : "Start the configured game"}
+            onClick={() => void start()}
+          >
+            Start game
+          </Button>
+        )}
         <Button variant="ghost" onClick={() => setLeaving(true)}>
           Leave room
         </Button>
@@ -1181,6 +1228,7 @@ function TaskView({
   const [killTarget, setKillTarget] = useState<string | null>(null);
   const [gallery, setGallery] = useState(false);
   const [roleInfo, setRoleInfo] = useState(false);
+  const [mobilePanel, setMobilePanel] = useState<"status" | null>(null);
   const [confirmMeeting, setConfirmMeeting] = useState(false);
   const [meetingBusy, setMeetingBusy] = useState(false);
   const [covertOpen, setCovertOpen] = useState(false);
@@ -1519,6 +1567,120 @@ function TaskView({
           </aside>
         </div>
       </GameShell>
+      <nav className="mobile-game-actions" aria-label="Game actions">
+        <button type="button" onClick={() => setMobilePanel("status")}>
+          <Icon name="tasks" size={20} />
+          <span>Status</span>
+          <small>{game.progress.percent}%</small>
+        </button>
+        <button type="button" onClick={() => setGallery(true)}>
+          <Icon name="evidence" size={20} />
+          <span>Evidence</span>
+          <small>{ownProofs.length}</small>
+        </button>
+        <button
+          type="button"
+          className={meetingReady ? "meeting-ready" : ""}
+          onClick={() => (meetingReady ? setConfirmMeeting(true) : setMobilePanel("status"))}
+          aria-label={meetingReady ? "Call emergency meeting" : "Meeting unavailable; open status"}
+        >
+          <Icon name={meetingReady ? "meeting" : "cooldown"} size={20} />
+          <span>Meeting</span>
+          <small>{game.meetingRules.remainingForSelf}</small>
+        </button>
+      </nav>
+      <Drawer
+        open={mobilePanel === "status"}
+        title="Game status"
+        onClose={() => setMobilePanel(null)}
+      >
+        <div className="mobile-status-sheet">
+          <section className="mobile-status-identity" style={avatarAccentStyle(room.self.avatarId)}>
+            <IdentityToken
+              name={room.self.nickname}
+              avatarId={room.self.avatarId}
+              status="connected"
+            />
+            <span>
+              <small>Playing as</small>
+              <strong>{room.self.nickname}</strong>
+              <b>
+                {avatarById(room.self.avatarId).name} · {roleDetails.name}
+              </b>
+            </span>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setMobilePanel(null);
+                setRoleInfo(true);
+              }}
+            >
+              View role
+            </Button>
+          </section>
+          <section>
+            <div className="context-card-heading">
+              <Icon name="tasks" size={20} />
+              <strong>Mission status</strong>
+            </div>
+            <Progress value={game.progress.percent} max={100} label="Crew progress" />
+          </section>
+          {game.self.role === "imposter" && (
+            <section>
+              <div className="context-card-heading">
+                <Icon name="ghost" size={20} />
+                <strong>Your eliminations</strong>
+                <Badge tone="danger">{game.self.knownEliminatedParticipantIds.length}</Badge>
+              </div>
+              {game.self.knownEliminatedParticipantIds.length ? (
+                <ul className="elimination-history-list">
+                  {game.self.knownEliminatedParticipantIds.map((id) => {
+                    const player = game.participants.find((entry) => entry.id === id);
+                    return (
+                      <li key={id}>
+                        <IdentityToken
+                          name={player?.nickname ?? "Unknown player"}
+                          avatarId={player?.avatarId}
+                        />
+                        <span>
+                          <strong>{player?.nickname ?? "Unknown player"}</strong>
+                          <small>Eliminated by you</small>
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className="muted">No confirmed eliminations yet.</p>
+              )}
+            </section>
+          )}
+          <section>
+            <div className="context-card-heading">
+              <Icon name={meetingReady ? "meeting" : "cooldown"} size={20} />
+              <strong>Emergency meeting</strong>
+            </div>
+            <p className="muted">
+              {meetingReady
+                ? `${game.meetingRules.remainingForSelf} call${game.meetingRules.remainingForSelf === 1 ? "" : "s"} remaining.`
+                : game.meetingRules.requiresCompletedTask && !game.meetingRules.hasCompletedTask
+                  ? "Complete one task before calling a meeting."
+                  : game.meetingRules.remainingForSelf === 0
+                    ? "You have no meeting calls remaining."
+                    : "The meeting cooldown is still active."}
+            </p>
+            <Button
+              disabled={!meetingReady}
+              onClick={() => {
+                setMobilePanel(null);
+                setConfirmMeeting(true);
+              }}
+            >
+              <Icon name="meeting" size={18} /> Call meeting
+            </Button>
+          </section>
+        </div>
+      </Drawer>
       <UploadDialog
         open={Boolean(selected)}
         assignment={selected ?? null}

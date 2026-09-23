@@ -4,9 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ApiError, createIdempotencyKey, errorMessage, participantApi } from "../api/client";
 import type { RoomSnapshot } from "../api/types";
-import { Button, Field, GameSelect, Toast } from "./ui";
-import { AvatarPicker } from "./player-avatar";
-import { AVATAR_IDS, isAvatarId, type AvatarId } from "../../shared/avatars";
+import { Button, Drawer, Field, GameSelect, Toast } from "./ui";
+import { AvatarPicker, PlayerAvatar } from "./player-avatar";
+import { AVATAR_IDS, avatarById, isAvatarId, type AvatarId } from "../../shared/avatars";
 
 type Mode = "create" | "join";
 export function PlayForm() {
@@ -18,6 +18,7 @@ export function PlayForm() {
   const [maxPlayers, setMaxPlayers] = useState(12);
   const [accepted, setAccepted] = useState(false);
   const [avatarId, setAvatarId] = useState<AvatarId | null>(null);
+  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
   const [availableAvatarIds, setAvailableAvatarIds] = useState<AvatarId[]>([]);
   const [joinOptionsLoaded, setJoinOptionsLoaded] = useState(false);
   const [toast, setToast] = useState<{ id: number; message: string } | null>(null);
@@ -78,6 +79,7 @@ export function PlayForm() {
     setMode(next);
     dismissToast();
     setAvatarId(null);
+    setAvatarPickerOpen(false);
     setAvailableAvatarIds([]);
     setJoinOptionsLoaded(false);
     key.current = createIdempotencyKey();
@@ -289,48 +291,97 @@ export function PlayForm() {
           />
         )}
         {mode === "create" && (
-          <div className="form-grid two-column">
-            <GameSelect
-              label="Minimum players"
-              value={String(minPlayers)}
-              options={Array.from({ length: 13 }, (_, index) => index + 3).map((value) => ({
-                value: String(value),
-                label: String(value),
-              }))}
-              hint="At least 3 players are required."
-              onChange={(nextValue) => {
-                const value = Number(nextValue);
-                setMinPlayers(value);
-                if (maxPlayers < value) setMaxPlayers(value);
-                key.current = createIdempotencyKey();
-              }}
-            />
-            <GameSelect
-              label="Maximum players"
-              value={String(maxPlayers)}
-              options={Array.from(
-                { length: 16 - minPlayers },
-                (_, index) => index + minPlayers,
-              ).map((value) => ({ value: String(value), label: String(value) }))}
-              hint="Limited to 15 for reliable realtime play."
-              onChange={(value) => {
-                setMaxPlayers(Number(value));
-                key.current = createIdempotencyKey();
-              }}
-            />
-          </div>
+          <details className="play-options-disclosure">
+            <summary>
+              <span>
+                <strong>Room options</strong>
+                <small>
+                  {minPlayers} minimum · {maxPlayers} maximum
+                </small>
+              </span>
+              <span aria-hidden="true">⌄</span>
+            </summary>
+            <div className="form-grid two-column">
+              <GameSelect
+                label="Minimum players"
+                value={String(minPlayers)}
+                options={Array.from({ length: 13 }, (_, index) => index + 3).map((value) => ({
+                  value: String(value),
+                  label: String(value),
+                }))}
+                hint="At least 3 players are required."
+                onChange={(nextValue) => {
+                  const value = Number(nextValue);
+                  setMinPlayers(value);
+                  if (maxPlayers < value) setMaxPlayers(value);
+                  key.current = createIdempotencyKey();
+                }}
+              />
+              <GameSelect
+                label="Maximum players"
+                value={String(maxPlayers)}
+                options={Array.from(
+                  { length: 16 - minPlayers },
+                  (_, index) => index + minPlayers,
+                ).map((value) => ({ value: String(value), label: String(value) }))}
+                hint="Limited to 15 for reliable realtime play."
+                onChange={(value) => {
+                  setMaxPlayers(Number(value));
+                  key.current = createIdempotencyKey();
+                }}
+              />
+            </div>
+          </details>
         )}
         {(mode === "create" || joinOptionsLoaded) && (
-          <AvatarPicker
-            availableIds={mode === "create" ? AVATAR_IDS : availableAvatarIds}
-            value={avatarId}
-            onChange={(id) => {
-              setAvatarId(id);
-              dismissToast();
-              key.current = createIdempotencyKey();
-            }}
-            disabled={busy}
-          />
+          <div className="operative-select">
+            <span className="field-label">Your operative</span>
+            <button
+              type="button"
+              className="operative-select-button"
+              aria-haspopup="dialog"
+              onClick={() => setAvatarPickerOpen(true)}
+            >
+              {avatarId ? (
+                <>
+                  <PlayerAvatar id={avatarId} size={50} />
+                  <span>
+                    <strong>{avatarById(avatarId).name}</strong>
+                    <small>Selected operative</small>
+                  </span>
+                  <b>Change</b>
+                </>
+              ) : (
+                <>
+                  <span className="operative-placeholder" aria-hidden="true">
+                    ?
+                  </span>
+                  <span>
+                    <strong>Choose an operative</strong>
+                    <small>One unique identity per player</small>
+                  </span>
+                  <b>Choose</b>
+                </>
+              )}
+            </button>
+            <Drawer
+              open={avatarPickerOpen}
+              title="Choose your operative"
+              onClose={() => setAvatarPickerOpen(false)}
+            >
+              <AvatarPicker
+                availableIds={mode === "create" ? AVATAR_IDS : availableAvatarIds}
+                value={avatarId}
+                onChange={(id) => {
+                  setAvatarId(id);
+                  setAvatarPickerOpen(false);
+                  dismissToast();
+                  key.current = createIdempotencyKey();
+                }}
+                disabled={busy}
+              />
+            </Drawer>
+          </div>
         )}
         {(mode === "create" || joinOptionsLoaded) && (
           <label className="check-row">

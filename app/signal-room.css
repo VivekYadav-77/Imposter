@@ -789,6 +789,193 @@ html[data-theme="light"] .signal-scene-verdict {
   border-color: var(--accent);
   box-shadow: var(--shadow-card);
 }
+
+/* Mobile-first entry flow */
+.mode-picker button {
+  min-height: 72px;
+  padding: 12px 14px;
+}
+.play-options-disclosure {
+  border: 1px solid var(--border-1);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+.play-options-disclosure > summary {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 14px;
+  cursor: pointer;
+  list-style: none;
+}
+.play-options-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.play-options-disclosure > summary strong,
+.play-options-disclosure > summary small {
+  display: block;
+}
+.play-options-disclosure > summary small {
+  margin-top: 2px;
+  color: var(--text-2);
+}
+.play-options-disclosure > .form-grid {
+  padding: 4px 14px 14px;
+}
+.operative-select {
+  display: grid;
+  gap: 7px;
+}
+.operative-select .drawer .avatar-picker legend {
+  display: none;
+}
+.operative-select-button {
+  min-height: 72px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-1);
+  border-radius: 12px;
+  background: var(--control);
+  color: var(--text-1);
+  text-align: left;
+}
+.operative-select-button > span:nth-child(2) strong,
+.operative-select-button > span:nth-child(2) small {
+  display: block;
+}
+.operative-select-button small {
+  margin-top: 3px;
+  color: var(--text-2);
+}
+.operative-select-button b {
+  color: var(--accent);
+  font-size: 0.8rem;
+}
+.operative-placeholder {
+  width: 50px;
+  height: 50px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--border-2);
+  border-radius: 50%;
+  color: var(--text-2);
+  font: 700 1.25rem var(--display);
+}
+.article-jump-nav {
+  position: sticky;
+  top: 72px;
+  z-index: 10;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin: 0 0 44px;
+  padding: 8px;
+  border: 1px solid var(--border-1);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-1) 92%, transparent);
+  backdrop-filter: blur(14px);
+  scrollbar-width: none;
+}
+.article-jump-nav::-webkit-scrollbar {
+  display: none;
+}
+.article-jump-nav a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  padding: 8px 13px;
+  border-radius: 10px;
+  color: var(--text-1);
+  text-decoration: none;
+}
+.article-jump-nav a:hover,
+.article-jump-nav a:focus-visible {
+  background: var(--surface-2);
+  color: var(--accent);
+}
+.timeline-step,
+.article-page > section {
+  scroll-margin-top: 150px;
+}
+.journey-swipe-hint {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .funnel-page main {
+    width: min(100% - 32px, 620px);
+    margin: 34px auto 80px;
+  }
+  .funnel-page main > header {
+    margin-bottom: 18px;
+  }
+  .funnel-page main > header h1 {
+    font-size: clamp(2.55rem, 12vw, 3.7rem);
+  }
+  .play-panel {
+    padding: 16px;
+  }
+  .play-panel form {
+    gap: 14px;
+  }
+  .mode-picker {
+    grid-template-columns: 1fr 1fr;
+    gap: 5px;
+    margin-bottom: 18px;
+  }
+  .mode-picker button {
+    min-height: 64px;
+    padding: 9px 10px;
+  }
+  .mode-picker button span {
+    font-size: 0.72rem;
+  }
+  .field input,
+  .field textarea,
+  .game-select-trigger {
+    font-size: 16px;
+  }
+  .hero {
+    padding-top: 38px;
+    padding-bottom: 58px;
+    gap: 42px;
+  }
+  .hero-copy h1 {
+    font-size: clamp(3rem, 14vw, 4.3rem);
+  }
+  .steps-section {
+    padding-block: 60px;
+  }
+  .journey-track {
+    grid-template-columns: repeat(4, minmax(82vw, 1fr));
+    margin-right: -22px;
+    padding-right: 22px;
+  }
+  .journey-swipe-hint {
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    margin: 2px 0 0;
+    color: var(--text-2);
+    font-size: 0.78rem;
+  }
+  .article-page {
+    width: min(100% - 32px, 920px);
+  }
+  .article-hero {
+    padding-top: 40px;
+  }
+  .article-jump-nav {
+    top: 64px;
+    margin-bottom: 28px;
+  }
+}
 .field input,
 .field select,
 .field textarea,

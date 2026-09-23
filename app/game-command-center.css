@@ -1120,3 +1120,200 @@ html[data-theme="light"] .game-page .avatar-phase-bar .phase-identity {
     transition: none !important;
   }
 }
+
+.mobile-game-actions {
+  display: none;
+}
+.mobile-status-sheet {
+  display: grid;
+  gap: 14px;
+}
+.mobile-status-sheet > section {
+  padding: 14px;
+  border: 1px solid var(--game-border);
+  border-radius: 16px;
+  background: var(--game-panel);
+}
+.mobile-status-identity {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+.mobile-status-identity > span:nth-child(2) small,
+.mobile-status-identity > span:nth-child(2) strong,
+.mobile-status-identity > span:nth-child(2) b {
+  display: block;
+}
+.mobile-status-identity > span:nth-child(2) b {
+  margin-top: 2px;
+  color: var(--game-muted);
+  font-size: 0.76rem;
+}
+.mobile-status-identity .button {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 760px) {
+  .game-page {
+    padding-bottom: calc(92px + env(safe-area-inset-bottom));
+  }
+  .game-page .phase-label {
+    font-size: 0.82rem;
+  }
+  .game-page .game-utility-button,
+  .game-page .theme-toggle-game,
+  .game-page .phase-identity {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+  }
+  .game-page .task-command-shell {
+    padding-top: 16px;
+  }
+  .game-page .task-command-main .section-heading {
+    margin-bottom: 14px;
+  }
+  .game-page .task-command-main .section-heading h1 {
+    font-size: clamp(2rem, 11vw, 2.65rem);
+  }
+  .game-page .task-list {
+    gap: 10px;
+  }
+  .game-page .task-card {
+    min-height: 104px;
+    grid-template-columns: minmax(0, 1fr) 70px;
+    border-radius: 16px;
+  }
+  .game-page .task-card-main {
+    grid-column: 1;
+    grid-row: 1;
+    grid-template-columns: 36px minmax(0, 1fr);
+    gap: 9px;
+    padding: 12px;
+  }
+  .game-page .task-number {
+    width: 36px;
+    height: 36px;
+  }
+  .game-page .task-card-main > span:nth-child(2) > small:last-child {
+    display: none;
+  }
+  .game-page .task-card-main .badge {
+    margin-top: 5px;
+  }
+  .game-page .task-proof {
+    grid-column: 2;
+    grid-row: 1;
+    width: 70px;
+    height: 100%;
+    padding: 7px;
+    border-top: 0;
+    border-left: 1px solid var(--game-border);
+  }
+  .game-page .task-proof img,
+  .game-page .task-proof > span {
+    width: 48px;
+    height: 42px;
+  }
+  .game-page .game-context-rail {
+    display: none;
+  }
+  .mobile-game-actions {
+    position: fixed;
+    z-index: 58;
+    right: max(10px, env(safe-area-inset-right));
+    bottom: max(8px, env(safe-area-inset-bottom));
+    left: max(10px, env(safe-area-inset-left));
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
+    padding: 6px;
+    border: 1px solid var(--game-border);
+    border-radius: 18px;
+    background: var(--game-command);
+    box-shadow: 0 18px 48px rgb(0 0 0 / 34%);
+    backdrop-filter: blur(20px);
+  }
+  .mobile-game-actions button {
+    min-width: 0;
+    min-height: 58px;
+    display: grid;
+    grid-template-columns: auto auto;
+    place-content: center;
+    align-items: center;
+    gap: 2px 7px;
+    padding: 6px;
+    border: 0;
+    border-radius: 13px;
+    background: transparent;
+    color: var(--game-ink);
+  }
+  .mobile-game-actions button.meeting-ready {
+    background: color-mix(in srgb, var(--game-danger) 15%, transparent);
+    color: var(--game-danger);
+  }
+  .mobile-game-actions button svg {
+    grid-row: 1 / span 2;
+  }
+  .mobile-game-actions button span,
+  .mobile-game-actions button small {
+    min-width: 0;
+    overflow: hidden;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .mobile-game-actions button span {
+    font-size: 0.72rem;
+    font-weight: 800;
+  }
+  .mobile-game-actions button small {
+    color: var(--game-muted);
+    font-size: 0.65rem;
+  }
+  .game-page .meeting-action-rail .meeting-call-button {
+    position: static;
+    width: 100%;
+  }
+  .game-page .meeting-view {
+    padding-bottom: 86px;
+  }
+  .game-page .sticky-actions {
+    bottom: max(8px, env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 390px) {
+  .game-page .phase-label {
+    max-width: 42px;
+    overflow: hidden;
+    font-size: 0.68rem;
+  }
+  .game-page .phase-icon {
+    display: none;
+  }
+  .game-page .task-card {
+    grid-template-columns: minmax(0, 1fr) 76px;
+  }
+  .game-page .task-proof {
+    width: 76px;
+    min-height: 100%;
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    gap: 4px;
+    padding: 6px;
+    text-align: center;
+    border-top: 0;
+    border-left: 1px solid var(--game-border);
+  }
+  .game-page .task-proof small {
+    max-width: 100%;
+    overflow: hidden;
+    font-size: 0.66rem;
+    line-height: 1.05;
+    text-overflow: ellipsis;
+    white-space: normal;
+  }
+}

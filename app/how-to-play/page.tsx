@@ -21,8 +21,15 @@ export default function HowToPlay() {
           </div>
           <SignalSceneArt scene="tasks" compact />
         </header>
+        <nav className="article-jump-nav" aria-label="Jump to a game phase">
+          <a href="#lobby">Lobby</a>
+          <a href="#roles">Roles</a>
+          <a href="#tasks">Tasks</a>
+          <a href="#meeting">Meeting</a>
+          <a href="#verdict">Verdict</a>
+        </nav>
         <div className="round-timeline">
-          <section className="timeline-step">
+          <section className="timeline-step" id="lobby">
             <PhaseGlyph scene="lobby" />
             <div>
               <p className="timeline-index">01 · Lobby</p>
@@ -34,7 +41,7 @@ export default function HowToPlay() {
               </p>
             </div>
           </section>
-          <section className="timeline-step">
+          <section className="timeline-step" id="roles">
             <PhaseGlyph scene="lobby" />
             <div>
               <p className="timeline-index">02 · Secret role</p>
@@ -46,7 +53,7 @@ export default function HowToPlay() {
               </p>
             </div>
           </section>
-          <section className="timeline-step">
+          <section className="timeline-step" id="tasks">
             <PhaseGlyph scene="tasks" />
             <div>
               <p className="timeline-index">03 · Tasks</p>
@@ -58,7 +65,7 @@ export default function HowToPlay() {
               </p>
             </div>
           </section>
-          <section className="timeline-step">
+          <section className="timeline-step" id="meeting">
             <PhaseGlyph scene="meeting" />
             <div>
               <p className="timeline-index">04 · Meeting</p>
@@ -70,7 +77,7 @@ export default function HowToPlay() {
               </p>
             </div>
           </section>
-          <section className="timeline-step">
+          <section className="timeline-step" id="verdict">
             <PhaseGlyph scene="verdict" />
             <div>
               <p className="timeline-index">05 · Verdict</p>

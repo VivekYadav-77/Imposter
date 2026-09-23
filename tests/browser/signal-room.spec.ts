@@ -6,6 +6,7 @@ const routes = ["/", "/play", "/how-to-play", "/privacy-and-photos", "/admin/log
 const viewports = [
   { name: "phone-320", width: 320, height: 720 },
   { name: "phone-390", width: 390, height: 844 },
+  { name: "phone-430", width: 430, height: 932 },
   { name: "tablet", width: 768, height: 1024 },
   { name: "desktop", width: 1440, height: 900 },
 ];
@@ -102,7 +103,11 @@ test("room creation failures use a dismissible toast", async ({ page }) => {
   });
   await page.goto("/play");
   await page.getByLabel("Your nickname").fill("Toast tester");
-  await page.getByRole("radio", { name: /Fox avatar/ }).click();
+  await page.getByRole("button", { name: /Choose an operative/ }).click();
+  await page
+    .getByRole("dialog", { name: "Choose your operative" })
+    .getByRole("radio", { name: /Fox avatar/ })
+    .click();
   await page.getByRole("checkbox").check();
   await page.getByRole("button", { name: "Create room" }).click();
 
@@ -111,6 +116,67 @@ test("room creation failures use a dismissible toast", async ({ page }) => {
   await expect(toast).toContainText("Room creation is temporarily unavailable.");
   await toast.getByRole("button", { name: "Dismiss notification" }).click();
   await expect(toast).toBeHidden();
+});
+
+test("mobile create flow keeps its primary action close and uses an operative sheet", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route("**/api/v1/rooms/current", async (route) => {
+    await route.fulfill({
+      status: 401,
+      contentType: "application/json",
+      body: JSON.stringify({ error: { code: "UNAUTHORIZED", message: "No active room." } }),
+    });
+  });
+  await page.goto("/play");
+
+  const create = page.getByRole("button", { name: "Create room" });
+  const createBox = await create.boundingBox();
+  expect(createBox).not.toBeNull();
+  expect(createBox!.y + createBox!.height).toBeLessThanOrEqual(844 * 1.5);
+
+  await page.getByRole("button", { name: /Choose an operative/ }).click();
+  const sheet = page.getByRole("dialog", { name: "Choose your operative" });
+  await expect(sheet).toBeVisible();
+  await sheet.getByRole("radio", { name: /Fox avatar/ }).click();
+  await expect(sheet).toBeHidden();
+  await expect(page.getByRole("button", { name: /Fox Selected operative/ })).toBeVisible();
+});
+
+test("mobile task screen exposes status evidence and meeting in one tap", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/dev/showcase?fixture=tasks");
+  const actions = page.getByRole("navigation", { name: "Game actions" });
+  await expect(actions).toBeVisible();
+  await expect(actions.getByRole("button", { name: /Status/ })).toBeVisible();
+  await expect(actions.getByRole("button", { name: /Evidence/ })).toBeVisible();
+  await expect(actions.getByRole("button", { name: /Meeting/ })).toBeVisible();
+
+  const secondTask = page.locator(".task-card").nth(1);
+  const secondTaskBox = await secondTask.boundingBox();
+  expect(secondTaskBox).not.toBeNull();
+  expect(secondTaskBox!.y).toBeLessThan(844);
+});
+
+test("mobile primary controls meet the minimum touch target", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 720 });
+  await page.goto("/dev/showcase?fixture=tasks");
+  const undersized = await page
+    .locator(".phase-utilities button, .mobile-game-actions button")
+    .evaluateAll((elements) =>
+      elements
+        .map((element) => {
+          const box = element.getBoundingClientRect();
+          return {
+            label: element.getAttribute("aria-label") ?? element.textContent,
+            width: box.width,
+            height: box.height,
+          };
+        })
+        .filter(({ width, height }) => width < 44 || height < 44),
+    );
+  expect(undersized).toEqual([]);
 });
 
 test("mobile game confirmations are vertically centered", async ({ page }) => {
@@ -210,30 +276,31 @@ test("game toast stays compact below the command bar", async ({ page }) => {
   expect(toast!.x + toast!.width).toBeLessThanOrEqual(390);
 });
 
-test("narrow task proof action stays aligned and elimination history remains visible", async ({
-  page,
-}) => {
+test("narrow task proof action stays aligned and status remains one tap away", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 720 });
   await page.goto("/dev/showcase?fixture=tasks");
   const proof = page.locator(".task-proof").last();
   const icon = proof.locator(":scope > span");
   const label = proof.locator("small");
   await expect(proof).toBeVisible();
+  await expect(page.locator(".game-context-rail")).toBeHidden();
   await expect(
-    page.locator(".elimination-history-card", { hasText: "Your eliminations" }),
+    page.getByRole("navigation", { name: "Game actions" }).getByRole("button", { name: /Status/ }),
   ).toBeVisible();
   const [iconBox, labelBox] = await Promise.all([icon.boundingBox(), label.boundingBox()]);
   expect(iconBox).not.toBeNull();
   expect(labelBox).not.toBeNull();
-  expect(
-    Math.abs(iconBox!.y + iconBox!.height / 2 - (labelBox!.y + labelBox!.height / 2)),
-  ).toBeLessThan(3);
+  const proofBox = await proof.boundingBox();
+  expect(proofBox).not.toBeNull();
+  expect(labelBox!.x).toBeGreaterThanOrEqual(proofBox!.x);
+  expect(labelBox!.x + labelBox!.width).toBeLessThanOrEqual(proofBox!.x + proofBox!.width + 1);
 });
 
 const gameViewports = [
   { name: "phone-320", width: 320, height: 720 },
   { name: "phone-360", width: 360, height: 800 },
   { name: "phone-390", width: 390, height: 844 },
+  { name: "phone-430", width: 430, height: 932 },
   { name: "tablet-portrait", width: 768, height: 1024 },
   { name: "tablet-landscape", width: 1024, height: 768 },
   { name: "laptop", width: 1280, height: 800 },

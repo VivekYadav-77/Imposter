@@ -98,6 +98,10 @@ export default function Home() {
               </div>
             </article>
           </div>
+          <p className="journey-swipe-hint">
+            <span aria-hidden="true">Swipe to explore</span>
+            <span className="sr-only">The four game phases are shown in a horizontal list.</span>
+          </p>
         </section>
         <section className="signal-band">
           <div>

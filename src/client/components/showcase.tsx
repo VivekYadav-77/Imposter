@@ -416,6 +416,23 @@ function GameFixture({ state }: { state: string }) {
             </section>
           </aside>
         </div>
+        <nav className="mobile-game-actions" aria-label="Game actions">
+          <button type="button">
+            <Icon name="tasks" size={20} />
+            <span>Status</span>
+            <small>42%</small>
+          </button>
+          <button type="button">
+            <Icon name="evidence" size={20} />
+            <span>Evidence</span>
+            <small>2</small>
+          </button>
+          <button type="button" className="meeting-ready">
+            <Icon name="meeting" size={20} />
+            <span>Meeting</span>
+            <small>1</small>
+          </button>
+        </nav>
       </GameShell>
     </main>
   );

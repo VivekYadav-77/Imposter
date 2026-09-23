@@ -5416,6 +5416,90 @@ html[data-theme="dark"] .admin-page .save-bar .button-secondary {
     display: none;
   }
 }
+
+/* Progressive host settings and accessible mobile sheets */
+.responsive-settings-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  padding-top: 16px;
+}
+.responsive-settings.meeting-settings-section .responsive-settings-content {
+  grid-template-columns: minmax(0, 1.35fr) minmax(230px, 0.65fr);
+}
+
+@media (max-width: 760px) {
+  .drawer-wrap {
+    z-index: 100;
+  }
+  .drawer {
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: auto;
+    max-height: min(88dvh, 760px);
+    padding: 18px 16px max(18px, env(safe-area-inset-bottom));
+    border: 1px solid var(--line);
+    border-bottom: 0;
+    border-radius: 22px 22px 0 0;
+    transform: translateY(100%);
+  }
+  .drawer-wrap.open .drawer {
+    transform: none;
+  }
+  .drawer .avatar-picker-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .drawer .avatar-choice {
+    min-height: 86px;
+  }
+  .responsive-settings.meeting-settings-section .responsive-settings-content,
+  .responsive-settings-content {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .settings-completion {
+    padding: 14px;
+  }
+  .lobby-layout {
+    padding-bottom: 138px;
+  }
+  .lobby-actions {
+    position: fixed;
+    z-index: 60;
+    right: max(10px, env(safe-area-inset-right));
+    bottom: max(8px, env(safe-area-inset-bottom));
+    left: max(10px, env(safe-area-inset-left));
+    width: auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    margin: 0;
+    padding: 9px;
+    border-radius: 18px;
+    box-shadow: 0 16px 46px rgb(0 0 0 / 32%);
+  }
+  .lobby-actions .action-note,
+  .lobby-actions .waiting-copy {
+    grid-column: 1 / -1;
+    width: 100%;
+    overflow: hidden;
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.72rem;
+    line-height: 1.2;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .lobby-actions .settings-start-button {
+    min-height: 50px;
+  }
+  .lobby-actions .button-ghost {
+    min-height: 50px;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

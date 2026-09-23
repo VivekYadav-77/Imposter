@@ -23,6 +23,13 @@ export default function Privacy() {
           </div>
           <SignalSceneArt scene="verdict" compact />
         </header>
+        <nav className="article-jump-nav" aria-label="Jump to privacy information">
+          <a href="#photo-lifecycle">Photo lifecycle</a>
+          <a href="#before-upload">Before upload</a>
+          <a href="#visibility">Visibility</a>
+          <a href="#retention">Retention</a>
+          <a href="#browser-storage">Browser storage</a>
+        </nav>
         <section className="privacy-lifecycle" aria-labelledby="photo-lifecycle">
           <div>
             <Icon name="camera" />
@@ -52,7 +59,7 @@ export default function Privacy() {
             Photo lifecycle
           </h2>
         </section>
-        <section>
+        <section id="before-upload">
           <h2>Before you upload</h2>
           <ul className="plain-list">
             <li>Ask permission before including another person in a photo.</li>
@@ -61,7 +68,7 @@ export default function Privacy() {
             <li>Only submit evidence needed for the task.</li>
           </ul>
         </section>
-        <section>
+        <section id="visibility">
           <h2>Who can see evidence</h2>
           <p>
             Evidence is available only to authorized participants in your current room and only
@@ -69,7 +76,7 @@ export default function Privacy() {
             the web client does not store them in browser persistence.
           </p>
         </section>
-        <section>
+        <section id="retention">
           <h2>Processing and retention</h2>
           <p>
             Uploads are normalized for safety and may be rejected if they are unsupported or fail
@@ -78,7 +85,7 @@ export default function Privacy() {
             request is shown again before submission.
           </p>
         </section>
-        <section>
+        <section id="browser-storage">
           <h2>What the browser does not keep</h2>
           <p>
             Your participant credential lives in a Secure, HttpOnly, SameSite cookie that website
