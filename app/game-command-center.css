@@ -310,6 +310,19 @@ html[data-theme="light"] .game-page .phase-identity > span:last-child {
   flex: 0 0 34px;
   font-size: 0.68rem;
 }
+.game-page .phase-identity .player-avatar {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: grid;
+  place-items: center;
+  margin: 0;
+}
+.game-page .phase-identity .player-avatar svg {
+  width: 84%;
+  height: 84%;
+  margin: 0;
+}
 
 .game-page .game-utility-button,
 .game-page .theme-toggle-game {
@@ -1085,7 +1098,7 @@ html[data-theme="light"] .game-page .avatar-phase-bar .phase-identity {
     min-height: 52px;
     display: flex;
     align-items: center;
-    justify-content: flex-start;
+    justify-content: center;
     gap: 10px;
     padding: 8px 12px;
     text-align: left;
@@ -1096,12 +1109,6 @@ html[data-theme="light"] .game-page .avatar-phase-bar .phase-identity {
   .game-page .task-proof > span {
     width: 40px;
     height: 36px;
-  }
-  .game-page .task-proof small {
-    margin: 0;
-    font-size: 0.72rem;
-    line-height: 1;
-    white-space: nowrap;
   }
 }
 
@@ -1307,13 +1314,5 @@ html[data-theme="light"] .game-page .avatar-phase-bar .phase-identity {
     text-align: center;
     border-top: 0;
     border-left: 1px solid var(--game-border);
-  }
-  .game-page .task-proof small {
-    max-width: 100%;
-    overflow: hidden;
-    font-size: 0.66rem;
-    line-height: 1.05;
-    text-overflow: ellipsis;
-    white-space: normal;
   }
 }

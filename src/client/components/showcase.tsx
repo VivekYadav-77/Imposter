@@ -332,13 +332,6 @@ function GameFixture({ state }: { state: string }) {
                         size={23}
                       />
                     </span>
-                    <small>
-                      {proof === "processing"
-                        ? "Processing"
-                        : proof === "ready"
-                          ? "Preview"
-                          : "Add photo"}
-                    </small>
                   </button>
                 </article>
               ))}

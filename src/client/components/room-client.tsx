@@ -1410,7 +1410,6 @@ function TaskView({
                           <Icon name={proof ? "uploading" : "camera"} size={23} />
                         </span>
                       )}
-                      <small>{proof?.image ? "Preview" : proof ? "Processing" : "Add photo"}</small>
                     </button>
                   </article>
                 );
@@ -2631,6 +2630,7 @@ function TerminalView({
   const [busy, setBusy] = useState(false);
   const [easterEgg, setEasterEgg] = useState(0);
   const [showResults, setShowResults] = useState(false);
+  const [showVotes, setShowVotes] = useState(false);
   const summary = game.resultSummary;
   const won =
     game.winner === "crew"
@@ -2731,16 +2731,39 @@ function TerminalView({
                   </article>
                 ))}
               </div>
-              {game.meetingRules.voteVisibility === "public" &&
-              game.meeting?.result?.ballots?.length ? (
-                <PublicVoteFeed votes={game.meeting.result.ballots} />
-              ) : (
-                <p className="privacy-note">
-                  {game.meetingRules.voteVisibility === "public"
-                    ? "No public ballots were cast in the final round."
-                    : "Ballot choices were kept private by the host setting."}
-                </p>
-              )}
+            </section>
+          )}
+          {showResults && summary && (
+            <section className="terminal-votes" aria-labelledby="terminal-votes-title">
+              <button
+                type="button"
+                className="terminal-votes-toggle"
+                aria-expanded={showVotes}
+                aria-controls="terminal-votes-content"
+                onClick={() => setShowVotes((current) => !current)}
+              >
+                <span>
+                  <strong id="terminal-votes-title">Vote details</strong>
+                  <small>Review the final ballot separately</small>
+                </span>
+                <Icon name="chevron" size={20} />
+              </button>
+              <div
+                id="terminal-votes-content"
+                className="terminal-votes-content"
+                hidden={!showVotes}
+              >
+                {game.meetingRules.voteVisibility === "public" &&
+                game.meeting?.result?.ballots?.length ? (
+                  <PublicVoteFeed votes={game.meeting.result.ballots} />
+                ) : (
+                  <p className="privacy-note">
+                    {game.meetingRules.voteVisibility === "public"
+                      ? "No public ballots were cast in the final round."
+                      : "Ballot choices were kept private by the host setting."}
+                  </p>
+                )}
+              </div>
             </section>
           )}
           {game.phase === "game_over" && <FinalEvidenceSection onError={onError} />}

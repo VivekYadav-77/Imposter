@@ -408,13 +408,16 @@ export function Dialog({
       className="dialog"
       onCancel={onClose}
       onClose={onClose}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
       aria-labelledby={titleId}
     >
       <div className="dialog-head">
         <h2 id={titleId}>{title}</h2>
         <IconButton icon="close" onClick={onClose} label="Close dialog" />
       </div>
-      {children}
+      <div className="dialog-body">{children}</div>
     </dialog>
   );
 }
@@ -655,6 +658,8 @@ export function Drawer({
   const drawerRef = useRef<HTMLElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
+  const dragStartRef = useRef<number | null>(null);
+  const dragDistanceRef = useRef(0);
   const titleId = useId();
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -696,6 +701,27 @@ export function Drawer({
       returnFocusRef.current?.focus();
     };
   }, [open]);
+  const finishDrag = () => {
+    const drawer = drawerRef.current;
+    if (!drawer || dragStartRef.current === null) return;
+    const shouldClose = dragDistanceRef.current > 80;
+    dragStartRef.current = null;
+    dragDistanceRef.current = 0;
+    drawer.style.removeProperty("transition");
+    drawer.style.removeProperty("transform");
+    if (shouldClose) onCloseRef.current();
+  };
+  const startDrag = (clientY: number) => {
+    if (!window.matchMedia("(max-width: 760px)").matches) return;
+    dragStartRef.current = clientY;
+    dragDistanceRef.current = 0;
+    if (drawerRef.current) drawerRef.current.style.transition = "none";
+  };
+  const moveDrag = (clientY: number) => {
+    if (dragStartRef.current === null || !drawerRef.current) return;
+    dragDistanceRef.current = Math.max(0, clientY - dragStartRef.current);
+    drawerRef.current.style.transform = `translateY(${dragDistanceRef.current}px)`;
+  };
   return (
     <div className={open ? "drawer-wrap open" : "drawer-wrap"} aria-hidden={!open}>
       <button className="drawer-scrim" aria-label="Close drawer" onClick={onClose} />
@@ -706,6 +732,23 @@ export function Drawer({
         aria-modal="true"
         aria-labelledby={titleId}
       >
+        <div
+          className="drawer-grabber"
+          aria-hidden="true"
+          onPointerDown={(event) => {
+            startDrag(event.clientY);
+            event.currentTarget.setPointerCapture(event.pointerId);
+          }}
+          onPointerMove={(event) => moveDrag(event.clientY)}
+          onPointerUp={finishDrag}
+          onPointerCancel={finishDrag}
+          onLostPointerCapture={finishDrag}
+          onTouchStart={(event) => startDrag(event.touches[0]?.clientY ?? 0)}
+          onTouchMove={(event) => moveDrag(event.touches[0]?.clientY ?? 0)}
+          onTouchEnd={finishDrag}
+        >
+          <span />
+        </div>
         <div className="dialog-head">
           <h2 id={titleId}>{title}</h2>
           <IconButton icon="close" onClick={onClose} label="Close drawer" />

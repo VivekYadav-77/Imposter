@@ -139,6 +139,37 @@ test("mobile create flow keeps its primary action close and uses an operative sh
   await page.getByRole("button", { name: /Choose an operative/ }).click();
   const sheet = page.getByRole("dialog", { name: "Choose your operative" });
   await expect(sheet).toBeVisible();
+  const sheetBox = await sheet.boundingBox();
+  expect(sheetBox).not.toBeNull();
+  expect(sheetBox!.x).toBeGreaterThanOrEqual(12);
+  expect(sheetBox!.x + sheetBox!.width).toBeLessThanOrEqual(390 - 12);
+  const firstChoice = sheet.getByRole("radio").first();
+  const [choiceBox, avatarBox] = await Promise.all([
+    firstChoice.boundingBox(),
+    firstChoice.locator(".player-avatar").boundingBox(),
+  ]);
+  expect(choiceBox).not.toBeNull();
+  expect(avatarBox).not.toBeNull();
+  expect(avatarBox!.x).toBeGreaterThanOrEqual(choiceBox!.x);
+  expect(avatarBox!.x + avatarBox!.width).toBeLessThanOrEqual(choiceBox!.x + choiceBox!.width);
+
+  await page.mouse.click(4, 4);
+  await expect(sheet).toBeHidden();
+
+  await page.getByRole("button", { name: /Choose an operative/ }).click();
+  const grabber = page.locator(".drawer-grabber");
+  const grabberBox = await grabber.boundingBox();
+  expect(grabberBox).not.toBeNull();
+  await grabber.dispatchEvent("touchstart", {
+    touches: [{ identifier: 1, clientX: grabberBox!.x + 20, clientY: grabberBox!.y + 6 }],
+  });
+  await grabber.dispatchEvent("touchmove", {
+    touches: [{ identifier: 1, clientX: grabberBox!.x + 20, clientY: grabberBox!.y + 120 }],
+  });
+  await grabber.dispatchEvent("touchend", { touches: [] });
+  await expect(sheet).toBeHidden();
+
+  await page.getByRole("button", { name: /Choose an operative/ }).click();
   await sheet.getByRole("radio", { name: /Fox avatar/ }).click();
   await expect(sheet).toBeHidden();
   await expect(page.getByRole("button", { name: /Fox Selected operative/ })).toBeVisible();
@@ -281,19 +312,18 @@ test("narrow task proof action stays aligned and status remains one tap away", a
   await page.goto("/dev/showcase?fixture=tasks");
   const proof = page.locator(".task-proof").last();
   const icon = proof.locator(":scope > span");
-  const label = proof.locator("small");
   await expect(proof).toBeVisible();
+  await expect(proof.locator("small")).toHaveCount(0);
   await expect(page.locator(".game-context-rail")).toBeHidden();
   await expect(
     page.getByRole("navigation", { name: "Game actions" }).getByRole("button", { name: /Status/ }),
   ).toBeVisible();
-  const [iconBox, labelBox] = await Promise.all([icon.boundingBox(), label.boundingBox()]);
+  const iconBox = await icon.boundingBox();
   expect(iconBox).not.toBeNull();
-  expect(labelBox).not.toBeNull();
   const proofBox = await proof.boundingBox();
   expect(proofBox).not.toBeNull();
-  expect(labelBox!.x).toBeGreaterThanOrEqual(proofBox!.x);
-  expect(labelBox!.x + labelBox!.width).toBeLessThanOrEqual(proofBox!.x + proofBox!.width + 1);
+  expect(iconBox!.x).toBeGreaterThanOrEqual(proofBox!.x);
+  expect(iconBox!.x + iconBox!.width).toBeLessThanOrEqual(proofBox!.x + proofBox!.width + 1);
 });
 
 const gameViewports = [
