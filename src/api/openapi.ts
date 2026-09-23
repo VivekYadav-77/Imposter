@@ -1,5 +1,7 @@
 import type { OpenAPIObject } from "openapi3-ts/oas31";
 
+import { MAX_TASKS_PER_MAP } from "../shared/task-packs.js";
+
 const metaSchema = {
   type: "object" as const,
   required: ["requestId", "serverTime"],
@@ -1407,7 +1409,7 @@ export const openApiDocument: OpenAPIObject = {
           description: { type: ["string", "null"], maxLength: 1000 },
           items: {
             type: "array",
-            maxItems: 15,
+            maxItems: MAX_TASKS_PER_MAP,
             items: {
               oneOf: [
                 { type: "string", minLength: 1, maxLength: 280 },
@@ -1434,7 +1436,7 @@ export const openApiDocument: OpenAPIObject = {
           description: { type: ["string", "null"], maxLength: 1000 },
           items: {
             type: "array",
-            maxItems: 15,
+            maxItems: MAX_TASKS_PER_MAP,
             items: {
               oneOf: [
                 { type: "string", minLength: 1, maxLength: 280 },

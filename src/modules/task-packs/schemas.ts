@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { MAX_TASKS_PER_MAP } from "../../shared/task-packs.js";
+
 const description = z.string().trim().max(1000).nullable().optional();
 const item = z
   .object({
@@ -36,7 +38,7 @@ const items = z
       item,
     ]),
   )
-  .max(15);
+  .max(MAX_TASKS_PER_MAP);
 
 export const createPackSchema = z
   .object({

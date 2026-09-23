@@ -378,7 +378,7 @@ Clients do not call a public “resolve vote” endpoint. The server resolves wh
 
 - Authentication/authorization: active admin.
 - Idempotency: required.
-- Body: name, optional description, and ordered 0–15 initial task descriptions.
+- Body: name, optional description, and ordered 0–100 initial task descriptions.
 - Response `201`: complete draft pack with revision.
 - Errors: `409 PACK_SLUG_CONFLICT`; `422`.
 

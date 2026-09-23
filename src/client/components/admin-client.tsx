@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { MAX_TASKS_PER_MAP, MIN_ACTIVE_TASKS_PER_PUBLISHED_MAP } from "../../shared/task-packs";
 import { downloadableTaskCsv, parseTaskCsv, type CsvImportResult } from "../admin/csv";
 import { adminApi, ApiError, errorMessage } from "../api/client";
 import type { AdminPack, AdminPackSummary, PackStatus } from "../api/types";
@@ -520,7 +521,10 @@ export function AdminEditor({ packId }: { packId?: string }) {
     ? "Add at least one task description."
     : "";
   const activeTaskCount = items.filter((item) => item.isActive && item.description.trim()).length;
-  const publishReady = activeTaskCount >= 3 && activeTaskCount <= 15 && !validation;
+  const publishReady =
+    activeTaskCount >= MIN_ACTIVE_TASKS_PER_PUBLISHED_MAP &&
+    activeTaskCount <= MAX_TASKS_PER_MAP &&
+    !validation;
   const save = async () => {
     if (validation) {
       setError(validation);
@@ -639,15 +643,15 @@ export function AdminEditor({ packId }: { packId?: string }) {
   const applyImport = (parsed: CsvImportResult) => {
     const existing = items.filter((item) => item.description.trim());
     const combined = importMode === "append" ? [...existing, ...parsed.tasks] : parsed.tasks;
-    const kept = combined.slice(0, 15);
-    const omitted = parsed.truncatedRows + Math.max(0, combined.length - 15);
+    const kept = combined.slice(0, MAX_TASKS_PER_MAP);
+    const omitted = parsed.truncatedRows + Math.max(0, combined.length - MAX_TASKS_PER_MAP);
     setItems(kept);
     setPendingImport(null);
     notify({
       title: "Tasks imported",
       message: `${kept.length} task${kept.length === 1 ? "" : "s"} now in the editor.${
         parsed.ignoredRows ? ` ${parsed.ignoredRows} empty row(s) ignored.` : ""
-      }${omitted ? ` ${omitted} row(s) omitted because maps support 15 tasks.` : ""}`,
+      }${omitted ? ` ${omitted} row(s) omitted because maps support ${MAX_TASKS_PER_MAP} tasks.` : ""}`,
       tone: omitted ? "warning" : "success",
     });
   };
@@ -803,7 +807,8 @@ export function AdminEditor({ packId }: { packId?: string }) {
             <div>
               <h2>Map task table</h2>
               <p className="muted">
-                Add up to 15 descriptions. A map can be published with at least 3 active tasks.
+                Add up to {MAX_TASKS_PER_MAP} descriptions. A map can be published with at least{" "}
+                {MIN_ACTIVE_TASKS_PER_PUBLISHED_MAP} active tasks.
               </p>
             </div>
             <Badge>
@@ -927,7 +932,7 @@ export function AdminEditor({ packId }: { packId?: string }) {
               </tbody>
             </table>
           </div>
-          {items.length < 15 && pack?.status !== "archived" && (
+          {items.length < MAX_TASKS_PER_MAP && pack?.status !== "archived" && (
             <Button
               type="button"
               variant="secondary"
@@ -1088,7 +1093,7 @@ export function AdminEditor({ packId }: { packId?: string }) {
         title={confirm === "publish" ? "Publish this map?" : "Archive this map?"}
         description={
           confirm === "publish"
-            ? "The map needs 3 to 15 active tasks. Room task options will match the available difficulties."
+            ? `The map needs ${MIN_ACTIVE_TASKS_PER_PUBLISHED_MAP} to ${MAX_TASKS_PER_MAP} active tasks. Room task options will match the available difficulties.`
             : "Archiving is terminal. The pack will no longer be available for new rooms."
         }
         confirmLabel={confirm === "publish" ? "Publish map" : "Archive map"}

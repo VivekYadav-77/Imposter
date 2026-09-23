@@ -28,9 +28,9 @@ To disable an administrator, set `app.admin_users.status` to `disabled` and revo
 
 ## Task-pack rules
 
-- Drafts contain 0–15 ordered items.
+- Drafts contain 0–100 ordered items.
 - Names contain 1–80 trimmed characters, descriptions at most 1,000 characters, and item text 1–280 characters.
-- Publication requires 10–15 active items.
+- Publication requires 3–100 active items.
 - Mutations require an `Idempotency-Key` and expected revision where applicable. Idempotent results are retained for 24 hours.
 - Archived packs cannot be edited or restored in Phase 2.
 - Audit events store action, actor, target, outcome, request ID, and bounded structural metadata—never passwords, session tokens, or task-edit bodies.

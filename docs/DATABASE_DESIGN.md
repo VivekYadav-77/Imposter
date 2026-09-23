@@ -285,7 +285,7 @@ Index published packs by `(status, name)`. Packs are archived, not deleted, once
 | `created_at`   | `timestamptz` |   No | Default current time                                      |
 | `updated_at`   | `timestamptz` |   No | Application maintained                                    |
 
-Publishing requires the approved task-count range, initially 10–15 active items.
+Publishing requires the approved task-count range of 3–100 active items.
 
 ### `admin_audit_events`
 

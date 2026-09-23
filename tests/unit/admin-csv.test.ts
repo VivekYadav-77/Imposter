@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { downloadableTaskCsv, parseTaskCsv, sampleTaskCsv } from "../../src/client/admin/csv.js";
+import { MAX_TASKS_PER_MAP } from "../../src/shared/task-packs.js";
 
 describe("admin task CSV import", () => {
   it("auto maps common columns and boolean values", () => {
@@ -50,10 +51,10 @@ describe("admin task CSV import", () => {
     const source = [
       "task",
       "",
-      ...Array.from({ length: 17 }, (_, index) => `Task ${index + 1}`),
+      ...Array.from({ length: MAX_TASKS_PER_MAP + 2 }, (_, index) => `Task ${index + 1}`),
     ].join("\n");
     const result = parseTaskCsv(source);
-    expect(result.tasks).toHaveLength(15);
+    expect(result.tasks).toHaveLength(MAX_TASKS_PER_MAP);
     expect(result.ignoredRows).toBe(1);
     expect(result.truncatedRows).toBe(2);
   });

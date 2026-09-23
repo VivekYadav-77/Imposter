@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createPackSchema, updatePackSchema } from "../../src/modules/task-packs/schemas.js";
+import { MAX_TASKS_PER_MAP } from "../../src/shared/task-packs.js";
 
 describe("task-pack input validation", () => {
   it("normalizes ordered string items and trimmed metadata", () => {
@@ -14,7 +15,14 @@ describe("task-pack input validation", () => {
 
   it("rejects excessive item counts and item lengths", () => {
     expect(
-      createPackSchema.safeParse({ name: "Pack", items: Array(16).fill("task") }).success,
+      createPackSchema.safeParse({ name: "Pack", items: Array(MAX_TASKS_PER_MAP).fill("task") })
+        .success,
+    ).toBe(true);
+    expect(
+      createPackSchema.safeParse({
+        name: "Pack",
+        items: Array(MAX_TASKS_PER_MAP + 1).fill("task"),
+      }).success,
     ).toBe(false);
     expect(createPackSchema.safeParse({ name: "Pack", items: ["x".repeat(281)] }).success).toBe(
       false,

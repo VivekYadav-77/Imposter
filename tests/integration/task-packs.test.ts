@@ -8,6 +8,7 @@ import {
   type DatabaseDependencies,
 } from "../../src/infrastructure/database/database.js";
 import { TaskPackRepository } from "../../src/modules/task-packs/repository.js";
+import { MAX_TASKS_PER_MAP } from "../../src/shared/task-packs.js";
 
 const connectionString = process.env.TEST_DATABASE_URL;
 const describeWithDatabase = connectionString ? describe : describe.skip;
@@ -68,7 +69,7 @@ describeWithDatabase("task-pack lifecycle persistence", () => {
       ),
     ).rejects.toMatchObject({ code: "PACK_NOT_PUBLISHABLE" });
 
-    const items = Array.from({ length: 3 }, (_, index) => ({
+    const items = Array.from({ length: MAX_TASKS_PER_MAP }, (_, index) => ({
       description: `Task ${index + 1}`,
       isActive: true,
     }));
@@ -79,7 +80,9 @@ describeWithDatabase("task-pack lifecycle persistence", () => {
       "req-update",
       "update-key-1",
     );
-    expect(updated.items.map((item) => item.position)).toEqual([1, 2, 3]);
+    expect(updated.items.map((item) => item.position)).toEqual(
+      Array.from({ length: MAX_TASKS_PER_MAP }, (_, index) => index + 1),
+    );
     await expect(
       repository.update(
         created.id,
@@ -102,8 +105,8 @@ describeWithDatabase("task-pack lifecycle persistence", () => {
     const projection = await repository.getPublic(created.id);
     expect(projection).toMatchObject({
       id: created.id,
-      activeTaskCount: 3,
-      difficultyTaskCounts: { easy: 0, medium: 3, hard: 0 },
+      activeTaskCount: MAX_TASKS_PER_MAP,
+      difficultyTaskCounts: { easy: 0, medium: MAX_TASKS_PER_MAP, hard: 0 },
       revision: 3,
     });
     expect(projection).not.toHaveProperty("slug");

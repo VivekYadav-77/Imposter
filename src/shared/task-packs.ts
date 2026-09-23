@@ -1,0 +1,2 @@
+export const MAX_TASKS_PER_MAP = 100;
+export const MIN_ACTIVE_TASKS_PER_PUBLISHED_MAP = 3;

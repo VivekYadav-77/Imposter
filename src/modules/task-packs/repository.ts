@@ -4,6 +4,7 @@ import { sql, type Transaction } from "kysely";
 import type { Database, DatabaseSchema } from "../../infrastructure/database/database.js";
 import { inTransaction } from "../../infrastructure/database/transaction.js";
 import { ApplicationError } from "../../shared/errors/application-error.js";
+import { MAX_TASKS_PER_MAP, MIN_ACTIVE_TASKS_PER_PUBLISHED_MAP } from "../../shared/task-packs.js";
 import type { CreatePackInput, UpdatePackInput } from "./schemas.js";
 import type {
   AdminPackDto,
@@ -361,11 +362,11 @@ export class TaskPackRepository {
           .where("task_pack_id", "=", id)
           .where("is_active", "=", true)
           .executeTakeFirstOrThrow();
-        if (count.count < 3 || count.count > 15)
+        if (count.count < MIN_ACTIVE_TASKS_PER_PUBLISHED_MAP || count.count > MAX_TASKS_PER_MAP)
           throw new ApplicationError(
             422,
             "PACK_NOT_PUBLISHABLE",
-            "A published map must contain 3 to 15 active tasks.",
+            `A published map must contain ${MIN_ACTIVE_TASKS_PER_PUBLISHED_MAP} to ${MAX_TASKS_PER_MAP} active tasks.`,
             { activeItemCount: count.count },
           );
       } else if (current.status !== "published") {

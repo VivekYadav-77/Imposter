@@ -1,4 +1,5 @@
 import type { TaskDifficulty } from "../api/types";
+import { MAX_TASKS_PER_MAP } from "../../shared/task-packs";
 
 export interface ImportedTask {
   description: string;
@@ -63,7 +64,7 @@ function rowsFromCsv(source: string): string[][] {
   return rows;
 }
 
-export function parseTaskCsv(source: string, limit = 15): CsvImportResult {
+export function parseTaskCsv(source: string, limit = MAX_TASKS_PER_MAP): CsvImportResult {
   const rows = rowsFromCsv(source.replace(/^\uFEFF/, ""));
   if (rows.length === 0) return { tasks: [], ignoredRows: 0, truncatedRows: 0 };
 

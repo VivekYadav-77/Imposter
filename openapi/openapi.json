@@ -4834,7 +4834,7 @@
           },
           "items": {
             "type": "array",
-            "maxItems": 15,
+            "maxItems": 100,
             "items": {
               "oneOf": [
                 {
@@ -4895,7 +4895,7 @@
           },
           "items": {
             "type": "array",
-            "maxItems": 15,
+            "maxItems": 100,
             "items": {
               "oneOf": [
                 {
