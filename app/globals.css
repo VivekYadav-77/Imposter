@@ -2376,8 +2376,9 @@ html[data-theme="light"] .dashboard-page {
 .dashboard-bottom-nav {
   display: none;
 }
-.dashboard-main {
-  width: min(1180px, calc(100% - 48px));
+.dashboard-page .dashboard-main {
+  width: calc(100% - clamp(40px, 5vw, 80px));
+  max-width: 1500px;
   min-width: 0;
   margin: 0 auto;
   padding: 40px 0 64px;
@@ -2752,8 +2753,9 @@ html[data-theme="light"] .dashboard-page {
   .dashboard-page {
     grid-template-columns: 232px minmax(0, 1fr);
   }
-  .dashboard-main {
-    width: min(1240px, calc(100% - 64px));
+  .dashboard-page .dashboard-main {
+    width: calc(100% - clamp(48px, 5vw, 96px));
+    max-width: 1600px;
   }
   .dashboard-page .result-roster {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2761,7 +2763,7 @@ html[data-theme="light"] .dashboard-page {
 }
 
 @media (max-width: 1100px) and (min-width: 900px) {
-  .dashboard-main {
+  .dashboard-page .dashboard-main {
     width: min(100% - 36px, 1050px);
   }
   .dashboard-overview-grid {
@@ -2847,7 +2849,7 @@ html[data-theme="light"] .dashboard-page {
     padding: 5px;
     font-size: 0.7rem;
   }
-  .dashboard-main {
+  .dashboard-page .dashboard-main {
     width: min(100% - 28px, 760px);
     padding: 20px 0 28px;
   }
@@ -2886,6 +2888,33 @@ html[data-theme="light"] .dashboard-page {
 }
 
 @media (max-width: 520px) {
+  .account-page .dialog,
+  .dashboard-page .dialog {
+    width: calc(100% - 16px);
+    max-height: calc(100dvh - 16px);
+    margin: auto;
+    padding: 16px;
+    border-radius: 18px;
+  }
+  .account-page .dialog-head,
+  .dashboard-page .dialog-head {
+    gap: 12px;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+  }
+  .account-page .dialog-head h2,
+  .dashboard-page .dialog-head h2 {
+    font-size: 1.3rem;
+  }
+  .account-page .dialog-head .icon-button,
+  .dashboard-page .dialog-head .icon-button {
+    min-width: 40px;
+    min-height: 40px;
+  }
+  .account-dialog-intro {
+    margin: 0 0 12px;
+    font-size: 0.9rem;
+  }
   .account-page .site-header .header-back-link span {
     display: none;
   }
@@ -2913,9 +2942,11 @@ html[data-theme="light"] .dashboard-page {
   }
   .account-avatar-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
   }
   .account-avatar-grid button {
-    min-height: 82px;
+    min-height: 76px;
+    padding: 6px 3px;
   }
   .dashboard-heading {
     align-items: flex-start;

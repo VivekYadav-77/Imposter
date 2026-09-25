@@ -203,6 +203,49 @@ test("registration keeps the primary action close and uses an accessible avatar 
   await expect(page.getByRole("textbox", { name: "Password" })).toHaveAttribute("type", "text");
 });
 
+test("avatar dialog stays contained and usable on the narrowest supported phone", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 720 });
+  await page.goto("/register");
+  await page.getByRole("button", { name: /Fox Selected operative/ }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Choose your operative" });
+  await expect(dialog).toBeVisible();
+  const box = await dialog.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box!.x).toBeGreaterThanOrEqual(8);
+  expect(box!.y).toBeGreaterThanOrEqual(8);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(312);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(712);
+
+  const options = await dialog.getByRole("radio").evaluateAll((radios) =>
+    radios.map((radio) => {
+      const bounds = radio.getBoundingClientRect();
+      return { width: bounds.width, height: bounds.height };
+    }),
+  );
+  expect(options).toHaveLength(18);
+  expect(options.every(({ width, height }) => width >= 44 && height >= 44)).toBe(true);
+});
+
+test("desktop dashboard uses the available content canvas", async ({ page }) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await mockAccountApi(page);
+  await page.goto("/dashboard");
+
+  const widths = await page.locator(".dashboard-page").evaluate((dashboard) => {
+    const main = dashboard.querySelector<HTMLElement>(".dashboard-main");
+    const sidebar = dashboard.querySelector<HTMLElement>(".dashboard-sidebar");
+    return {
+      main: main?.getBoundingClientRect().width ?? 0,
+      available:
+        dashboard.getBoundingClientRect().width - (sidebar?.getBoundingClientRect().width ?? 0),
+    };
+  });
+  expect(widths.main).toBeGreaterThanOrEqual(widths.available * 0.9);
+});
+
 test("auth forms prevent duplicate submission and preserve their API payloads", async ({
   page,
 }) => {
