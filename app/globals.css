@@ -737,6 +737,64 @@ select {
 .field textarea {
   resize: vertical;
 }
+.whole-number-control {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) 46px;
+  align-items: stretch;
+  min-width: 0;
+}
+.whole-number-input-wrap {
+  position: relative;
+  min-width: 0;
+}
+.field .whole-number-input-wrap input {
+  height: 100%;
+  min-height: 48px;
+  border-radius: 0;
+  text-align: center;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+.whole-number-input-wrap > span {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-size: 0.72rem;
+  pointer-events: none;
+}
+.whole-number-input-wrap:has(> span) input {
+  padding-right: 64px;
+}
+.number-step-button {
+  min-width: 46px;
+  min-height: 48px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+.number-step-button:first-child {
+  border-right: 0;
+  border-radius: 8px 0 0 8px;
+}
+.number-step-button:last-child {
+  border-left: 0;
+  border-radius: 0 8px 8px 0;
+}
+.number-step-button:hover:not(:disabled),
+.number-step-button:focus-visible {
+  position: relative;
+  z-index: 1;
+  border-color: var(--amber);
+  color: var(--amber);
+}
+.number-step-button:disabled {
+  color: var(--disabled);
+  cursor: not-allowed;
+}
 .game-select {
   position: relative;
   min-width: 0;
@@ -954,6 +1012,51 @@ select {
   align-items: center;
   gap: 22px;
 }
+.phase-bar .phase-bar-inner {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.phase-primary,
+.phase-utilities {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+.phase-primary {
+  overflow: hidden;
+}
+.phase-primary > :not(.phase-label) {
+  min-width: 0;
+  overflow: hidden;
+}
+.phase-primary .badge {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.phase-utilities {
+  flex: 0 0 auto;
+  gap: 10px;
+}
+.game-utility-button {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 11px;
+  border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  color: var(--ink);
+}
+.phase-bar .theme-toggle-game {
+  position: static;
+  flex: 0 0 44px;
+}
 .phase-lobby {
   background: var(--lobby);
 }
@@ -1098,8 +1201,7 @@ select {
   line-height: 1;
 }
 .site-header,
-.admin-header,
-.phase-bar {
+.admin-header {
   padding-right: max(72px, calc(env(safe-area-inset-right) + 60px));
 }
 .section-heading {
@@ -5102,17 +5204,51 @@ html[data-theme="dark"] .admin-page .save-bar .button-secondary {
   }
   .phase-bar {
     min-height: 82px;
+    padding-right: max(12px, env(safe-area-inset-right));
+    padding-left: max(12px, env(safe-area-inset-left));
   }
   .site-header,
-  .admin-header,
-  .phase-bar {
+  .admin-header {
     padding-right: max(68px, calc(env(safe-area-inset-right) + 58px));
   }
   .sound-toggle {
     top: calc(max(8px, env(safe-area-inset-top)) + 82px);
   }
   .phase-bar > div {
-    gap: 10px;
+    gap: 8px;
+  }
+  .phase-primary {
+    gap: 7px;
+  }
+  .phase-utilities {
+    gap: 6px;
+  }
+  .phase-identity {
+    max-width: none;
+  }
+  .phase-identity > span:last-child,
+  .game-utility-button .utility-label {
+    display: none;
+  }
+  .phase-identity .player-avatar,
+  .phase-identity .identity-token {
+    width: 40px;
+    height: 40px;
+    flex-basis: 40px;
+  }
+  .game-utility-button,
+  .phase-bar .theme-toggle-game {
+    min-width: 40px;
+    width: 40px;
+    height: 40px;
+    flex-basis: 40px;
+    padding: 0;
+  }
+  .phase-primary .badge {
+    white-space: nowrap;
+  }
+  .dashboard-avatar-watermark {
+    display: none;
   }
   .room-code small,
   .room-code span {

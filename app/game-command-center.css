@@ -951,6 +951,14 @@ html[data-theme="light"] .game-page .avatar-phase-bar .phase-identity {
   .game-page .phase-primary {
     gap: 8px;
     flex: 1;
+    overflow: hidden;
+  }
+  .game-page .phase-primary > .badge {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .game-page .phase-label {
     font-size: 0.82rem;

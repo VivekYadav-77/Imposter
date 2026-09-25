@@ -674,8 +674,7 @@ export class GameService {
         participants.length >= 3 && participants.length <= 15
           ? maximumImposterCount(participants.length)
           : 0;
-      if (room.imposter_count > maxImposters)
-        reasons.imposterCount = `Choose between 1 and ${maxImposters} impostor${maxImposters === 1 ? "" : "s"} for this player count.`;
+      const imposterCount = maxImposters;
       if (!room.selected_task_pack_id) reasons.selectedTaskPack = "Select a published task pack.";
       const pack = room.selected_task_pack_id
         ? await trx
@@ -710,7 +709,7 @@ export class GameService {
       const roleTotal = Object.values(room.role_counts).reduce((sum, count) => sum + count, 0);
       if (Object.keys(room.role_counts).some((name) => !roleByName.has(name)))
         reasons.roleCounts = "A selected crew role is no longer available on this map.";
-      if (roleTotal > participants.length - room.imposter_count)
+      if (roleTotal > participants.length - imposterCount)
         reasons.roleCounts = "Selected crew roles exceed the available crewmates.";
       if (Object.keys(reasons).length || !pack)
         throw new ApplicationError(422, "ROOM_NOT_READY", "The room is not ready to start.", {
@@ -761,7 +760,7 @@ export class GameService {
         position: item.position,
         difficulty_snapshot: item.difficulty,
       }));
-      const plan = createAssignmentPlan(participantIds, snapshots, room.imposter_count, 0);
+      const plan = createAssignmentPlan(participantIds, snapshots, imposterCount, 0);
       for (const participantId of participantIds) {
         const chosen = (["easy", "medium", "hard"] as const).flatMap((difficulty) =>
           sampleDistinct(
@@ -841,7 +840,7 @@ export class GameService {
         .updateTable("app.rooms")
         .set({
           status: "active",
-          imposter_count: room.imposter_count,
+          imposter_count: imposterCount,
           tasks_per_crew: requestedTasks.easy + requestedTasks.medium + requestedTasks.hard,
           last_activity_at: now,
           expires_at: new Date(now.getTime() + 12 * 60 * 60 * 1000),

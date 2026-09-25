@@ -116,6 +116,119 @@ export function Field({
   );
 }
 
+export function WholeNumberField({
+  label,
+  value,
+  min,
+  max,
+  step = 1,
+  suffix,
+  hint,
+  labelAction,
+  disabled,
+  className = "",
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step?: number;
+  suffix?: string;
+  hint?: string;
+  labelAction?: ReactNode;
+  disabled?: boolean;
+  className?: string;
+  onChange: (value: number) => void;
+}) {
+  const id = useId();
+  const [draft, setDraft] = ReactUseState(String(value));
+  useEffect(() => setDraft(String(value)), [value]);
+
+  const parsed = Number(draft);
+  const valid = /^\d+$/.test(draft) && Number.isInteger(parsed) && parsed >= min && parsed <= max;
+  const commit = () => {
+    if (!draft) {
+      setDraft(String(value));
+      return;
+    }
+    const next = Math.min(max, Math.max(min, Math.trunc(parsed)));
+    setDraft(String(next));
+    if (next !== value) onChange(next);
+  };
+  const nudge = (direction: -1 | 1) => {
+    const current = valid ? parsed : value;
+    const next = Math.min(max, Math.max(min, current + direction * step));
+    setDraft(String(next));
+    if (next !== value) onChange(next);
+  };
+
+  return (
+    <label className={`field whole-number-field ${className}`}>
+      <span className="game-select-label-row">
+        <span className="field-label" id={`${id}-label`}>
+          {label}
+        </span>
+        {labelAction}
+      </span>
+      <span className="whole-number-control">
+        <button
+          type="button"
+          className="number-step-button"
+          disabled={disabled || (valid ? parsed : value) <= min}
+          aria-label={`Decrease ${label} by ${step}`}
+          onClick={() => nudge(-1)}
+        >
+          <span aria-hidden="true">−</span>
+        </button>
+        <span className="whole-number-input-wrap">
+          <input
+            id={id}
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            autoComplete="off"
+            value={draft}
+            disabled={disabled}
+            role="spinbutton"
+            aria-labelledby={`${id}-label`}
+            aria-invalid={!valid}
+            aria-valuemin={min}
+            aria-valuemax={max}
+            onChange={(event) => {
+              if (/^\d*$/.test(event.target.value))
+                setDraft(event.target.value.slice(0, String(max).length));
+            }}
+            onBlur={commit}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                commit();
+                event.currentTarget.blur();
+              }
+              if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+                event.preventDefault();
+                nudge(event.key === "ArrowUp" ? 1 : -1);
+              }
+            }}
+          />
+          {suffix && <span>{suffix}</span>}
+        </span>
+        <button
+          type="button"
+          className="number-step-button"
+          disabled={disabled || (valid ? parsed : value) >= max}
+          aria-label={`Increase ${label} by ${step}`}
+          onClick={() => nudge(1)}
+        >
+          <span aria-hidden="true">+</span>
+        </button>
+      </span>
+      {hint && <span className="field-hint">{hint}</span>}
+    </label>
+  );
+}
+
 export function GameSelect({
   label,
   value,

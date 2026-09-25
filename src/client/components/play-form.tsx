@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ApiError, createIdempotencyKey, errorMessage, participantApi } from "../api/client";
 import type { RoomSnapshot } from "../api/types";
-import { Button, Drawer, Field, GameSelect, Toast } from "./ui";
+import { Button, Drawer, Field, Toast, WholeNumberField } from "./ui";
 import { AvatarPicker, PlayerAvatar } from "./player-avatar";
 import { AVATAR_IDS, avatarById, isAvatarId, type AvatarId } from "../../shared/avatars";
 
@@ -15,7 +15,7 @@ export function PlayForm() {
   const [nickname, setNickname] = useState("");
   const [code, setCode] = useState("");
   const [minPlayers, setMinPlayers] = useState(3);
-  const [maxPlayers, setMaxPlayers] = useState(12);
+  const [maxPlayers, setMaxPlayers] = useState(15);
   const [accepted, setAccepted] = useState(false);
   const [avatarId, setAvatarId] = useState<AvatarId | null>(null);
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
@@ -302,31 +302,25 @@ export function PlayForm() {
               <span aria-hidden="true">⌄</span>
             </summary>
             <div className="form-grid two-column">
-              <GameSelect
+              <WholeNumberField
                 label="Minimum players"
-                value={String(minPlayers)}
-                options={Array.from({ length: 13 }, (_, index) => index + 3).map((value) => ({
-                  value: String(value),
-                  label: String(value),
-                }))}
+                value={minPlayers}
+                min={3}
+                max={maxPlayers}
                 hint="At least 3 players are required."
-                onChange={(nextValue) => {
-                  const value = Number(nextValue);
+                onChange={(value) => {
                   setMinPlayers(value);
-                  if (maxPlayers < value) setMaxPlayers(value);
                   key.current = createIdempotencyKey();
                 }}
               />
-              <GameSelect
+              <WholeNumberField
                 label="Maximum players"
-                value={String(maxPlayers)}
-                options={Array.from(
-                  { length: 16 - minPlayers },
-                  (_, index) => index + minPlayers,
-                ).map((value) => ({ value: String(value), label: String(value) }))}
+                value={maxPlayers}
+                min={minPlayers}
+                max={15}
                 hint="Limited to 15 for reliable realtime play."
                 onChange={(value) => {
-                  setMaxPlayers(Number(value));
+                  setMaxPlayers(value);
                   key.current = createIdempotencyKey();
                 }}
               />

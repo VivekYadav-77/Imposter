@@ -12,6 +12,7 @@ import type { GameService } from "../../src/modules/games/service.js";
 import type { EvidenceService } from "../../src/modules/evidence/service.js";
 import {
   normalizeNickname,
+  roomCreationSchema,
   roomMembershipSchema,
   roomSettingsSchema,
 } from "../../src/modules/rooms/schemas.js";
@@ -26,6 +27,10 @@ afterEach(async () =>
 );
 
 describe("host gameplay settings", () => {
+  it("defaults new rooms to the maximum supported capacity", () => {
+    expect(roomCreationSchema.parse({ nickname: "Host" }).maxPlayers).toBe(15);
+  });
+
   it("accepts a 240 minute game and rejects anything longer", () => {
     expect(roomSettingsSchema.safeParse({ taskPhaseSeconds: 14_400 }).success).toBe(true);
     expect(roomSettingsSchema.safeParse({ taskPhaseSeconds: 14_401 }).success).toBe(false);

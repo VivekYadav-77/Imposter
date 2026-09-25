@@ -249,7 +249,7 @@ export class RoomService {
         estimatedMeetingCooldownSeconds: room.meeting_cooldown_seconds,
         imposterCount: room.imposter_count,
         allowedImposterCounts: Array.from(
-          { length: maximumImposterCount(Math.max(3, participants.length)) },
+          { length: maximumImposterCount(room.max_players) },
           (_, index) => index + 1,
         ),
         taskCounts: {
@@ -360,7 +360,7 @@ export class RoomService {
     this.throttlePublic(requestScope);
     const normalized = normalizeNickname(input.nickname);
     const minPlayers = input.minPlayers ?? 3;
-    const maxPlayers = input.maxPlayers ?? 12;
+    const maxPlayers = input.maxPlayers ?? 15;
     const avatarId = input.avatarId ?? AVATAR_IDS[0];
     const replayInput = { ...normalized, avatarId, minPlayers, maxPlayers };
     for (let attempt = 0; attempt < 8; attempt += 1) {
@@ -425,7 +425,7 @@ export class RoomService {
               meeting_duration_seconds: 90,
               meeting_voting_mode: "timed",
               vote_visibility: "private",
-              evidence_visibility: "public",
+              evidence_visibility: "private",
               meeting_task_requirement: "one",
               meeting_cooldown_seconds: 90,
               imposter_cooldown_seconds: 60,
@@ -703,13 +703,13 @@ export class RoomService {
         .executeTakeFirstOrThrow();
       if (
         input.imposterCount !== undefined &&
-        input.imposterCount > maximumImposterCount(Math.max(3, joined.count))
+        input.imposterCount > maximumImposterCount(room.max_players)
       )
         throw new ApplicationError(
           422,
           "VALIDATION_FAILED",
-          "That many impostors would leave too few crewmates for the current player count.",
-          { maximum: maximumImposterCount(Math.max(3, joined.count)) },
+          "That many impostors would leave too few crewmates at this room's capacity.",
+          { maximum: maximumImposterCount(room.max_players) },
         );
       if (input.taskCounts !== undefined) {
         const requested = input.taskCounts;

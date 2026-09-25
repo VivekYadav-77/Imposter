@@ -27,7 +27,7 @@ export const roomCreationSchema = z
     nickname,
     avatarId: avatarId.optional(),
     minPlayers: z.number().int().min(3).max(15).default(3),
-    maxPlayers: z.number().int().min(3).max(15).default(12),
+    maxPlayers: z.number().int().min(3).max(15).default(15),
   })
   .strict()
   .refine((value) => value.minPlayers <= value.maxPlayers, {

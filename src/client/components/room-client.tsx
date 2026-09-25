@@ -46,6 +46,7 @@ import {
   SkeletonList,
   Timer,
   Toast,
+  WholeNumberField,
 } from "./ui";
 
 type GameToastDetail = { message: string; tone: "success" | "danger" | "info" };
@@ -623,15 +624,13 @@ function LobbyView({
                 onApply={(value) => void update({ meetingCooldownSeconds: value })}
                 hint="Time after a meeting ends before another meeting can be called."
               />
-              <GameSelect
+              <WholeNumberField
                 label="Meetings per player"
-                value={String(room.settings.meetingsPerPlayer)}
+                value={room.settings.meetingsPerPlayer}
+                min={0}
+                max={10}
                 disabled={busy}
-                options={Array.from({ length: 6 }, (_, count) => ({
-                  value: String(count),
-                  label: String(count),
-                }))}
-                onChange={(value) => void update({ meetingsPerPlayer: Number(value) })}
+                onChange={(value) => void update({ meetingsPerPlayer: value })}
               />
               <div className="vote-visibility-control">
                 <span className="field-label">Impostor task needed to call a meeting</span>
@@ -667,16 +666,14 @@ function LobbyView({
                   Crew members always need one completed task. The caller’s identity is never shown.
                 </span>
               </div>
-              <GameSelect
+              <WholeNumberField
                 label="Impostors"
-                value={String(room.settings.imposterCount)}
+                value={room.settings.imposterCount}
+                min={1}
+                max={room.settings.allowedImposterCounts.at(-1) ?? 1}
                 disabled={busy}
-                options={room.settings.allowedImposterCounts.map((count) => ({
-                  value: String(count),
-                  label: `${count}${count === 1 ? " (recommended for small rooms)" : ""}`,
-                }))}
-                hint="Options keep crewmates in the majority at game start."
-                onChange={(value) => void update({ imposterCount: Number(value) })}
+                hint={`Choose up to ${room.settings.allowedImposterCounts.at(-1) ?? 1} for a ${room.maxPlayers}-player room. Game start uses the safest maximum for the players actually present.`}
+                onChange={(value) => void update({ imposterCount: value })}
               />
             </ResponsiveSettingsDetails>
             <details className="settings-section settings-collapsible" open>
@@ -698,35 +695,30 @@ function LobbyView({
               </summary>
               <div className="difficulty-settings">
                 {(["easy", "medium", "hard"] as const).map((difficulty) => (
-                  <GameSelect
+                  <WholeNumberField
                     className="compact-field"
                     key={difficulty}
                     label={difficulty[0].toUpperCase() + difficulty.slice(1)}
-                    value={String(room.settings.taskCounts[difficulty])}
+                    value={room.settings.taskCounts[difficulty]}
+                    min={0}
+                    max={Math.min(
+                      availableTaskCounts[difficulty],
+                      15 -
+                        Object.entries(room.settings.taskCounts)
+                          .filter(([name]) => name !== difficulty)
+                          .reduce((sum, [, count]) => sum + count, 0),
+                    )}
                     disabled={
                       busy ||
                       !room.settings.selectedTaskPack ||
                       availableTaskCounts[difficulty] === 0
                     }
-                    options={Array.from(
-                      {
-                        length:
-                          Math.min(
-                            availableTaskCounts[difficulty],
-                            15 -
-                              Object.entries(room.settings.taskCounts)
-                                .filter(([name]) => name !== difficulty)
-                                .reduce((sum, [, count]) => sum + count, 0),
-                          ) + 1,
-                      },
-                      (_, index) => ({ value: String(index), label: String(index) }),
-                    )}
                     hint={`${availableTaskCounts[difficulty]} active on this map`}
                     onChange={(value) =>
                       void update({
                         taskCounts: {
                           ...room.settings.taskCounts,
-                          [difficulty]: Number(value),
+                          [difficulty]: value,
                         },
                       })
                     }
@@ -748,7 +740,7 @@ function LobbyView({
                 </summary>
                 <div className="role-settings">
                   {room.settings.selectedTaskPack.roles.map((role) => (
-                    <GameSelect
+                    <WholeNumberField
                       className="compact-field"
                       key={role.name}
                       label={role.name}
@@ -763,23 +755,16 @@ function LobbyView({
                           <span aria-hidden="true">i</span>
                         </button>
                       }
-                      value={String(room.settings.roleCounts[role.name] ?? 0)}
+                      value={room.settings.roleCounts[role.name] ?? 0}
+                      min={0}
+                      max={Math.max(0, room.participants.length - room.settings.imposterCount)}
                       disabled={busy}
-                      options={Array.from(
-                        {
-                          length: Math.max(
-                            1,
-                            room.participants.length - room.settings.imposterCount + 1,
-                          ),
-                        },
-                        (_, index) => ({ value: String(index), label: String(index) }),
-                      )}
                       hint="Select how many crewmates receive this role."
                       onChange={(value) =>
                         void update({
                           roleCounts: {
                             ...room.settings.roleCounts,
-                            [role.name]: Number(value),
+                            [role.name]: value,
                           },
                         })
                       }
@@ -862,57 +847,19 @@ function GameDurationControl({
   onChange: (value: number) => void;
   busy: boolean;
 }) {
-  const presets = [300, 600, 900, 1200, 1800, 3600, 7200, 14400];
-  const [draftMinutes, setDraftMinutes] = useState(String(value / 60));
-  useEffect(() => setDraftMinutes(String(value / 60)), [value]);
-  const parsedMinutes = Number(draftMinutes);
-  const valid = Number.isInteger(parsedMinutes) && parsedMinutes >= 5 && parsedMinutes <= 240;
   return (
-    <div className="field custom-duration-field">
-      <GameSelect
-        label="Game time"
-        value={String(value)}
-        disabled={busy}
-        options={[
-          ...(!presets.includes(value)
-            ? [{ value: String(value), label: `${value / 60} min (custom)` }]
-            : []),
-          ...presets.map((seconds) => ({
-            value: String(seconds),
-            label: `${seconds / 60} min`,
-          })),
-        ]}
-        onChange={(nextValue) => onChange(Number(nextValue))}
-      />
-      <span className="duration-input-row">
-        <input
-          type="number"
-          min={5}
-          max={240}
-          step={1}
-          value={draftMinutes}
-          disabled={busy}
-          aria-label="Custom game time in minutes"
-          aria-invalid={!valid}
-          onChange={(event) => setDraftMinutes(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && valid && parsedMinutes * 60 !== value) {
-              event.preventDefault();
-              onChange(parsedMinutes * 60);
-            }
-          }}
-        />
-        <span>minutes</span>
-        <Button
-          variant="secondary"
-          disabled={busy || !valid || parsedMinutes * 60 === value}
-          onClick={() => onChange(parsedMinutes * 60)}
-        >
-          Set custom
-        </Button>
-      </span>
-      <span className="field-hint">Choose any whole number from 5 to 240 minutes.</span>
-    </div>
+    <WholeNumberField
+      className="custom-duration-field"
+      label="Game time"
+      value={value / 60}
+      min={5}
+      max={240}
+      step={5}
+      suffix="min"
+      disabled={busy}
+      hint="Enter a whole number from 5 to 240 minutes. Buttons change the time by 5 minutes."
+      onChange={(minutes) => onChange(minutes * 60)}
+    />
   );
 }
 
@@ -929,11 +876,6 @@ function MeetingVotingControl({
   onModeChange: (mode: "timed" | "all_voted") => void;
   onDurationChange: (seconds: number) => void;
 }) {
-  const [draft, setDraft] = useState(String(duration));
-  useEffect(() => setDraft(String(duration)), [duration]);
-  const parsed = Number(draft);
-  const valid = Number.isInteger(parsed) && parsed >= 30 && parsed <= 1800;
-  const presets = [60, 90, 120, 180, 300, 600, 900];
   return (
     <div className="meeting-rule-control">
       <div className="meeting-mode-grid" role="radiogroup" aria-label="Meeting voting rule">
@@ -968,51 +910,17 @@ function MeetingVotingControl({
       </div>
       {mode === "timed" && (
         <div className="meeting-duration-editor">
-          <div className="field-label-row">
-            <span className="field-label">Maximum voting time</span>
-            <strong>{formatDuration(duration)}</strong>
-          </div>
-          <div className="duration-presets" aria-label="Quick voting time choices">
-            {presets.map((seconds) => (
-              <button
-                type="button"
-                key={seconds}
-                className={duration === seconds ? "selected" : ""}
-                disabled={busy}
-                onClick={() => onDurationChange(seconds)}
-              >
-                {seconds < 60 ? `${seconds}s` : `${seconds / 60}m`}
-              </button>
-            ))}
-          </div>
-          <label className="meeting-custom-time">
-            <span>Custom</span>
-            <input
-              type="number"
-              min={30}
-              max={1800}
-              step={5}
-              value={draft}
-              disabled={busy}
-              aria-invalid={!valid}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && valid && parsed !== duration) {
-                  event.preventDefault();
-                  onDurationChange(parsed);
-                }
-              }}
-            />
-            <span>seconds</span>
-            <Button
-              variant="secondary"
-              disabled={busy || !valid || parsed === duration}
-              onClick={() => onDurationChange(parsed)}
-            >
-              Set
-            </Button>
-          </label>
-          <small className="field-hint">Choose a preset or enter 30–1800 seconds.</small>
+          <WholeNumberField
+            label="Maximum voting time"
+            value={duration}
+            min={30}
+            max={1800}
+            step={5}
+            suffix="seconds"
+            disabled={busy}
+            hint="Enter a whole number from 30 to 1800 seconds."
+            onChange={onDurationChange}
+          />
         </div>
       )}
       {mode === "all_voted" && (
@@ -1040,36 +948,18 @@ function CustomDurationField({
   onApply: (value: number) => void;
   hint?: string;
 }) {
-  const [draft, setDraft] = useState(String(value));
-  useEffect(() => setDraft(String(value)), [value]);
-  const parsed = Number(draft);
-  const valid = Number.isInteger(parsed) && parsed >= min && parsed <= max;
   return (
-    <label className="field custom-duration-field">
-      <span className="field-label">{label}</span>
-      <span className="duration-input-row">
-        <input
-          type="number"
-          min={min}
-          max={max}
-          step={5}
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          aria-invalid={!valid}
-        />
-        <span>seconds</span>
-        <Button
-          variant="secondary"
-          disabled={!valid || parsed === value}
-          onClick={() => onApply(parsed)}
-        >
-          Apply
-        </Button>
-      </span>
-      <span className="field-hint">
-        {hint ?? `Choose any whole number from ${min} to ${max} seconds.`}
-      </span>
-    </label>
+    <WholeNumberField
+      className="custom-duration-field"
+      label={label}
+      value={value}
+      min={min}
+      max={max}
+      step={5}
+      suffix="seconds"
+      hint={hint ?? `Choose any whole number from ${min} to ${max} seconds.`}
+      onChange={onApply}
+    />
   );
 }
 
@@ -1769,32 +1659,22 @@ function UploadDialog({
   onClose: () => void;
   onError: (message: string) => void;
 }) {
-  const [state, setState] = useState<"idle" | "optimizing" | "uploading" | "processing" | "done">(
-    "idle",
-  );
-  const closeTimer = useRef<number | undefined>(undefined);
-  const activeUpload = useRef<AbortController | null>(null);
+  const activeUploads = useRef(new Set<AbortController>());
   useEffect(() => {
-    if (!open) {
-      activeUpload.current?.abort();
-      activeUpload.current = null;
-      setState("idle");
-    }
     return () => {
-      if (closeTimer.current !== undefined) window.clearTimeout(closeTimer.current);
-      activeUpload.current?.abort();
+      for (const controller of activeUploads.current) controller.abort();
+      activeUploads.current.clear();
     };
-  }, [open]);
+  }, []);
   if (!assignment) return null;
   const upload = async (file: File) => {
-    activeUpload.current?.abort();
     const controller = new AbortController();
-    activeUpload.current = controller;
-    setState("optimizing");
+    activeUploads.current.add(controller);
+    onClose();
+    gameToast("Photo selected. Uploading in the background…", "info");
     try {
       const preparedFile = await normalizeEvidenceImage(file, controller.signal);
       if (controller.signal.aborted) return;
-      setState("uploading");
       playGameSound("upload-start");
       let expectedStateVersion = game.stateVersion;
       const refreshStateVersion = async () => {
@@ -1819,7 +1699,6 @@ function UploadDialog({
         intent = (await createIntent()).data;
       }
       await uploadEvidenceObject(intent, preparedFile, controller.signal);
-      setState("processing");
       const confirm = () =>
         participantApi.confirmUpload(
           assignment.id,
@@ -1839,9 +1718,6 @@ function UploadDialog({
       setGame(latest.data);
       playGameSound("upload");
       gameToast("Photo uploaded to this task.");
-      setState("done");
-      activeUpload.current = null;
-      closeTimer.current = window.setTimeout(onClose, 650);
     } catch (e) {
       if (e instanceof Error && e.name === "AbortError") return;
       playGameSound("upload-failure");
@@ -1850,67 +1726,47 @@ function UploadDialog({
           ? evidenceImageErrorMessage(e)
           : errorMessage(e),
       );
-      activeUpload.current = null;
-      setState("idle");
+    } finally {
+      activeUploads.current.delete(controller);
     }
   };
   return (
     <Dialog open={open} title="Upload task photo" onClose={onClose}>
       <p className="task-description">{assignment.description}</p>
-      {state !== "idle" ? (
-        <div className="processing-state">
-          <span className="scan-line" />
-          <h3>
-            {state === "done"
-              ? "Done"
-              : state === "optimizing"
-                ? "Optimizing photo…"
-                : state === "uploading"
-                  ? "Uploading photo…"
-                  : "Finishing task…"}
-          </h3>
-          <p>
-            {state === "done"
-              ? "Your task is complete."
-              : "This will close automatically when the upload is ready."}
-          </p>
+      <div className="file-picker-panel">
+        <div className="file-picker-options">
+          <label className="file-picker">
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              capture="environment"
+              onChange={(event) => {
+                const selectedFile = event.target.files?.[0];
+                if (selectedFile) void upload(selectedFile);
+              }}
+            />
+            <Icon name="camera" size={28} />
+            <span>Take photo</span>
+            <small>Open your camera</small>
+          </label>
+          <label className="file-picker">
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={(event) => {
+                const selectedFile = event.target.files?.[0];
+                if (selectedFile) void upload(selectedFile);
+              }}
+            />
+            <Icon name="upload" size={28} />
+            <span>Choose from gallery</span>
+            <small>Select an existing photo</small>
+          </label>
         </div>
-      ) : (
-        <div className="file-picker-panel">
-          <div className="file-picker-options">
-            <label className="file-picker">
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                capture="environment"
-                onChange={(event) => {
-                  const selectedFile = event.target.files?.[0];
-                  if (selectedFile) void upload(selectedFile);
-                }}
-              />
-              <Icon name="camera" size={28} />
-              <span>Take photo</span>
-              <small>Open your camera</small>
-            </label>
-            <label className="file-picker">
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                onChange={(event) => {
-                  const selectedFile = event.target.files?.[0];
-                  if (selectedFile) void upload(selectedFile);
-                }}
-              />
-              <Icon name="upload" size={28} />
-              <span>Choose from gallery</span>
-              <small>Select an existing photo</small>
-            </label>
-          </div>
-          <small className="file-picker-note">
-            JPEG, PNG or WebP · large photos are optimized automatically
-          </small>
-        </div>
-      )}
+        <small className="file-picker-note">
+          JPEG, PNG or WebP · upload continues in the background after selection
+        </small>
+      </div>
     </Dialog>
   );
 }

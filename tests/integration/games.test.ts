@@ -98,7 +98,7 @@ describeWithDatabase("authoritative game start and progress", () => {
     };
   }
 
-  it("serializes concurrent starts and persists fixed distributions", async () => {
+  it("serializes concurrent starts and uses the safe maximum impostor count", async () => {
     const ready = await readyRoom(8);
     const starts = await Promise.allSettled([
       games.start(ready.host, randomUUID()),
@@ -115,7 +115,7 @@ describeWithDatabase("authoritative game start and progress", () => {
       .select(["role"])
       .where("game_id", "=", snapshot.id)
       .execute();
-    expect(persistedRoles.filter((entry) => entry.role === "imposter")).toHaveLength(1);
+    expect(persistedRoles.filter((entry) => entry.role === "imposter")).toHaveLength(3);
   });
 
   it("rejects a lobby that is missing players and a selected pack", async () => {

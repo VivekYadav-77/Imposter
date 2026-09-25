@@ -92,7 +92,7 @@ describe("frontend design foundations", () => {
       readFile("src/client/components/ui.tsx", "utf8"),
       readFile("app/game-command-center.css", "utf8"),
     ]);
-    expect(room.match(/<GameSelect/g)?.length).toBeGreaterThanOrEqual(7);
+    expect(room.match(/<GameSelect/g)?.length).toBeGreaterThanOrEqual(2);
     expect(room).not.toContain("<select");
     expect(ui).toContain("data-placement={placement}");
     expect(ui).toContain('event.key === "ArrowDown"');
@@ -105,7 +105,7 @@ describe("frontend design foundations", () => {
     );
   });
 
-  it("uses the constrained custom dropdown for every project option menu", async () => {
+  it("uses bounded whole-number controls for numeric game settings", async () => {
     const sources = await Promise.all([
       readFile("src/client/components/room-client.tsx", "utf8"),
       readFile("src/client/components/play-form.tsx", "utf8"),
@@ -115,6 +115,8 @@ describe("frontend design foundations", () => {
     expect(sources.join("\n")).toContain('label="Game time"');
     expect(sources.join("\n")).toContain('label="Meetings per player"');
     expect(sources.join("\n")).toContain('label="Impostors"');
+    expect(sources.join("\n")).toContain("<WholeNumberField");
+    expect(sources.join("\n")).not.toContain('type="number"');
   });
 
   it("places the host start action after the final lobby setting", async () => {
@@ -241,7 +243,7 @@ describe("frontend design foundations", () => {
 
   it("exposes the host gameplay controls and keeps evidence identities anonymous", async () => {
     const roomClient = await readFile("src/client/components/room-client.tsx", "utf8");
-    expect(roomClient).toContain("Choose any whole number from 5 to 240 minutes.");
+    expect(roomClient).toContain("Enter a whole number from 5 to 240 minutes.");
     expect(roomClient).toContain("Evidence visibility");
     expect(roomClient).toContain("Impostor task needed to call a meeting");
     expect(roomClient).toContain("Crew members always need one completed task");
@@ -251,7 +253,7 @@ describe("frontend design foundations", () => {
     expect(roomClient).toContain('{task.status === "completed" ? "Done" : "To do"}');
   });
 
-  it("uploads a selected task photo immediately and closes after the success sound", async () => {
+  it("closes the photo picker immediately and uploads in the background", async () => {
     const roomClient = await readFile("src/client/components/room-client.tsx", "utf8");
     expect(roomClient).toContain("if (selectedFile) void upload(selectedFile)");
     expect(roomClient).toContain("<span>Take photo</span>");
@@ -263,10 +265,11 @@ describe("frontend design foundations", () => {
     );
     expect(roomClient).toContain('error.code !== "GAME_STATE_CONFLICT"');
     expect(roomClient).toContain("expectedStateVersion = await refreshStateVersion()");
-    expect(roomClient).toContain("Optimizing photo…");
+    expect(roomClient).toContain("onClose();");
+    expect(roomClient).toContain("Uploading in the background");
     expect(roomClient).toContain('playGameSound("upload")');
-    expect(roomClient).toContain("window.setTimeout(onClose, 650)");
-    expect(roomClient).toContain("This will close automatically when the upload is ready.");
+    expect(roomClient).not.toContain("window.setTimeout(onClose, 650)");
+    expect(roomClient).not.toContain("This will close automatically when the upload is ready.");
   });
 
   it("shows a responsive shared evidence archive after the final result", async () => {
