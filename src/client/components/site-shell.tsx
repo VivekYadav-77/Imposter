@@ -39,6 +39,8 @@ export function SiteHeader({
           <nav id="site-nav" className={open ? "nav-open" : ""} aria-label="Main navigation">
             <Link href="/how-to-play">How to play</Link>
             <Link href="/privacy-and-photos">Privacy & photos</Link>
+            <Link href="/login">Sign in</Link>
+            <Link href="/dashboard">Dashboard</Link>
             <Link className="button button-primary" href="/play">
               Start a room <Icon name="arrow" size={17} />
             </Link>
@@ -59,6 +61,7 @@ export function SiteFooter() {
       <nav aria-label="Footer">
         <Link href="/how-to-play">How to play</Link>
         <Link href="/privacy-and-photos">Privacy & photos</Link>
+        <Link href="/login">Player sign in</Link>
         <Link href="/admin/login">Admin</Link>
       </nav>
       <small>18+ · Built for private rooms.</small>

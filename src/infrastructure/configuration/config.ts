@@ -42,6 +42,8 @@ const configSchema = z
       .min(32)
       .default("development-only-participant-token-pepper"),
     PARTICIPANT_SESSION_TTL_SECONDS: z.coerce.number().int().min(300).max(86400).default(7200),
+    USER_SESSION_TOKEN_PEPPER: z.string().min(32).default("development-only-user-session-pepper"),
+    USER_SESSION_TTL_SECONDS: z.coerce.number().int().min(3600).max(31536000).default(2592000),
     ROOM_LOBBY_TTL_SECONDS: z.coerce.number().int().min(300).max(86400).default(7200),
     ROOM_CODE_COOLDOWN_SECONDS: z.coerce.number().int().min(0).max(604800).default(86400),
     HOST_DISCONNECT_GRACE_SECONDS: z.coerce.number().int().min(5).max(600).default(30),
@@ -87,6 +89,7 @@ const configSchema = z
         "PARTICIPANT_SESSION_TOKEN_PEPPER",
         values.PARTICIPANT_SESSION_TOKEN_PEPPER.includes("development-only"),
       ],
+      ["USER_SESSION_TOKEN_PEPPER", values.USER_SESSION_TOKEN_PEPPER.includes("development-only")],
       ["METRICS_BEARER_TOKEN", !values.METRICS_BEARER_TOKEN],
       ["SERVICE_VERSION", values.SERVICE_VERSION === "development"],
       ["CORS_ALLOWED_ORIGINS", values.CORS_ALLOWED_ORIGINS.trim().length === 0],
@@ -102,6 +105,17 @@ const configSchema = z
         code: "custom",
         path: ["PARTICIPANT_SESSION_TOKEN_PEPPER"],
         message: "must be distinct from ADMIN_SESSION_TOKEN_PEPPER",
+      });
+    }
+    if (
+      [values.ADMIN_SESSION_TOKEN_PEPPER, values.PARTICIPANT_SESSION_TOKEN_PEPPER].includes(
+        values.USER_SESSION_TOKEN_PEPPER,
+      )
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["USER_SESSION_TOKEN_PEPPER"],
+        message: "must be distinct from other session peppers",
       });
     }
     for (const origin of values.CORS_ALLOWED_ORIGINS.split(",").filter(Boolean)) {
@@ -162,6 +176,8 @@ const configSchema = z
     adminLoginMaxAttempts: values.ADMIN_LOGIN_MAX_ATTEMPTS,
     participantSessionTokenPepper: values.PARTICIPANT_SESSION_TOKEN_PEPPER,
     participantSessionTtlSeconds: values.PARTICIPANT_SESSION_TTL_SECONDS,
+    userSessionTokenPepper: values.USER_SESSION_TOKEN_PEPPER,
+    userSessionTtlSeconds: values.USER_SESSION_TTL_SECONDS,
     roomLobbyTtlSeconds: values.ROOM_LOBBY_TTL_SECONDS,
     roomCodeCooldownSeconds: values.ROOM_CODE_COOLDOWN_SECONDS,
     hostDisconnectGraceSeconds: values.HOST_DISCONNECT_GRACE_SECONDS,

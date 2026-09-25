@@ -121,6 +121,29 @@ export interface ParticipantsTable {
   joined_at: Timestamp;
   last_seen_at: Timestamp;
   disconnected_at: NullableTimestamp;
+  user_id: string | null;
+}
+
+export interface UserAccountsTable {
+  id: string;
+  email: string;
+  display_name: string;
+  default_avatar_id: AvatarId;
+  password_hash: string;
+  status: "active" | "disabled";
+  created_at: Timestamp;
+  updated_at: Timestamp;
+}
+export interface UserSessionsTable {
+  id: string;
+  user_id: string;
+  token_hash: string;
+  device_label: string;
+  ip_hash: string;
+  issued_at: Timestamp;
+  expires_at: Timestamp;
+  last_used_at: NullableTimestamp;
+  revoked_at: NullableTimestamp;
 }
 
 export interface ParticipantSessionsTable {
@@ -331,6 +354,8 @@ export interface JobsTable {
 }
 
 export interface DatabaseSchema {
+  "app.user_accounts": UserAccountsTable;
+  "app.user_sessions": UserSessionsTable;
   "app.admin_users": AdminUsersTable;
   "app.admin_sessions": AdminSessionsTable;
   "app.task_packs": TaskPacksTable;

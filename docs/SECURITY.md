@@ -29,6 +29,12 @@ This is a party game, not a financial system, but role secrecy and photo privacy
 
 ## 3. Participant authentication
 
+Optional player accounts use a credential and cookie distinct from participant and
+administrator sessions. Account passwords use scrypt, login is rate-limited, and
+stored session tokens are keyed hashes. Email is not verified and there is no
+recovery channel in this release. Password changes revoke other devices, while
+account deletion requires password confirmation and unlinks participant history.
+
 ### Credential
 
 - Generate at least 256 bits of cryptographically secure random data.

@@ -2,7 +2,19 @@ import { expect, test, type Page } from "@playwright/test";
 
 type Theme = "light" | "dark";
 
-const routes = ["/", "/play", "/how-to-play", "/privacy-and-photos", "/admin/login", "/room"];
+const routes = [
+  "/",
+  "/play",
+  "/how-to-play",
+  "/privacy-and-photos",
+  "/admin/login",
+  "/login",
+  "/register",
+  "/dashboard",
+  "/dashboard/history",
+  "/dashboard/settings",
+  "/room",
+];
 const viewports = [
   { name: "phone-320", width: 320, height: 720 },
   { name: "phone-390", width: 390, height: 844 },

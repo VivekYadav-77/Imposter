@@ -93,6 +93,12 @@ export default function Privacy() {
             by a service worker. Game and admin screens do not use third-party analytics or session
             replay.
           </p>
+          <p>
+            Optional player accounts retain profile details and game-result metadata so signed-in
+            players can rejoin rooms and review history. Evidence photos are never copied into the
+            dashboard and still follow the deletion schedule. Deleting an account removes its login
+            and unlinks its game identities from the account.
+          </p>
         </section>
         <p className="muted">
           This product notice explains current behavior. Final public legal language requires

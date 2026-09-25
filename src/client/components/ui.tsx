@@ -116,6 +116,44 @@ export function Field({
   );
 }
 
+export function PasswordField({
+  label,
+  error,
+  hint,
+  className = "",
+  ...props
+}: InputHTMLAttributes<HTMLInputElement> & { label: string; error?: string; hint?: string }) {
+  const id = useId();
+  const helpId = `${id}-help`;
+  const [visible, setVisible] = ReactUseState(false);
+  return (
+    <div className={`field ${className}`}>
+      <label className="field-label" htmlFor={id}>
+        {label}
+      </label>
+      <div className="password-input-wrap">
+        <input
+          id={id}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error || hint ? helpId : undefined}
+          {...props}
+          type={visible ? "text" : "password"}
+        />
+        <IconButton
+          className="password-toggle"
+          icon={visible ? "eyeOff" : "eye"}
+          label={visible ? `Hide ${label.toLowerCase()}` : `Show ${label.toLowerCase()}`}
+          aria-pressed={visible}
+          onClick={() => setVisible((value) => !value)}
+        />
+      </div>
+      <span id={helpId} className={error ? "field-error" : "field-hint"}>
+        {error ?? hint}
+      </span>
+    </div>
+  );
+}
+
 export function WholeNumberField({
   label,
   value,

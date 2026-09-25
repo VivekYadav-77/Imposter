@@ -11,6 +11,11 @@ import type {
   SessionIssue,
   Submission,
   UploadIntent,
+  UserProfile,
+  DashboardData,
+  UserSession,
+  UserGameSummary,
+  UserGameDetail,
 } from "./types";
 import type { AvatarId } from "../../shared/avatars";
 
@@ -113,6 +118,50 @@ export async function apiRequest<T>(
 }
 
 const json = (body: unknown) => JSON.stringify(body);
+export const userApi = {
+  register: (body: { email: string; password: string; displayName: string; avatarId: AvatarId }) =>
+    apiRequest<{ user: UserProfile; linkStatus: string | null }>("/api/v1/accounts", {
+      method: "POST",
+      body: json(body),
+      retry: false,
+    }),
+  login: (email: string, password: string) =>
+    apiRequest<{ user: UserProfile; linkStatus: string | null }>("/api/v1/account-sessions", {
+      method: "POST",
+      body: json({ email, password }),
+      retry: false,
+    }),
+  me: () => apiRequest<UserProfile>("/api/v1/me", { retry: false }),
+  updateProfile: (body: { displayName?: string; avatarId?: AvatarId }) =>
+    apiRequest<UserProfile>("/api/v1/me", { method: "PATCH", body: json(body), retry: false }),
+  dashboard: () => apiRequest<DashboardData>("/api/v1/me/dashboard", { retry: false }),
+  history: (cursor?: string) =>
+    apiRequest<{ items: UserGameSummary[]; nextCursor: string | null }>(
+      `/api/v1/me/games${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
+      { retry: false },
+    ),
+  game: (id: string) => apiRequest<UserGameDetail>(`/api/v1/me/games/${id}`, { retry: false }),
+  rejoin: (participantId: string) =>
+    apiRequest<{ room: RoomSnapshot; sessionExpiresAt: string }>(
+      `/api/v1/me/participations/${participantId}/rejoin`,
+      { method: "POST", body: "{}", idempotencyKey: createIdempotencyKey(), retry: false },
+    ),
+  sessions: () => apiRequest<UserSession[]>("/api/v1/me/sessions", { retry: false }),
+  revokeSession: (id: string) =>
+    apiRequest<void>(`/api/v1/me/sessions/${id}`, { method: "DELETE", retry: false }),
+  revokeOthers: () =>
+    apiRequest<void>("/api/v1/me/sessions/others", { method: "DELETE", retry: false }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    apiRequest<void>("/api/v1/me/password", {
+      method: "PUT",
+      body: json({ currentPassword, newPassword }),
+      retry: false,
+    }),
+  logout: () =>
+    apiRequest<void>("/api/v1/account-sessions/current", { method: "DELETE", retry: false }),
+  deleteAccount: (password: string) =>
+    apiRequest<void>("/api/v1/me", { method: "DELETE", body: json({ password }), retry: false }),
+};
 export const participantApi = {
   createRoom: (
     nickname: string,

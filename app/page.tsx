@@ -20,7 +20,7 @@ export default function Home() {
             </h1>
             <p className="lead">
               Turn any hangout into a case of trust, bluffing, and photo-proof tasks. No download.
-              No accounts. One room code.
+              No account required. One room code.
             </p>
             <div className="hero-actions">
               <Link className="button button-primary" href="/play">

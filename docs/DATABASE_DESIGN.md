@@ -18,6 +18,12 @@ The exact DDL and query library will be selected in Phase 1. Names below are the
 
 ## 2. Domain diagrams
 
+`user_accounts` stores optional persistent identities and scrypt password hashes;
+`user_sessions` stores hashed opaque credentials and revocation data.
+`participants.user_id` remains nullable for guests and uses `ON DELETE SET NULL`.
+Rooms may own multiple immutable game rounds, with current gameplay selecting the
+latest `(room_id, started_at)` row.
+
 ### Administration and task catalog
 
 ```mermaid

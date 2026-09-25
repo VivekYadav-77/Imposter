@@ -444,6 +444,7 @@ export class RoomService {
               membership_status: "joined",
               last_seen_at: now,
               disconnected_at: null,
+              user_id: null,
             })
             .execute();
           await trx
@@ -565,6 +566,7 @@ export class RoomService {
             membership_status: "joined",
             last_seen_at: now,
             disconnected_at: null,
+            user_id: null,
           })
           .execute();
         await trx
@@ -1041,6 +1043,63 @@ export class RoomService {
     });
     this.events.sessionRevoked(principal.sessionId, "session_rotated");
     return { sessionToken: result.sessionToken, sessionExpiresAt: result.sessionExpiresAt };
+  }
+
+  async rejoinForUser(
+    userId: string,
+    participantId: string,
+    key: string,
+  ): Promise<SessionIssueDto> {
+    const result = await inTransaction(this.database, async (trx) => {
+      const participant = await trx
+        .selectFrom("app.participants as p")
+        .innerJoin("app.rooms as r", "r.id", "p.room_id")
+        .select(["p.id", "p.room_id", "r.status", "r.expires_at"])
+        .where("p.id", "=", participantId)
+        .where("p.user_id", "=", userId)
+        .where("p.membership_status", "=", "joined")
+        .forUpdate()
+        .executeTakeFirst();
+      if (!participant)
+        throw new ApplicationError(
+          404,
+          "ROOM_NOT_FOUND",
+          "That room is not linked to your account.",
+        );
+      if (participant.status === "expired" || new Date(participant.expires_at) <= new Date())
+        throw new ApplicationError(409, "ROOM_EXPIRED", "That room is available in history only.");
+      if (["completed", "abandoned"].includes(participant.status)) {
+        await trx
+          .updateTable("app.rooms")
+          .set({
+            status: "lobby",
+            last_activity_at: new Date(),
+            expires_at: new Date(Date.now() + this.config.roomLobbyTtlSeconds * 1000),
+          })
+          .where("id", "=", participant.room_id)
+          .execute();
+      }
+      const sessionId = randomUUID();
+      const issued = await this.issueIn(
+        trx,
+        participant.id,
+        sessionId,
+        key,
+        participant.status === "completed" || participant.status === "abandoned"
+          ? new Date(Date.now() + this.config.roomLobbyTtlSeconds * 1000)
+          : participant.expires_at,
+      );
+      const principal = { participantId: participant.id, roomId: participant.room_id, sessionId };
+      const snapshot = await this.snapshotWith(trx, principal);
+      return {
+        room: snapshot,
+        participant: snapshot.self,
+        sessionToken: issued.token,
+        sessionExpiresAt: issued.expiresAt.toISOString(),
+      };
+    });
+    this.events.roomChanged(result.room.id);
+    return result;
   }
 
   async revoke(principal: ParticipantPrincipal): Promise<void> {

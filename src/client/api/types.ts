@@ -79,6 +79,92 @@ export interface RoomJoinOptions {
   spotsRemaining: number;
 }
 
+export interface UserProfile {
+  id: string;
+  email: string;
+  displayName: string;
+  avatarId: AvatarId;
+  createdAt: string;
+}
+export interface UserGameSummary {
+  id: string;
+  roomId: string;
+  code: string;
+  taskPackName: string;
+  winner: "crew" | "imposters" | null;
+  endReason: string | null;
+  phase: GamePhase;
+  role: "crew" | "imposter";
+  lifeStatus: LifeStatus;
+  playerCount: number;
+  won: boolean;
+  startedAt: string;
+  endedAt: string | null;
+}
+export interface DashboardData {
+  rooms: Array<{
+    participantId: string;
+    nickname: string;
+    avatarId: AvatarId;
+    roomId: string;
+    code: string;
+    status: RoomSnapshot["status"];
+    isHost: boolean;
+    expiresAt: string;
+    rejoinable: boolean;
+  }>;
+  recentGames: UserGameSummary[];
+  stats: {
+    games: number;
+    wins: number;
+    crewGames: number;
+    imposterGames: number;
+    tasksCompleted: number;
+    tasksTotal: number;
+    survived: number;
+    hosted: number;
+    winRate: number;
+    taskCompletionRate: number;
+    survivalRate: number;
+  };
+}
+export interface UserSession {
+  id: string;
+  deviceLabel: string;
+  issuedAt: string;
+  lastUsedAt: string | null;
+  expiresAt: string;
+  current: boolean;
+}
+export interface UserGameDetail {
+  id: string;
+  code: string;
+  taskPackName: string;
+  winner: "crew" | "imposters" | null;
+  endReason: string | null;
+  role: "crew" | "imposter";
+  lifeStatus: LifeStatus;
+  startedAt: string;
+  endedAt: string | null;
+  voteVisibility: "private" | "public";
+  players: Array<{
+    id: string;
+    nickname: string;
+    avatarId: AvatarId;
+    role: "crew" | "imposter";
+    lifeStatus: LifeStatus;
+    totalTasks: number;
+    completedTasks: number;
+  }>;
+  ballots: Array<{ meeting: number; voter: string; target: string | null }>;
+  eliminations: Array<{
+    type: "killed" | "ejected";
+    target: string;
+    actor: string | null;
+    occurredAt: string;
+  }>;
+}
+
 export interface PublicPackSummary {
   id: string;
   name: string;

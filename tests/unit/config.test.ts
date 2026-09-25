@@ -29,6 +29,7 @@ describe("loadConfig", () => {
       DATABASE_URL: "postgresql://localhost/game",
       ADMIN_SESSION_TOKEN_PEPPER: "admin-production-pepper-at-least-32-chars",
       PARTICIPANT_SESSION_TOKEN_PEPPER: "participant-production-pepper-32-chars",
+      USER_SESSION_TOKEN_PEPPER: "user-production-pepper-at-least-32-chars",
       METRICS_BEARER_TOKEN: "metrics-production-token-at-least-32-chars",
       SERVICE_VERSION: "sha-123",
       CORS_ALLOWED_ORIGINS: "https://game.example",

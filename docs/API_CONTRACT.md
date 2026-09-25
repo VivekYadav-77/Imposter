@@ -15,6 +15,13 @@
 
 ### Authentication
 
+Optional player accounts use the independent `__Host-user_session` Secure,
+HttpOnly, SameSite=Strict cookie. `POST /api/v1/accounts` registers and signs in;
+`POST /api/v1/account-sessions` signs in; and account-scoped profile, dashboard,
+history, rejoin, password, and device-session operations live under `/api/v1/me`.
+Email is an unverified login identifier in v1 and cannot be changed or recovered.
+Room participant credentials remain separate, so guest gameplay is unchanged.
+
 - Participant API: `Authorization: Bearer <opaque-participant-token>` or equivalent same-origin Secure HttpOnly web cookie.
 - Admin API: Secure HttpOnly admin session cookie.
 - Public endpoints: health checks, room creation/join, and admin login only.

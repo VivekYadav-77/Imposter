@@ -15,6 +15,7 @@ import { createLogger } from "../infrastructure/observability/logger.js";
 import { InMemoryMetrics } from "../infrastructure/observability/metrics.js";
 import { PostgresAdminAuthRepository } from "../modules/admin-auth/repository.js";
 import { AdminAuthService } from "../modules/admin-auth/service.js";
+import { UserAuthService } from "../modules/user-auth/service.js";
 import { MemoryLoginThrottle } from "../modules/admin-auth/throttle.js";
 import { TaskPackRepository } from "../modules/task-packs/repository.js";
 import { RoomService } from "../modules/rooms/service.js";
@@ -62,6 +63,7 @@ async function main(): Promise<void> {
   );
   const taskPacks = new TaskPackRepository(database.db);
   const rooms = new RoomService(database.db, config);
+  const userAuth = new UserAuthService(database.db, config);
   const games = new GameService(database.db);
   const evidence = new EvidenceService(
     database.db,
@@ -80,6 +82,7 @@ async function main(): Promise<void> {
     adminAuth,
     taskPacks,
     rooms,
+    userAuth,
     games,
     evidence,
     readinessCheck: async () => {

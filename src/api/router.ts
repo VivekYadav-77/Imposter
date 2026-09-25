@@ -8,6 +8,14 @@ import type { AppConfig } from "../infrastructure/configuration/config.js";
 import type { Metrics } from "../infrastructure/observability/metrics.js";
 import { MemoryRateLimiter } from "../infrastructure/security/rate-limiter.js";
 import type { AdminAuthService } from "../modules/admin-auth/service.js";
+import type { UserAuthService, UserPrincipal } from "../modules/user-auth/service.js";
+import {
+  registerUserSchema,
+  loginUserSchema,
+  updateProfileSchema,
+  changePasswordSchema,
+  confirmPasswordSchema,
+} from "../modules/user-auth/schemas.js";
 import {
   createPackSchema,
   loginSchema,
@@ -47,6 +55,9 @@ import {
   PARTICIPANT_COOKIE_NAME,
   participantSessionCookie,
   readCookie,
+  USER_COOKIE_NAME,
+  userSessionCookie,
+  clearUserSessionCookie,
 } from "../shared/security/cookies.js";
 import { readJsonBody } from "./body.js";
 import { sendError, sendJson } from "./http.js";
@@ -65,6 +76,7 @@ export interface ApiDependencies {
   rooms?: RoomService;
   games?: GameService;
   evidence?: EvidenceService;
+  userAuth?: UserAuthService;
   authorizePublishedPackRead?: (request: IncomingMessage) => Promise<void>;
 }
 
@@ -198,6 +210,22 @@ export function createApiHandler(dependencies: ApiDependencies): ApiHandler {
           response.setHeader("X-Request-ID", requestId);
           response.end(Buffer.from(object.bytes));
         } else throw new ApplicationError(405, "METHOD_NOT_ALLOWED", "That method is not allowed.");
+      } else if (
+        dependencies.userAuth &&
+        dependencies.rooms &&
+        (path.startsWith("/api/v1/accounts") ||
+          path.startsWith("/api/v1/account-sessions") ||
+          path.startsWith("/api/v1/me"))
+      ) {
+        await handleUserRoute(
+          request,
+          response,
+          path,
+          requestId,
+          dependencies.userAuth,
+          dependencies.rooms,
+          dependencies.config,
+        );
       } else if (dependencies.rooms && isGameRoute(path)) {
         if (!dependencies.games)
           throw new ApplicationError(404, "NOT_FOUND", "The requested resource was not found.");
@@ -220,6 +248,7 @@ export function createApiHandler(dependencies: ApiDependencies): ApiHandler {
           dependencies.rooms,
           dependencies.games,
           dependencies.config,
+          dependencies.userAuth,
         );
       } else if (dependencies.adminAuth && dependencies.taskPacks && path.startsWith("/api/v1/")) {
         await handlePhaseTwoRoute(request, response, path, requestId, {
@@ -380,6 +409,7 @@ async function handleRoomRoute(
   rooms: RoomService,
   games: GameService | undefined,
   config: AppConfig,
+  userAuth?: UserAuthService,
 ): Promise<void> {
   const method = request.method ?? "GET";
   const publicScope = `public:${trustedClientAddress(request, config)}`;
@@ -387,6 +417,10 @@ async function handleRoomRoute(
     const key = requireIdempotencyKey(request);
     const body = await validatedBody(request, config.maxJsonBodyBytes, roomCreationSchema);
     const issued = await rooms.createRoom(body, key, publicScope);
+    const account = userAuth
+      ? await userAuth.authenticate(readCookie(request, USER_COOKIE_NAME))
+      : null;
+    if (account) await userAuth!.claimParticipant(account, issued.participant.participantId);
     sendIssuedSession(request, response, 201, issued, requestId, config);
     return;
   }
@@ -417,6 +451,10 @@ async function handleRoomRoute(
       key,
       `${publicScope}:${joinMatch[1].toUpperCase()}`,
     );
+    const account = userAuth
+      ? await userAuth.authenticate(readCookie(request, USER_COOKIE_NAME))
+      : null;
+    if (account) await userAuth!.claimParticipant(account, issued.participant.participantId);
     sendIssuedSession(request, response, 201, issued, requestId, config);
     return;
   }
@@ -502,6 +540,194 @@ async function handleRoomRoute(
     return;
   }
   throw new ApplicationError(404, "NOT_FOUND", "The requested resource was not found.");
+}
+
+function userRequestMeta(request: IncomingMessage, config: AppConfig) {
+  return {
+    ip: trustedClientAddress(request, config),
+    userAgent: String(request.headers["user-agent"] ?? ""),
+  };
+}
+
+async function requireUser(
+  request: IncomingMessage,
+  users: UserAuthService,
+): Promise<UserPrincipal> {
+  const principal = await users.authenticate(readCookie(request, USER_COOKIE_NAME));
+  if (!principal) throw new ApplicationError(401, "USER_SESSION_INVALID", "Sign in to continue.");
+  return principal;
+}
+
+async function handleUserRoute(
+  request: IncomingMessage,
+  response: ServerResponse,
+  path: string,
+  requestId: string,
+  users: UserAuthService,
+  rooms: RoomService,
+  config: AppConfig,
+): Promise<void> {
+  const method = request.method ?? "GET";
+  if (["POST", "PATCH", "PUT", "DELETE"].includes(method) && readCookie(request, USER_COOKIE_NAME))
+    validateOriginForCookieMutation(request, config);
+  if (method === "POST" && path === "/api/v1/accounts") {
+    const body = await validatedBody(request, config.maxJsonBodyBytes, registerUserSchema);
+    const created = await users.register(body, userRequestMeta(request, config));
+    const participant = await participantPrincipalOptional(request, rooms);
+    const linkStatus = participant
+      ? await users.claimParticipant(
+          { userId: created.user.id, sessionId: created.session.sessionId },
+          participant.participantId,
+        )
+      : null;
+    response.setHeader(
+      "Set-Cookie",
+      userSessionCookie(created.session.token, config.userSessionTtlSeconds),
+    );
+    sendJson(
+      response,
+      201,
+      successEnvelope({ user: created.user, linkStatus }, requestId),
+      requestId,
+    );
+    return;
+  }
+  if (method === "POST" && path === "/api/v1/account-sessions") {
+    const body = await validatedBody(request, config.maxJsonBodyBytes, loginUserSchema);
+    const logged = await users.login(body, userRequestMeta(request, config));
+    const principal = { userId: logged.user.id, sessionId: logged.session.sessionId };
+    const participant = await participantPrincipalOptional(request, rooms);
+    const linkStatus = participant
+      ? await users.claimParticipant(principal, participant.participantId)
+      : null;
+    response.setHeader(
+      "Set-Cookie",
+      userSessionCookie(logged.session.token, config.userSessionTtlSeconds),
+    );
+    sendJson(
+      response,
+      200,
+      successEnvelope({ user: logged.user, linkStatus }, requestId),
+      requestId,
+    );
+    return;
+  }
+  const principal = await requireUser(request, users);
+  if (method === "GET" && path === "/api/v1/me") {
+    sendJson(response, 200, successEnvelope(await users.profile(principal), requestId), requestId);
+    return;
+  }
+  if (method === "PATCH" && path === "/api/v1/me") {
+    const body = await validatedBody(request, config.maxJsonBodyBytes, updateProfileSchema);
+    sendJson(
+      response,
+      200,
+      successEnvelope(await users.updateProfile(principal, body), requestId),
+      requestId,
+    );
+    return;
+  }
+  if (method === "DELETE" && path === "/api/v1/me") {
+    const body = await validatedBody(request, config.maxJsonBodyBytes, confirmPasswordSchema);
+    await users.deleteAccount(principal, body.password);
+    response.setHeader("Set-Cookie", clearUserSessionCookie());
+    response.statusCode = 204;
+    response.end();
+    return;
+  }
+  if (method === "PUT" && path === "/api/v1/me/password") {
+    const body = await validatedBody(request, config.maxJsonBodyBytes, changePasswordSchema);
+    await users.changePassword(principal, body.currentPassword, body.newPassword);
+    response.statusCode = 204;
+    response.end();
+    return;
+  }
+  if (method === "GET" && path === "/api/v1/me/dashboard") {
+    sendJson(
+      response,
+      200,
+      successEnvelope(await users.dashboard(principal), requestId),
+      requestId,
+    );
+    return;
+  }
+  if (method === "GET" && path === "/api/v1/me/games") {
+    const url = new URL(request.url ?? path, "http://localhost");
+    const limit = Math.min(50, Math.max(1, Number(url.searchParams.get("limit") ?? 20)));
+    sendJson(
+      response,
+      200,
+      successEnvelope(
+        await users.history(principal, limit, url.searchParams.get("cursor") ?? undefined),
+        requestId,
+      ),
+      requestId,
+    );
+    return;
+  }
+  const game = path.match(/^\/api\/v1\/me\/games\/([0-9a-f-]{36})$/i);
+  if (method === "GET" && game) {
+    sendJson(
+      response,
+      200,
+      successEnvelope(await users.gameDetail(principal, game[1]), requestId),
+      requestId,
+    );
+    return;
+  }
+  if (method === "GET" && path === "/api/v1/me/sessions") {
+    sendJson(response, 200, successEnvelope(await users.sessions(principal), requestId), requestId);
+    return;
+  }
+  if (method === "DELETE" && path === "/api/v1/account-sessions/current") {
+    await users.revokeSession(principal, principal.sessionId);
+    response.setHeader("Set-Cookie", clearUserSessionCookie());
+    response.statusCode = 204;
+    response.end();
+    return;
+  }
+  if (method === "DELETE" && path === "/api/v1/me/sessions/others") {
+    await users.revokeOthers(principal);
+    response.statusCode = 204;
+    response.end();
+    return;
+  }
+  const session = path.match(/^\/api\/v1\/me\/sessions\/([0-9a-f-]{36})$/i);
+  if (method === "DELETE" && session) {
+    await users.revokeSession(principal, session[1]);
+    if (session[1] === principal.sessionId)
+      response.setHeader("Set-Cookie", clearUserSessionCookie());
+    response.statusCode = 204;
+    response.end();
+    return;
+  }
+  const rejoin = path.match(/^\/api\/v1\/me\/participations\/([0-9a-f-]{36})\/rejoin$/i);
+  if (method === "POST" && rejoin) {
+    const key = requireIdempotencyKey(request);
+    await validatedBody(request, config.maxJsonBodyBytes, emptyBodySchema);
+    const issued = await rooms.rejoinForUser(principal.userId, rejoin[1], key);
+    const maxAge = Math.max(
+      0,
+      Math.floor((Date.parse(issued.sessionExpiresAt) - Date.now()) / 1000),
+    );
+    response.setHeader("Set-Cookie", participantSessionCookie(issued.sessionToken, maxAge));
+    sendJson(
+      response,
+      200,
+      successEnvelope({ room: issued.room, sessionExpiresAt: issued.sessionExpiresAt }, requestId),
+      requestId,
+    );
+    return;
+  }
+  throw new ApplicationError(404, "NOT_FOUND", "The requested resource was not found.");
+}
+
+async function participantPrincipalOptional(
+  request: IncomingMessage,
+  rooms: RoomService,
+): Promise<ParticipantPrincipal | null> {
+  const credential = participantCredential(request);
+  return credential ? rooms.authenticate(credential) : null;
 }
 
 async function handleGameRoute(

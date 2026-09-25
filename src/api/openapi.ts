@@ -50,6 +50,7 @@ const participantSecurity: NonNullable<OpenAPIObject["security"]> = [
   { participantBearer: [] },
   { participantCookie: [] },
 ];
+const userSecurity: NonNullable<OpenAPIObject["security"]> = [{ userCookie: [] }];
 
 export const openApiDocument: OpenAPIObject = {
   openapi: "3.1.0",
@@ -766,6 +767,140 @@ export const openApiDocument: OpenAPIObject = {
         },
       },
     },
+    "/api/v1/accounts": {
+      post: {
+        operationId: "registerUser",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["email", "password", "displayName", "avatarId"],
+                properties: {
+                  email: { type: "string", format: "email" },
+                  password: { type: "string", minLength: 12, maxLength: 128 },
+                  displayName: { type: "string", minLength: 1, maxLength: 24 },
+                  avatarId: { $ref: "#/components/schemas/AvatarId" },
+                },
+              },
+            },
+          },
+        },
+        responses: { "201": envelope({ type: "object" }), "409": error, "422": error },
+      },
+    },
+    "/api/v1/account-sessions": {
+      post: {
+        operationId: "loginUser",
+        responses: { "200": envelope({ type: "object" }), "401": error, "422": error },
+      },
+    },
+    "/api/v1/account-sessions/current": {
+      delete: {
+        operationId: "logoutUser",
+        security: userSecurity,
+        responses: { "204": { description: "Signed out" }, "401": error },
+      },
+    },
+    "/api/v1/me": {
+      get: {
+        operationId: "getUserProfile",
+        security: userSecurity,
+        responses: { "200": envelope({ type: "object" }), "401": error },
+      },
+      patch: {
+        operationId: "updateUserProfile",
+        security: userSecurity,
+        responses: { "200": envelope({ type: "object" }), "401": error, "422": error },
+      },
+      delete: {
+        operationId: "deleteUserAccount",
+        security: userSecurity,
+        responses: { "204": { description: "Account deleted" }, "401": error },
+      },
+    },
+    "/api/v1/me/dashboard": {
+      get: {
+        operationId: "getUserDashboard",
+        security: userSecurity,
+        responses: { "200": envelope({ type: "object" }), "401": error },
+      },
+    },
+    "/api/v1/me/games": {
+      get: {
+        operationId: "listUserGames",
+        security: userSecurity,
+        responses: { "200": envelope({ type: "object" }), "401": error },
+      },
+    },
+    "/api/v1/me/games/{gameId}": {
+      get: {
+        operationId: "getUserGame",
+        security: userSecurity,
+        parameters: [
+          {
+            name: "gameId",
+            in: "path",
+            required: true,
+            schema: { type: "string", format: "uuid" },
+          },
+        ],
+        responses: { "200": envelope({ type: "object" }), "404": error },
+      },
+    },
+    "/api/v1/me/sessions": {
+      get: {
+        operationId: "listUserSessions",
+        security: userSecurity,
+        responses: { "200": envelope({ type: "array", items: { type: "object" } }), "401": error },
+      },
+    },
+    "/api/v1/me/sessions/others": {
+      delete: {
+        operationId: "revokeOtherUserSessions",
+        security: userSecurity,
+        responses: { "204": { description: "Other sessions revoked" }, "401": error },
+      },
+    },
+    "/api/v1/me/sessions/{sessionId}": {
+      delete: {
+        operationId: "revokeUserSession",
+        security: userSecurity,
+        parameters: [
+          {
+            name: "sessionId",
+            in: "path",
+            required: true,
+            schema: { type: "string", format: "uuid" },
+          },
+        ],
+        responses: { "204": { description: "Session revoked" }, "401": error },
+      },
+    },
+    "/api/v1/me/password": {
+      put: {
+        operationId: "changeUserPassword",
+        security: userSecurity,
+        responses: { "204": { description: "Password changed" }, "401": error, "422": error },
+      },
+    },
+    "/api/v1/me/participations/{participantId}/rejoin": {
+      post: {
+        operationId: "rejoinUserRoom",
+        security: userSecurity,
+        parameters: [
+          {
+            name: "participantId",
+            in: "path",
+            required: true,
+            schema: { type: "string", format: "uuid" },
+          },
+          idempotency,
+        ],
+        responses: { "200": envelope({ type: "object" }), "409": error },
+      },
+    },
   },
   components: {
     securitySchemes: {
@@ -777,6 +912,7 @@ export const openApiDocument: OpenAPIObject = {
       },
       participantBearer: { type: "http", scheme: "bearer", bearerFormat: "opaque" },
       participantCookie: { type: "apiKey", in: "cookie", name: "participant_session" },
+      userCookie: { type: "apiKey", in: "cookie", name: "__Host-user_session" },
     },
     schemas: {
       AvatarId: {

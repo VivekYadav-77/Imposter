@@ -54,7 +54,14 @@ export function ThemeToggle({
   const nextTheme: Theme = theme === "light" ? "dark" : "light";
   const label = theme === "light" ? "Switch to dark theme" : "Switch to light theme";
 
-  if (placement === "public" && (pathname.startsWith("/room") || pathname.startsWith("/admin")))
+  if (
+    placement === "public" &&
+    (pathname.startsWith("/room") ||
+      pathname.startsWith("/admin") ||
+      pathname.startsWith("/dashboard") ||
+      pathname === "/login" ||
+      pathname === "/register")
+  )
     return null;
 
   return (
