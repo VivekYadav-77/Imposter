@@ -16,6 +16,12 @@ Use a dedicated non-administrator operating-system account for the app. That acc
 - Never expose `/internal/metrics` publicly. If it is routed internally, require `Authorization: Bearer $METRICS_BEARER_TOKEN`.
 - Limit JSON request bodies to 64 KiB. Evidence uploads pass through the application and remain subject to the configured evidence limits.
 
+### Evidence capacity controls
+
+Evidence request bodies are streamed to private temporary files rather than buffered in the Node.js heap. Keep `EVIDENCE_UPLOAD_MAX_CONCURRENT` aligned with the sustained write capacity of the evidence disk; `8` is the default. Up to `EVIDENCE_UPLOAD_MAX_QUEUED` requests wait with socket backpressure for at most `EVIDENCE_UPLOAD_QUEUE_TIMEOUT_MS`. Excess traffic receives a retryable `503` and `Retry-After`, and the browser retries with bounded exponential backoff.
+
+`EVIDENCE_PROCESSING_CONCURRENCY` controls CPU- and memory-intensive Sharp normalization independently of upload concurrency. The default of `2` bounds worst-case decoded-image memory while draining the durable job queue without the former per-image polling delay. Reduce it to `1` on small instances. Increase it only after observing process RSS, CPU saturation, job age, and disk latency under representative load.
+
 ## Server preparation
 
 1. Install Node.js 24, npm 11+, and PostgreSQL 16 or newer.

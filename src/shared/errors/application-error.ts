@@ -56,6 +56,7 @@ export type SafeErrorCode =
   | "METHOD_NOT_ALLOWED"
   | "UPLOAD_CAPABILITY_INVALID"
   | "UPLOAD_MISMATCH"
+  | "UPLOAD_BUSY"
   | "GAME_NOT_FINISHED";
 
 export class ApplicationError extends Error {

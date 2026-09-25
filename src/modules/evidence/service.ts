@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import type { Readable } from "node:stream";
 
 import { sql, type Transaction } from "kysely";
 
@@ -64,6 +65,48 @@ export class EvidenceService {
           "UPLOAD_MISMATCH",
           "The selected file does not match the upload request.",
         );
+      throw error;
+    }
+  }
+
+  async localUploadCapability(
+    token: string,
+    source: Readable,
+    contentType: string,
+    contentLength?: number,
+  ): Promise<void> {
+    if (!this.storage.acceptLocalUploadCapability)
+      throw new ApplicationError(404, "NOT_FOUND", "The requested resource was not found.");
+    try {
+      await this.storage.acceptLocalUploadCapability(token, source, contentType, contentLength);
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        ["INVALID_STORAGE_CAPABILITY", "EXPIRED_STORAGE_CAPABILITY"].includes(error.message)
+      )
+        throw new ApplicationError(
+          403,
+          "UPLOAD_CAPABILITY_INVALID",
+          "This upload link is invalid or expired.",
+        );
+      if (
+        error instanceof Error &&
+        ["STORAGE_OBJECT_MISMATCH", "STORAGE_CAPABILITY_USED"].includes(error.message)
+      )
+        throw new ApplicationError(
+          422,
+          "UPLOAD_MISMATCH",
+          "The selected file does not match the upload request.",
+        );
+      if (error instanceof Error && error.message === "UPLOAD_ABORTED")
+        throw new ApplicationError(400, "BAD_REQUEST", "The upload was interrupted.");
+      if (
+        error instanceof Error &&
+        ["STORAGE_BUSY", "STORAGE_UPLOAD_IN_PROGRESS"].includes(error.message)
+      )
+        throw new ApplicationError(503, "UPLOAD_BUSY", "Upload capacity is temporarily busy.", {
+          retryAfterSeconds: 1,
+        });
       throw error;
     }
   }
@@ -209,10 +252,8 @@ export class EvidenceService {
         .where("id", "=", assignment.game_id)
         .forUpdate()
         .executeTakeFirstOrThrow();
-      if (Number(lockedGame.state_version) !== input.expectedStateVersion)
-        throw new ApplicationError(409, "GAME_STATE_CONFLICT", "The game state has changed.", {
-          currentStateVersion: Number(lockedGame.state_version),
-        });
+      // Upload reservations are assignment-scoped. The locked current game phase is authoritative;
+      // unrelated players completing tasks must not invalidate an upload already being prepared.
       if (lockedGame.phase !== "task")
         throw new ApplicationError(
           409,
@@ -426,10 +467,8 @@ export class EvidenceService {
           "ASSIGNMENT_NOT_FOUND",
           "The task assignment was not found.",
         );
-      if (Number(game.state_version) !== input.expectedStateVersion)
-        throw new ApplicationError(409, "GAME_STATE_CONFLICT", "The game state has changed.", {
-          currentStateVersion: Number(game.state_version),
-        });
+      // Confirmation is serialized by the game row lock and revalidates the phase and assignment.
+      // Accepting a stale snapshot here prevents unrelated simultaneous uploads from conflicting.
       if (game.phase !== "task")
         throw new ApplicationError(
           409,

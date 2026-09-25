@@ -33,7 +33,7 @@ describe("evidence object upload", () => {
       fetcher,
     );
 
-    await vi.advanceTimersByTimeAsync(300);
+    await vi.advanceTimersByTimeAsync(500);
     await expect(upload).resolves.toBeUndefined();
     expect(fetcher).toHaveBeenCalledTimes(2);
     expect(fetcher.mock.calls[0][0]).toBe(intent.url);
@@ -52,6 +52,24 @@ describe("evidence object upload", () => {
       ),
     ).rejects.toThrow("Storage upload failed");
     expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it("honors Retry-After when upload capacity is temporarily busy", async () => {
+    vi.useFakeTimers();
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(null, { status: 503, headers: { "Retry-After": "1" } }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    const upload = uploadEvidenceObject(
+      intent,
+      new File(["photo"], "photo.jpg", { type: "image/jpeg" }),
+      undefined,
+      fetcher,
+    );
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    await expect(upload).resolves.toBeUndefined();
+    expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
   it("stops retrying when the dialog cancels the upload", async () => {

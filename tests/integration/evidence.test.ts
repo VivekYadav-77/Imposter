@@ -162,6 +162,54 @@ describeWithDatabase("private evidence lifecycle", () => {
     return { principals, snapshot: await games.start(principals[0], randomUUID()) };
   }
 
+  it("accepts simultaneous confirmations from different assignments with the same snapshot", async () => {
+    const { principals, snapshot } = await startedRoom();
+    const jpeg = await sharp({ create: { width: 8, height: 8, channels: 3, background: "green" } })
+      .jpeg()
+      .toBuffer();
+    const attempts = await Promise.all(
+      principals.slice(0, 2).map(async (principal) => {
+        const own = await games.snapshot(principal);
+        const assignmentId = own.assignments[0].id;
+        const intent = await evidence.createUploadIntent(
+          principal,
+          assignmentId,
+          {
+            expectedStateVersion: snapshot.stateVersion,
+            contentType: "image/jpeg",
+            byteSize: jpeg.byteLength,
+          },
+          randomUUID(),
+        );
+        const row = await dependencies.db
+          .selectFrom("app.evidence_upload_intents")
+          .select("object_key")
+          .where("id", "=", intent.uploadId)
+          .executeTakeFirstOrThrow();
+        storage.objects.set(row.object_key, {
+          bytes: jpeg,
+          contentType: "image/jpeg",
+          checksum: null,
+        });
+        return { principal, assignmentId, uploadId: intent.uploadId };
+      }),
+    );
+
+    const confirmations = await Promise.all(
+      attempts.map((attempt) =>
+        evidence.confirm(
+          attempt.principal,
+          attempt.assignmentId,
+          { expectedStateVersion: snapshot.stateVersion, uploadId: attempt.uploadId },
+          randomUUID(),
+        ),
+      ),
+    );
+
+    expect(confirmations).toHaveLength(2);
+    expect(new Set(confirmations.map((confirmation) => confirmation.stateVersion)).size).toBe(2);
+  });
+
   it("keeps photos private during play and unlocks them for everyone after the result", async () => {
     const { principals, snapshot } = await startedRoom({ evidenceVisibility: "private" });
     const owner = principals.find((p) => p.participantId === snapshot.self.participantId)!;

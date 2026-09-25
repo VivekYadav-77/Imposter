@@ -135,19 +135,41 @@ async function main(): Promise<void> {
   }, config.roomMaintenanceIntervalMs);
   maintenance.unref();
   const evidenceWorkerId = `evidence-${process.pid}`;
-  const evidenceWorker = setInterval(() => {
-    void evidence
-      .scheduleTerminalRetention()
-      .then(() => evidence.runNextJob(evidenceWorkerId))
-      .then((worked) => {
-        metrics.increment("worker.evidence.tick", { outcome: worked ? "processed" : "idle" });
-      })
-      .catch((error: unknown) => {
-        metrics.increment("worker.evidence.failures");
-        logger.error({ err: error }, "Evidence worker failed");
-      });
-  }, config.evidenceWorkerIntervalMs);
-  evidenceWorker.unref();
+  const evidenceWorkerStop = new AbortController();
+  const waitForEvidenceWork = () =>
+    new Promise<void>((resolve) => {
+      if (evidenceWorkerStop.signal.aborted) return resolve();
+      const finish = () => {
+        clearTimeout(timer);
+        evidenceWorkerStop.signal.removeEventListener("abort", finish);
+        resolve();
+      };
+      const timer = setTimeout(finish, config.evidenceWorkerIntervalMs);
+      timer.unref();
+      evidenceWorkerStop.signal.addEventListener("abort", finish, { once: true });
+    });
+  let lastRetentionSweep = 0;
+  const evidenceWorkers = Array.from({ length: config.evidenceProcessingConcurrency }, (_, slot) =>
+    (async () => {
+      while (!evidenceWorkerStop.signal.aborted) {
+        try {
+          if (slot === 0 && Date.now() - lastRetentionSweep >= config.evidenceWorkerIntervalMs) {
+            lastRetentionSweep = Date.now();
+            await evidence.scheduleTerminalRetention();
+          }
+          const worked = await evidence.runNextJob(`${evidenceWorkerId}-${slot}`);
+          metrics.increment("worker.evidence.tick", {
+            outcome: worked ? "processed" : "idle",
+          });
+          if (!worked) await waitForEvidenceWork();
+        } catch (error) {
+          metrics.increment("worker.evidence.failures");
+          logger.error({ err: error, workerSlot: slot }, "Evidence worker failed");
+          await waitForEvidenceWork();
+        }
+      }
+    })(),
+  );
   const meetingWorker = setInterval(() => {
     void games
       .runDueTransitions()
@@ -164,19 +186,19 @@ async function main(): Promise<void> {
     .runMaintenance()
     .catch((error: unknown) => logger.warn({ err: error }, "Initial room maintenance failed"));
   const shutdown = new ShutdownManager(logger, config.shutdownTimeoutMs, [
-    () => {
+    async () => {
       clearInterval(maintenance);
-      clearInterval(evidenceWorker);
+      evidenceWorkerStop.abort();
       clearInterval(meetingWorker);
       clearInterval(metricsWorker);
-      return Promise.resolve();
+      await Promise.all(evidenceWorkers);
+      await closeDatabase(database);
     },
     () => new Promise<void>((resolve) => realtime.close(() => resolve())),
     () =>
       new Promise<void>((resolve, reject) =>
         httpServer.close((error) => (error ? reject(error) : resolve())),
       ),
-    () => closeDatabase(database),
   ]);
 
   for (const signal of ["SIGINT", "SIGTERM"] as const) {

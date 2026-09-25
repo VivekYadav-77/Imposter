@@ -48,7 +48,7 @@ import {
   participantSessionCookie,
   readCookie,
 } from "../shared/security/cookies.js";
-import { readBinaryBody, readJsonBody } from "./body.js";
+import { readJsonBody } from "./body.js";
 import { sendError, sendJson } from "./http.js";
 import { openApiDocument } from "./openapi.js";
 import { resolveRequestId } from "./request-id.js";
@@ -119,11 +119,16 @@ export function createApiHandler(dependencies: ApiDependencies): ApiHandler {
     }
 
     const evidenceObjectMatch = path.match(/^\/api\/v1\/evidence-objects\/([A-Za-z0-9._-]+)$/);
-    const contentLength = Number(request.headers["content-length"] ?? 0);
+    const rawContentLength = request.headers["content-length"];
+    const contentLength = rawContentLength === undefined ? undefined : Number(rawContentLength);
     const maximumRequestBytes = evidenceObjectMatch
       ? dependencies.config.evidenceMaxBytes
       : dependencies.config.maxJsonBodyBytes;
-    if (Number.isFinite(contentLength) && contentLength > maximumRequestBytes) {
+    if (
+      contentLength !== undefined &&
+      Number.isFinite(contentLength) &&
+      contentLength > maximumRequestBytes
+    ) {
       sendError(
         response,
         new ApplicationError(413, "PAYLOAD_TOO_LARGE", "The request body is too large."),
@@ -173,9 +178,13 @@ export function createApiHandler(dependencies: ApiDependencies): ApiHandler {
         sendJson(response, 200, openApiDocument, requestId);
       } else if (evidenceObjectMatch && dependencies.evidence) {
         if (request.method === "PUT") {
-          const bytes = await readBinaryBody(request, dependencies.config.evidenceMaxBytes);
           const contentType = String(request.headers["content-type"] ?? "").split(";")[0];
-          await dependencies.evidence.localCapability(evidenceObjectMatch[1], bytes, contentType);
+          await dependencies.evidence.localUploadCapability(
+            evidenceObjectMatch[1],
+            request,
+            contentType,
+            contentLength,
+          );
           response.statusCode = 204;
           response.setHeader("X-Request-ID", requestId);
           response.end();
@@ -222,7 +231,7 @@ export function createApiHandler(dependencies: ApiDependencies): ApiHandler {
         throw new ApplicationError(404, "NOT_FOUND", "The requested resource was not found.");
       }
     } catch (error) {
-      if (error instanceof ApplicationError && error.status === 429) {
+      if (error instanceof ApplicationError && [429, 503].includes(error.status)) {
         const retryAfter = error.details?.retryAfterSeconds;
         if (typeof retryAfter === "number") response.setHeader("Retry-After", String(retryAfter));
       }
@@ -242,7 +251,13 @@ export function createApiHandler(dependencies: ApiDependencies): ApiHandler {
         path: normalizedPath,
       });
       dependencies.logger.info(
-        { requestId, method: request.method, path, status: response.statusCode, durationMs },
+        {
+          requestId,
+          method: request.method,
+          path: normalizedPath,
+          status: response.statusCode,
+          durationMs,
+        },
         "HTTP request completed",
       );
     }
@@ -259,6 +274,8 @@ function validMetricsCredential(request: IncomingMessage, expected: string | und
 }
 
 function metricPath(path: string): string {
+  if (/^\/api\/v1\/evidence-objects\/[A-Za-z0-9._-]+$/.test(path))
+    return "/api/v1/evidence-objects/:capability";
   return path.replace(
     /\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?=\/|$)/gi,
     "/:id",
