@@ -124,7 +124,13 @@ function ResponsiveSettingsDetails({
         </span>
         <Icon name="chevron" size={18} />
       </summary>
-      <div className="responsive-settings-content">{children}</div>
+      <div className="responsive-settings-content">
+        {children}
+        <button type="button" className="section-close-button" onClick={() => setOpen(false)}>
+          Close {title}
+          <Icon name="chevron" size={17} aria-hidden="true" />
+        </button>
+      </div>
     </details>
   );
 }
@@ -732,6 +738,16 @@ function LobbyView({
                   />
                 ))}
               </div>
+              <button
+                type="button"
+                className="section-close-button"
+                onClick={(event) => {
+                  event.currentTarget.closest("details")?.removeAttribute("open");
+                }}
+              >
+                Close tasks per player
+                <Icon name="chevron" size={17} aria-hidden="true" />
+              </button>
             </details>
             {room.settings.selectedTaskPack?.roles.length ? (
               <details className="settings-section settings-collapsible">
@@ -746,38 +762,58 @@ function LobbyView({
                   <Icon name="chevron" size={18} />
                 </summary>
                 <div className="role-settings">
-                  {room.settings.selectedTaskPack.roles.map((role) => (
-                    <WholeNumberField
-                      className="compact-field"
-                      key={role.name}
-                      label={role.name}
-                      labelAction={
-                        <button
-                          type="button"
-                          className="role-info-trigger"
-                          onClick={() => setRoleInfo(role)}
-                          aria-label={`About the ${role.name} role`}
-                        >
-                          <span className="sr-only">About {role.name}</span>
-                          <span aria-hidden="true">i</span>
-                        </button>
-                      }
-                      value={room.settings.roleCounts[role.name] ?? 0}
-                      min={0}
-                      max={Math.max(0, room.participants.length - room.settings.imposterCount)}
-                      disabled={busy}
-                      hint="Select how many crewmates receive this role."
-                      onChange={(value) =>
-                        void update({
-                          roleCounts: {
-                            ...room.settings.roleCounts,
-                            [role.name]: value,
-                          },
-                        })
-                      }
-                    />
-                  ))}
+                  {room.settings.selectedTaskPack.roles.map((role) => {
+                    const availableCrew = Math.max(
+                      0,
+                      room.participants.length - room.settings.imposterCount,
+                    );
+                    return (
+                      <WholeNumberField
+                        className="compact-field"
+                        key={role.name}
+                        label={role.name}
+                        labelAction={
+                          <button
+                            type="button"
+                            className="role-info-trigger"
+                            onClick={() => setRoleInfo(role)}
+                            aria-label={`About the ${role.name} role`}
+                          >
+                            <span className="sr-only">About {role.name}</span>
+                            <span aria-hidden="true">i</span>
+                          </button>
+                        }
+                        value={room.settings.roleCounts[role.name] ?? 0}
+                        min={0}
+                        max={availableCrew}
+                        disabled={busy || availableCrew === 0}
+                        hint={
+                          availableCrew === 0
+                            ? "This becomes editable when at least one crewmate joins the room."
+                            : `Assign this role to up to ${availableCrew} crewmate${availableCrew === 1 ? "" : "s"}.`
+                        }
+                        onChange={(value) =>
+                          void update({
+                            roleCounts: {
+                              ...room.settings.roleCounts,
+                              [role.name]: value,
+                            },
+                          })
+                        }
+                      />
+                    );
+                  })}
                 </div>
+                <button
+                  type="button"
+                  className="section-close-button"
+                  onClick={(event) => {
+                    event.currentTarget.closest("details")?.removeAttribute("open");
+                  }}
+                >
+                  Close crew roles
+                  <Icon name="chevron" size={17} aria-hidden="true" />
+                </button>
               </details>
             ) : null}
             <div className="settings-completion" aria-label="Finish game setup">
@@ -1016,13 +1052,17 @@ function GameView({
     if (meetingId && meetingId !== previousMeetingId.current) playMeetingAlert();
     previousMeetingId.current = meetingId;
 
+    // Progress is shared even when evidence photos are private. Announce every newly accepted
+    // upload from that shared counter without exposing the uploader or the photo itself.
+    if (game.progress.percent > previousProgress.current) playGameSound("upload");
+    previousProgress.current = game.progress.percent;
+
     if (!roleAcknowledged) {
       previousPhase.current = game.phase;
       return;
     }
     if (previousLifeStatus.current === "alive" && game.self.lifeStatus !== "alive")
       playGameSound("eliminated");
-    if (game.progress.percent > previousProgress.current) playGameSound("task-complete");
     if (phaseChanged) {
       if (game.phase === "voting") playGameSound("vote");
       else if (game.phase === "result") playGameSound("result");
@@ -1039,7 +1079,6 @@ function GameView({
     }
     previousPhase.current = game.phase;
     previousLifeStatus.current = game.self.lifeStatus;
-    previousProgress.current = game.progress.percent;
   }, [game, roleAcknowledged]);
   if (game.phase === "game_over" || game.phase === "abandoned")
     return <TerminalView game={game} room={room} onReplay={onReplay} onError={onError} />;
@@ -2007,6 +2046,10 @@ function FinalEvidenceSection({ onError }: { onError: (message: string) => void 
             ))}
           </div>
         )}
+        <button type="button" className="section-close-button" onClick={() => setOpen(false)}>
+          Close evidence
+          <Icon name="chevron" size={17} aria-hidden="true" />
+        </button>
       </div>
       <ImagePreview
         open={Boolean(preview)}
@@ -2521,14 +2564,23 @@ function TerminalView({
   const [showResults, setShowResults] = useState(false);
   const [showVotes, setShowVotes] = useState(false);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [guestPlayer, setGuestPlayer] = useState<boolean | null>(null);
   useEffect(() => {
     if (game.phase !== "game_over") return;
     const storageKey = `imposter-game:guest-upgrade:${game.id}`;
-    if (window.sessionStorage.getItem(storageKey)) return;
+    const upgradeDismissed = Boolean(window.sessionStorage.getItem(storageKey));
     let active = true;
-    userApi.me().catch((cause: unknown) => {
-      if (active && cause instanceof ApiError && cause.status === 401) setUpgradeOpen(true);
-    });
+    userApi
+      .me()
+      .then(() => {
+        if (active) setGuestPlayer(false);
+      })
+      .catch((cause: unknown) => {
+        if (active && cause instanceof ApiError && cause.status === 401) {
+          setGuestPlayer(true);
+          if (!upgradeDismissed) setUpgradeOpen(true);
+        }
+      });
     return () => {
       active = false;
     };
@@ -2637,6 +2689,14 @@ function TerminalView({
                   </article>
                 ))}
               </div>
+              <button
+                type="button"
+                className="section-close-button"
+                onClick={() => setShowResults(false)}
+              >
+                Close full results
+                <Icon name="chevron" size={17} aria-hidden="true" />
+              </button>
             </section>
           )}
           {showResults && summary && (
@@ -2669,6 +2729,14 @@ function TerminalView({
                       : "Ballot choices were kept private by the host setting."}
                   </p>
                 )}
+                <button
+                  type="button"
+                  className="section-close-button"
+                  onClick={() => setShowVotes(false)}
+                >
+                  Close vote details
+                  <Icon name="chevron" size={17} aria-hidden="true" />
+                </button>
               </div>
             </section>
           )}
@@ -2723,7 +2791,7 @@ function TerminalView({
                   try {
                     await participantApi.leave();
                     gameToast("You left the room.", "info");
-                    window.location.assign("/");
+                    window.location.assign(guestPlayer === false ? "/dashboard" : "/");
                   } catch (error) {
                     onError(errorMessage(error));
                     setBusy(false);
@@ -2734,6 +2802,16 @@ function TerminalView({
               </Button>
             </div>
           </div>
+          {guestPlayer === true && !upgradeOpen && (
+            <section className="guest-result-signin" aria-label="Save this result">
+              <div>
+                <p className="eyebrow">Save this case</p>
+                <h2>Keep this result in your dashboard</h2>
+                <p>Sign in to attach this finished game and room to your private history.</p>
+              </div>
+              <GoogleSignInLink intent="post_game" />
+            </section>
+          )}
         </section>
       </div>
       <Dialog

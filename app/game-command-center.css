@@ -98,8 +98,11 @@ html[data-theme="light"] .game-page {
   left: 0;
   width: 100%;
   min-width: 0;
-  max-height: min(280px, 42dvh);
+  max-height: min(260px, 40dvh, calc(100dvh - 7rem));
   overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
   padding: 6px;
   border: 1px solid var(--game-border);
   border-radius: 13px;

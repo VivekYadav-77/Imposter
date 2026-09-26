@@ -24,8 +24,9 @@ export function PlayAccessGate({ children }: { children: ReactNode }) {
       .me()
       .then(() => {
         if (!active) return;
-        window.history.replaceState(window.history.state, "", "/play");
-        setChecking(false);
+        // An authenticated player should enter through their account command center. This also
+        // avoids presenting guest identity controls while a valid server session already exists.
+        router.replace("/dashboard");
       })
       .catch((cause: unknown) => {
         if (!active) return;
@@ -41,7 +42,7 @@ export function PlayAccessGate({ children }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [router]);
 
   const continueAsGuest = () => {
     continuingAsGuest.current = true;

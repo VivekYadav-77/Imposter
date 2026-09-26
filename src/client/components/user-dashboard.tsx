@@ -71,6 +71,22 @@ function Frame({ children }: { children: React.ReactNode }) {
   );
 }
 
+function SignedOutFrame({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="dashboard-page dashboard-page-signed-out">
+      <header className="dashboard-mobile-header">
+        <Link href="/" className="dashboard-brand" aria-label="Imposter Game home">
+          <Brand compact />
+        </Link>
+        <ThemeToggle placement="compact" />
+      </header>
+      <main id="main-content" className="dashboard-main">
+        {children}
+      </main>
+    </div>
+  );
+}
+
 function Loading({ label = "Loading your case files" }: { label?: string }) {
   return (
     <Frame>
@@ -84,21 +100,30 @@ function Loading({ label = "Loading your case files" }: { label?: string }) {
 
 function Failure({ error }: { error: unknown }) {
   const signedOut = error instanceof ApiError && error.status === 401;
+  if (signedOut)
+    return (
+      <SignedOutFrame>
+        <section className="dashboard-empty" role="alert">
+          <span className="empty-seal" aria-hidden="true">
+            <Icon name="lock" size={28} />
+          </span>
+          <h1>Sign in to continue</h1>
+          <p>Your player session has ended.</p>
+          <Link className="button button-primary" href="/login">
+            Sign in
+          </Link>
+        </section>
+      </SignedOutFrame>
+    );
   return (
     <Frame>
       <section className="dashboard-empty" role="alert">
         <span className="empty-seal" aria-hidden="true">
-          <Icon name={signedOut ? "lock" : "warning"} size={28} />
+          <Icon name="warning" size={28} />
         </span>
-        <h1>{signedOut ? "Sign in to continue" : "Couldn’t open the dashboard"}</h1>
-        <p>{signedOut ? "Your player session has ended." : errorMessage(error)}</p>
-        {signedOut ? (
-          <Link className="button button-primary" href="/login">
-            Sign in
-          </Link>
-        ) : (
-          <Button onClick={() => window.location.reload()}>Try again</Button>
-        )}
+        <h1>Couldn’t open the dashboard</h1>
+        <p>{errorMessage(error)}</p>
+        <Button onClick={() => window.location.reload()}>Try again</Button>
       </section>
     </Frame>
   );
@@ -217,7 +242,7 @@ export function DashboardOverview() {
         title="Welcome back."
         description="Resume a live room or review your latest cases."
         action={
-          <Link className="button button-primary" href="/play?entry=1">
+          <Link className="button button-primary" href="/play">
             Start or join <Icon name="arrow" size={18} aria-hidden="true" />
           </Link>
         }
@@ -239,7 +264,7 @@ export function DashboardOverview() {
           <div className="section-title">
             <div>
               <p className="eyebrow">Rooms</p>
-              <h2>Continue playing</h2>
+              <h2>Rejoin a room</h2>
             </div>
           </div>
           {primaryRoom ? (
@@ -276,7 +301,7 @@ export function DashboardOverview() {
           ) : (
             <div className="dashboard-empty-inline">
               <Icon name="room" size={24} aria-hidden="true" />
-              <p>No linked rooms yet. Your next signed-in game will appear here.</p>
+              <p>No linked rooms yet. Live and previously played rooms will appear here.</p>
             </div>
           )}
         </section>

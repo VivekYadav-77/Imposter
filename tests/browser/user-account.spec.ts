@@ -261,6 +261,8 @@ test("play choice remains within phone, tablet, laptop, and desktop viewports", 
       scrollWidth: element.scrollWidth,
     }));
     expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth + 1);
+    await page.mouse.click(1, 1);
+    await expect(dialog).toBeHidden();
   }
 });
 
@@ -281,7 +283,7 @@ test("desktop dashboard uses the available content canvas", async ({ page }) => 
   expect(widths.main).toBeGreaterThanOrEqual(widths.available * 0.9);
 });
 
-test("signed-in players bypass the play choice", async ({ page }) => {
+test("signed-in players enter through the dashboard and can start there", async ({ page }) => {
   await mockAccountApi(page);
   await page.route("**/api/v1/rooms/current", async (route) => {
     await route.fulfill({
@@ -292,7 +294,23 @@ test("signed-in players bypass the play choice", async ({ page }) => {
   });
   await page.goto("/play?entry=1");
   await expect(page.getByRole("dialog", { name: "Choose how to play" })).toBeHidden();
-  await expect(page.getByRole("button", { name: "Create room" })).toBeVisible();
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(page.getByRole("link", { name: /Start or join/ })).toHaveAttribute("href", "/play");
+});
+
+test("signed-out dashboard hides account navigation", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route("**/api/v1/me/dashboard", (route) =>
+    route.fulfill({
+      status: 401,
+      contentType: "application/json",
+      body: JSON.stringify({ error: { code: "USER_SESSION_INVALID", message: "Sign in." } }),
+    }),
+  );
+  await page.goto("/dashboard");
+  await expect(page.getByRole("heading", { name: "Sign in to continue" })).toBeVisible();
+  await expect(page.locator(".dashboard-bottom-nav")).toHaveCount(0);
+  await expect(page.locator(".dashboard-sidebar")).toHaveCount(0);
 });
 
 test("completed guests can save the game with Google or keep playing as a guest", async ({
@@ -393,9 +411,16 @@ test("completed guests can save the game with Google or keep playing as a guest"
   );
   await dialog.getByRole("button", { name: "Keep playing as guest" }).click();
   await expect(dialog).toBeHidden();
+  await expect(page.getByRole("region", { name: "Save this result" })).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Save this result" }).getByRole("link", {
+      name: "Continue with Google",
+    }),
+  ).toHaveAttribute("href", "/api/v1/auth/google/start?intent=post_game");
   await page.reload();
   await expect(dialog).toBeHidden();
   await expect(page.getByRole("heading", { name: "Crew wins" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Save this result" })).toBeVisible();
 });
 
 test("mobile dashboard navigation is active, reachable, and does not cover the page end", async ({

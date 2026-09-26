@@ -23,7 +23,9 @@ const DELETION_REAUTH_TTL_MS = 5 * 60 * 1000;
 const OAUTH_RETURN_TO: Record<OAuthIntent, string> = {
   login: "/dashboard",
   play: "/dashboard",
-  post_game: "/dashboard",
+  // Keep the participant session in place so the newly linked account returns to the result it
+  // was created from. The room page will then expose the saved case through the dashboard too.
+  post_game: "/room",
   delete: "/dashboard/settings?reauthenticated=1",
 };
 

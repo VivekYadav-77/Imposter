@@ -565,7 +565,13 @@ export function Dialog({
       onCancel={onClose}
       onClose={onClose}
       onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        const bounds = event.currentTarget.getBoundingClientRect();
+        const clickedBackdrop =
+          event.clientX < bounds.left ||
+          event.clientX > bounds.right ||
+          event.clientY < bounds.top ||
+          event.clientY > bounds.bottom;
+        if (event.target === event.currentTarget || clickedBackdrop) onClose();
       }}
       aria-labelledby={titleId}
     >
@@ -913,6 +919,11 @@ export function Drawer({
           <IconButton icon="close" onClick={onClose} label="Close drawer" />
         </div>
         {children}
+        <div className="drawer-footer">
+          <Button variant="secondary" onClick={onClose}>
+            Close {title}
+          </Button>
+        </div>
       </aside>
     </div>
   );

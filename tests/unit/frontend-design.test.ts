@@ -218,6 +218,17 @@ describe("frontend design foundations", () => {
     expect(roomClient).toContain("window.clearTimeout(refreshTimer)");
   });
 
+  it("announces accepted evidence to every player without revealing private evidence", async () => {
+    const roomClient = await readFile("src/client/components/room-client.tsx", "utf8");
+    expect(roomClient).toContain("Progress is shared even when evidence photos are private");
+    expect(roomClient).toContain(
+      'if (game.progress.percent > previousProgress.current) playGameSound("upload")',
+    );
+    expect(roomClient.indexOf("previousProgress.current = game.progress.percent")).toBeLessThan(
+      roomClient.indexOf("if (!roleAcknowledged)"),
+    );
+  });
+
   it("offers the saved participant seat instead of creating a duplicate identity", async () => {
     const [playForm, roomClient] = await Promise.all([
       readFile("src/client/components/play-form.tsx", "utf8"),

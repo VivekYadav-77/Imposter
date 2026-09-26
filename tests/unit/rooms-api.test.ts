@@ -255,7 +255,7 @@ describe("room HTTP transport", () => {
       completeGoogleAuth: () =>
         Promise.resolve({
           intent: "post_game",
-          returnTo: "/dashboard",
+          returnTo: "/room",
           participantId: snapshot.self.participantId,
           user: { id: "user-1" },
           session: { token: "user-token", sessionId: "user-session" },
@@ -271,7 +271,7 @@ describe("room HTTP transport", () => {
       .set("Cookie", "__Host-oauth_transaction=oauth-state");
 
     expect(response.status).toBe(302);
-    expect(response.headers.location).toBe("/dashboard");
+    expect(response.headers.location).toBe("/room");
     expect(response.headers["set-cookie"]).toEqual(
       expect.arrayContaining([
         expect.stringContaining("__Host-user_session=user-token"),
