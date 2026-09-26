@@ -3339,81 +3339,29 @@
         }
       }
     },
-    "/api/v1/accounts": {
-      "post": {
-        "operationId": "registerUser",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "email",
-                  "password",
-                  "displayName",
-                  "avatarId"
-                ],
-                "properties": {
-                  "email": {
-                    "type": "string",
-                    "format": "email"
-                  },
-                  "password": {
-                    "type": "string",
-                    "minLength": 12,
-                    "maxLength": 128
-                  },
-                  "displayName": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 24
-                  },
-                  "avatarId": {
-                    "$ref": "#/components/schemas/AvatarId"
-                  }
-                }
-              }
+    "/api/v1/auth/google/start": {
+      "get": {
+        "operationId": "startGoogleSignIn",
+        "parameters": [
+          {
+            "name": "intent",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "login",
+                "play",
+                "post_game",
+                "delete"
+              ]
             }
           }
-        },
+        ],
         "responses": {
-          "201": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "data",
-                    "meta"
-                  ],
-                  "properties": {
-                    "data": {
-                      "type": "object"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "required": [
-                        "requestId",
-                        "serverTime"
-                      ],
-                      "properties": {
-                        "requestId": {
-                          "type": "string"
-                        },
-                        "serverTime": {
-                          "type": "string",
-                          "format": "date-time"
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
+          "302": {
+            "description": "Redirect to Google authorization"
           },
-          "409": {
+          "422": {
             "description": "Safe error envelope",
             "content": {
               "application/json": {
@@ -3423,7 +3371,7 @@
               }
             }
           },
-          "422": {
+          "503": {
             "description": "Safe error envelope",
             "content": {
               "application/json": {
@@ -3436,64 +3384,35 @@
         }
       }
     },
-    "/api/v1/account-sessions": {
-      "post": {
-        "operationId": "loginUser",
+    "/api/v1/auth/google/callback": {
+      "get": {
+        "operationId": "completeGoogleSignIn",
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "error",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "data",
-                    "meta"
-                  ],
-                  "properties": {
-                    "data": {
-                      "type": "object"
-                    },
-                    "meta": {
-                      "type": "object",
-                      "required": [
-                        "requestId",
-                        "serverTime"
-                      ],
-                      "properties": {
-                        "requestId": {
-                          "type": "string"
-                        },
-                        "serverTime": {
-                          "type": "string",
-                          "format": "date-time"
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Safe error envelope",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Safe error envelope",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
+          "302": {
+            "description": "Redirect to the safe application destination"
           }
         }
       }
@@ -3653,9 +3572,19 @@
         ],
         "responses": {
           "204": {
-            "description": "Account deleted"
+            "description": "Account deleted after recent Google re-authentication"
           },
           "401": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
             "description": "Safe error envelope",
             "content": {
               "application/json": {
@@ -3959,41 +3888,6 @@
             "description": "Session revoked"
           },
           "401": {
-            "description": "Safe error envelope",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/me/password": {
-      "put": {
-        "operationId": "changeUserPassword",
-        "security": [
-          {
-            "userCookie": []
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Password changed"
-          },
-          "401": {
-            "description": "Safe error envelope",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          },
-          "422": {
             "description": "Safe error envelope",
             "content": {
               "application/json": {

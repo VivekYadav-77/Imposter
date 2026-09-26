@@ -97,7 +97,7 @@ export default function HowToPlay() {
             manual phase advancement, or same-room replay.
           </p>
         </aside>
-        <Link className="button button-primary" href="/play">
+        <Link className="button button-primary" href="/play?entry=1">
           Start playing
         </Link>
       </main>

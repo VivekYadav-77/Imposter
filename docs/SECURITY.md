@@ -30,10 +30,14 @@ This is a party game, not a financial system, but role secrecy and photo privacy
 ## 3. Participant authentication
 
 Optional player accounts use a credential and cookie distinct from participant and
-administrator sessions. Account passwords use scrypt, login is rate-limited, and
-stored session tokens are keyed hashes. Email is not verified and there is no
-recovery channel in this release. Password changes revoke other devices, while
-account deletion requires password confirmation and unlinks participant history.
+administrator sessions. Google OpenID Connect is the only public player sign-in
+method. The server validates authorization `state`, ID-token `nonce`, issuer,
+audience, expiry, and verified email before mapping Google's stable subject to a
+local account. OAuth transactions are hashed, short-lived, and single-use; Google
+access and refresh tokens are not stored. Stored application session tokens remain
+keyed hashes. Account deletion requires a fresh Google re-authentication and unlinks
+participant history. Legacy player password hashes are inert and no public route
+can authenticate them; administrator password authentication remains separate.
 
 ### Credential
 

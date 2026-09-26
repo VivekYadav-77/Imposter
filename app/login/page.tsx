@@ -1,9 +1,15 @@
 import type { Metadata } from "next";
 import { SiteHeader } from "@/client/components/site-shell";
 import { ThemeToggle } from "@/client/components/theme-toggle";
-import { UserAuthForm } from "@/client/components/user-auth-form";
+import { GoogleSignInCard } from "@/client/components/user-auth-form";
 export const metadata: Metadata = { title: "Sign in", robots: { index: false, follow: false } };
-export default function Login() {
+export default async function Login({
+  searchParams,
+}: {
+  searchParams: Promise<{ authError?: string | string[] }>;
+}) {
+  const value = (await searchParams).authError;
+  const authError = Array.isArray(value) ? value[0] : value;
   return (
     <div className="account-page">
       <SiteHeader minimal backHref="/" backLabel="Back home" />
@@ -16,7 +22,7 @@ export default function Login() {
           <h1>Return to your cases.</h1>
           <p>Rejoin rooms and keep your game history across devices.</p>
         </header>
-        <UserAuthForm mode="login" />
+        <GoogleSignInCard authError={authError} />
       </main>
     </div>
   );

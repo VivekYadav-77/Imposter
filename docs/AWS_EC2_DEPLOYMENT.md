@@ -207,6 +207,11 @@ ADMIN_LOGIN_MAX_ATTEMPTS=5
 
 PARTICIPANT_SESSION_TOKEN_PEPPER=REPLACE_WITH_THIRD_64_CHARACTER_HEX_SECRET
 PARTICIPANT_SESSION_TTL_SECONDS=7200
+USER_SESSION_TOKEN_PEPPER=REPLACE_WITH_FOURTH_64_CHARACTER_HEX_SECRET
+USER_SESSION_TTL_SECONDS=2592000
+GOOGLE_OAUTH_CLIENT_ID=REPLACE_WITH_GOOGLE_WEB_CLIENT_ID
+GOOGLE_OAUTH_CLIENT_SECRET=REPLACE_WITH_GOOGLE_WEB_CLIENT_SECRET
+GOOGLE_OAUTH_REDIRECT_URI=https://game.example.com/api/v1/auth/google/callback
 ROOM_LOBBY_TTL_SECONDS=7200
 ROOM_CODE_COOLDOWN_SECONDS=86400
 HOST_DISCONNECT_GRACE_SECONDS=30
@@ -232,6 +237,8 @@ Notes:
 - `DATABASE_SSL=false` is appropriate only because PostgreSQL is accessed over local loopback on the same EC2 instance.
 - A database password placed in a URI must be percent-encoded if it contains URI-reserved characters. The recommended hexadecimal password avoids that problem.
 - `PUBLIC_APP_URL`, `CORS_ALLOWED_ORIGINS`, and `CSP_IMAGE_SOURCES` must use the final HTTPS domain.
+- Register the exact `GOOGLE_OAUTH_REDIRECT_URI` as an authorized redirect URI on a Google OAuth Web application client. Scheme, host, path, and trailing slash must match exactly.
+- Store the Google client secret only in the protected server environment file; never expose it through a `NEXT_PUBLIC_` variable.
 - Never copy the development peppers or placeholder values into production.
 - Do not add `ADMIN_BOOTSTRAP_PASSWORD` permanently. It is a one-time shell variable used later.
 

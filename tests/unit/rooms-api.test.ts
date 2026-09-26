@@ -10,6 +10,7 @@ import { InMemoryMetrics } from "../../src/infrastructure/observability/metrics.
 import type { RoomService } from "../../src/modules/rooms/service.js";
 import type { GameService } from "../../src/modules/games/service.js";
 import type { EvidenceService } from "../../src/modules/evidence/service.js";
+import type { UserAuthService } from "../../src/modules/user-auth/service.js";
 import {
   normalizeNickname,
   roomCreationSchema,
@@ -81,7 +82,13 @@ const snapshot = {
   gameId: null,
 };
 
-function roomApi(options: { games?: GameService; evidence?: EvidenceService } = {}) {
+function roomApi(
+  options: {
+    games?: GameService;
+    evidence?: EvidenceService;
+    userAuth?: UserAuthService;
+  } = {},
+) {
   const rooms = {
     createRoom: () =>
       Promise.resolve({
@@ -116,6 +123,7 @@ function roomApi(options: { games?: GameService; evidence?: EvidenceService } = 
     rooms,
     games: options.games,
     evidence: options.evidence,
+    userAuth: options.userAuth,
   });
   const server = createServer((req, res) => void handler(req, res));
   servers.push(server);
@@ -182,6 +190,95 @@ describe("room HTTP transport", () => {
       .set("Authorization", "Bearer valid");
     expect(response.status).toBe(204);
     expect(response.headers.etag).toBe('"7"');
+  });
+
+  it("routes meeting votes to the game API when user accounts are enabled", async () => {
+    const meetingId = "00000000-0000-4000-8000-000000000030";
+    let recordedVote: { meetingId: string; targetParticipantId: string | null } | null = null;
+    const games = {
+      ejectionVote: (
+        _principal: unknown,
+        receivedMeetingId: string,
+        input: { targetParticipantId: string | null },
+      ) => {
+        recordedVote = {
+          meetingId: receivedMeetingId,
+          targetParticipantId: input.targetParticipantId,
+        };
+        return Promise.resolve({ stateVersion: 8, votesCast: 1, requiredVotes: 3 });
+      },
+    } as unknown as GameService;
+    const userAuth = {
+      authenticate: () => {
+        throw new Error("Meeting votes must not enter the user-account router.");
+      },
+    } as unknown as UserAuthService;
+
+    const response = await roomApi({ games, userAuth })
+      .put(`/api/v1/meetings/${meetingId}/ejection-vote`)
+      .set("Authorization", "Bearer valid")
+      .set("Idempotency-Key", "meeting-vote-1")
+      .send({ expectedStateVersion: 7, targetParticipantId: null });
+
+    expect(response.status).toBe(200);
+    expect(recordedVote).toEqual({ meetingId, targetParticipantId: null });
+  });
+
+  it("starts Google sign-in with a short-lived Lax transaction cookie", async () => {
+    let participantId: string | null = null;
+    const userAuth = {
+      authenticate: () => Promise.resolve(null),
+      beginGoogleAuth: (_intent: string, receivedParticipantId: string | null) => {
+        participantId = receivedParticipantId;
+        return Promise.resolve({
+          state: "oauth-state",
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+          authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth?state=oauth-state",
+        });
+      },
+    } as unknown as UserAuthService;
+
+    const response = await roomApi({ userAuth })
+      .get("/api/v1/auth/google/start?intent=post_game")
+      .set("Cookie", "__Host-participant_session=valid");
+
+    expect(response.status).toBe(302);
+    expect(response.headers.location).toContain("accounts.google.com");
+    expect(response.headers["set-cookie"]?.[0]).toContain("__Host-oauth_transaction=oauth-state");
+    expect(response.headers["set-cookie"]?.[0]).toContain("SameSite=Lax");
+    expect(participantId).toBe(snapshot.self.participantId);
+  });
+
+  it("completes Google sign-in, claims the guest, and sets the app session", async () => {
+    let claimed: string | null = null;
+    const userAuth = {
+      completeGoogleAuth: () =>
+        Promise.resolve({
+          intent: "post_game",
+          returnTo: "/dashboard",
+          participantId: snapshot.self.participantId,
+          user: { id: "user-1" },
+          session: { token: "user-token", sessionId: "user-session" },
+        }),
+      claimParticipant: (_principal: unknown, participantId: string) => {
+        claimed = participantId;
+        return Promise.resolve("linked");
+      },
+    } as unknown as UserAuthService;
+
+    const response = await roomApi({ userAuth })
+      .get("/api/v1/auth/google/callback?state=oauth-state&code=google-code")
+      .set("Cookie", "__Host-oauth_transaction=oauth-state");
+
+    expect(response.status).toBe(302);
+    expect(response.headers.location).toBe("/dashboard");
+    expect(response.headers["set-cookie"]).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("__Host-user_session=user-token"),
+        expect.stringContaining("__Host-oauth_transaction=;"),
+      ]),
+    );
+    expect(claimed).toBe(snapshot.self.participantId);
   });
 
   it("returns the privacy policy with a constrained upload capability", async () => {

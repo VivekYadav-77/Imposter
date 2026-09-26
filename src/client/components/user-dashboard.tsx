@@ -12,16 +12,7 @@ import type {
   UserSession,
 } from "../api/types";
 import { ApiError, errorMessage, userApi } from "../api/client";
-import {
-  Brand,
-  Button,
-  ConfirmDialog,
-  Field,
-  Icon,
-  type IconName,
-  PasswordField,
-  SkeletonList,
-} from "./ui";
+import { Brand, Button, ConfirmDialog, Field, Icon, type IconName, SkeletonList } from "./ui";
 import { PlayerAvatar } from "./player-avatar";
 import { ThemeToggle } from "./theme-toggle";
 import { AvatarChooser } from "./user-auth-form";
@@ -226,7 +217,7 @@ export function DashboardOverview() {
         title="Welcome back."
         description="Resume a live room or review your latest cases."
         action={
-          <Link className="button button-primary" href="/play">
+          <Link className="button button-primary" href="/play?entry=1">
             Start or join <Icon name="arrow" size={18} aria-hidden="true" />
           </Link>
         }
@@ -514,10 +505,9 @@ export function DashboardGame({ gameId }: { gameId: string }) {
   );
 }
 
-type SettingsTab = "profile" | "security" | "devices" | "account";
+type SettingsTab = "profile" | "devices" | "account";
 const settingsTabs: Array<{ id: SettingsTab; label: string; icon: IconName }> = [
   { id: "profile", label: "Profile", icon: "players" },
-  { id: "security", label: "Security", icon: "lock" },
   { id: "devices", label: "Devices", icon: "room" },
   { id: "account", label: "Account", icon: "trash" },
 ];
@@ -577,9 +567,6 @@ export function DashboardSettings() {
   const [error, setError] = useState("");
   const [name, setName] = useState("");
   const [avatar, setAvatar] = useState<AvatarId>("fox");
-  const [current, setCurrent] = useState("");
-  const [next, setNext] = useState("");
-  const [deletePassword, setDeletePassword] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<SettingsTab>("profile");
   const [busy, setBusy] = useState<string>();
@@ -593,6 +580,14 @@ export function DashboardSettings() {
         setSessions(sessionsResponse.data);
       })
       .catch(setLoadError);
+  }, []);
+
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    if (query.get("reauthenticated") !== "1") return;
+    setActiveTab("account");
+    setDeleteOpen(true);
+    window.history.replaceState(window.history.state, "", "/dashboard/settings");
   }, []);
 
   const currentSession = useMemo(() => sessions.find((session) => session.current), [sessions]);
@@ -675,59 +670,6 @@ export function DashboardSettings() {
             <AvatarChooser value={avatar} onChange={setAvatar} compact />
             <Button type="submit" loading={busy === "profile"}>
               Save profile
-            </Button>
-          </form>
-        </section>
-
-        <section {...panelProps("security")} className="settings-panel account-card">
-          <div className="settings-panel-heading">
-            <div>
-              <p className="eyebrow">Security</p>
-              <h2>Change password</h2>
-            </div>
-            <span className="settings-panel-icon">
-              <Icon name="lock" size={24} />
-            </span>
-          </div>
-          <p className="settings-panel-copy">
-            Use at least 12 characters. Password recovery is currently unavailable.
-          </p>
-          <form
-            onSubmit={async (event) => {
-              event.preventDefault();
-              startAction("password");
-              try {
-                await userApi.changePassword(current, next);
-                setCurrent("");
-                setNext("");
-                setSessions((all) => all.filter((session) => session.current));
-                setMessage("Password changed. Other devices were signed out.");
-                setBusy(undefined);
-              } catch (value) {
-                failAction(value);
-              }
-            }}
-          >
-            <PasswordField
-              label="Current password"
-              value={current}
-              autoComplete="current-password"
-              required
-              disabled={busy === "password"}
-              onChange={(event) => setCurrent(event.target.value)}
-            />
-            <PasswordField
-              label="New password"
-              value={next}
-              minLength={12}
-              maxLength={128}
-              autoComplete="new-password"
-              required
-              disabled={busy === "password"}
-              onChange={(event) => setNext(event.target.value)}
-            />
-            <Button type="submit" loading={busy === "password"}>
-              Change password
             </Button>
           </form>
         </section>
@@ -832,32 +774,18 @@ export function DashboardSettings() {
               Sign out
             </Button>
           </div>
-          <form
-            className="delete-account-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              setDeleteOpen(true);
-            }}
-          >
+          <div className="delete-account-form">
             <div>
               <strong>Delete account</strong>
               <p>
                 This removes your login and unlinks your history. Shared anonymized game records
-                remain.
+                remain. Google will ask you to confirm your identity first.
               </p>
             </div>
-            <PasswordField
-              label="Confirm password"
-              value={deletePassword}
-              autoComplete="current-password"
-              required
-              disabled={busy === "delete"}
-              onChange={(event) => setDeletePassword(event.target.value)}
-            />
-            <Button variant="danger" type="submit">
-              Delete account
-            </Button>
-          </form>
+            <a className="button button-danger" href="/api/v1/auth/google/start?intent=delete">
+              Verify with Google to delete
+            </a>
+          </div>
         </section>
       </div>
       <ConfirmDialog
@@ -871,7 +799,7 @@ export function DashboardSettings() {
         onConfirm={async () => {
           startAction("delete");
           try {
-            await userApi.deleteAccount(deletePassword);
+            await userApi.deleteAccount();
             router.push("/");
             router.refresh();
           } catch (value) {

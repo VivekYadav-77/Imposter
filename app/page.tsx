@@ -23,7 +23,7 @@ export default function Home() {
               No account required. One room code.
             </p>
             <div className="hero-actions">
-              <Link className="button button-primary" href="/play">
+              <Link className="button button-primary" href="/play?entry=1">
                 Start a room <Icon name="arrow" size={18} />
               </Link>
               <Link className="text-link" href="/how-to-play">
@@ -146,7 +146,7 @@ export default function Home() {
               Read the photo policy <Icon name="arrow" size={17} />
             </Link>
           </div>
-          <Link className="button button-primary" href="/play">
+          <Link className="button button-primary" href="/play?entry=1">
             Open a case <Icon name="arrow" size={18} />
           </Link>
         </section>

@@ -41,7 +41,7 @@ export function SiteHeader({
             <Link href="/privacy-and-photos">Privacy & photos</Link>
             <Link href="/login">Sign in</Link>
             <Link href="/dashboard">Dashboard</Link>
-            <Link className="button button-primary" href="/play">
+            <Link className="button button-primary" href="/play?entry=1">
               Start a room <Icon name="arrow" size={17} />
             </Link>
           </nav>

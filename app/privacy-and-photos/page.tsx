@@ -94,17 +94,18 @@ export default function Privacy() {
             replay.
           </p>
           <p>
-            Optional player accounts retain profile details and game-result metadata so signed-in
-            players can rejoin rooms and review history. Evidence photos are never copied into the
-            dashboard and still follow the deletion schedule. Deleting an account removes its login
-            and unlinks its game identities from the account.
+            Optional player accounts use Google sign-in and retain the verified email, profile
+            details, and game-result metadata needed to rejoin rooms and review history. Google
+            passwords and Google access tokens are never stored. Evidence photos are never copied
+            into the dashboard and still follow the deletion schedule. Deleting an account removes
+            its login and unlinks its game identities from the account.
           </p>
         </section>
         <p className="muted">
           This product notice explains current behavior. Final public legal language requires
           launch-owner approval.
         </p>
-        <Link className="button button-primary" href="/play">
+        <Link className="button button-primary" href="/play?entry=1">
           I understand — continue
         </Link>
       </main>

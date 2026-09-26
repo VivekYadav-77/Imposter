@@ -1,12 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { AVATARS, avatarById, type AvatarId } from "../../shared/avatars";
-import { userApi, errorMessage } from "../api/client";
-import { Button, Dialog, Field, Icon, PasswordField } from "./ui";
+import { Dialog, Icon } from "./ui";
 import { PlayerAvatar } from "./player-avatar";
+import { GoogleMark, GoogleSignInLink } from "./google-sign-in";
 
 export function AvatarChooser({
   value,
@@ -62,89 +60,43 @@ export function AvatarChooser({
   );
 }
 
-export function UserAuthForm({ mode }: { mode: "login" | "register" }) {
-  const router = useRouter();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [avatarId, setAvatarId] = useState<AvatarId>("fox");
+const authErrorMessages: Record<string, string> = {
+  cancelled: "Google sign-in was cancelled. You can try again whenever you’re ready.",
+  invalid_response: "Google returned an incomplete response. Please try again.",
+  oauth_state_invalid: "That sign-in attempt is no longer valid. Please start again.",
+  oauth_transaction_expired: "That sign-in attempt expired. Please start again.",
+  google_identity_conflict: "That Google account is already connected elsewhere.",
+  reauth_account_mismatch: "Use the same Google account currently connected to this dashboard.",
+  google_auth_failed: "Google sign-in could not be completed. Please try again.",
+};
 
-  async function submit(event: React.FormEvent) {
-    event.preventDefault();
-    if (busy) return;
-    setBusy(true);
-    setError("");
-    try {
-      if (mode === "register") await userApi.register({ email, password, displayName, avatarId });
-      else await userApi.login(email, password);
-      router.push("/dashboard");
-      router.refresh();
-    } catch (value) {
-      setError(errorMessage(value));
-      setBusy(false);
-    }
-  }
-
+export function GoogleSignInCard({ authError }: { authError?: string }) {
+  const message = authError
+    ? (authErrorMessages[authError] ?? "Google sign-in could not be completed. Please try again.")
+    : "";
   return (
-    <form className="account-card account-auth-card" onSubmit={submit}>
-      {mode === "register" && (
-        <Field
-          label="Display name"
-          value={displayName}
-          maxLength={24}
-          autoComplete="nickname"
-          required
-          disabled={busy}
-          onChange={(event) => setDisplayName(event.target.value)}
-        />
-      )}
-      <Field
-        label="Email"
-        type="email"
-        value={email}
-        autoComplete="email"
-        required
-        disabled={busy}
-        onChange={(event) => setEmail(event.target.value)}
-      />
-      <PasswordField
-        label="Password"
-        value={password}
-        minLength={mode === "register" ? 12 : undefined}
-        maxLength={128}
-        autoComplete={mode === "register" ? "new-password" : "current-password"}
-        hint={
-          mode === "register"
-            ? "Use at least 12 characters. Password recovery is not available."
-            : undefined
-        }
-        required
-        disabled={busy}
-        onChange={(event) => setPassword(event.target.value)}
-      />
-      {mode === "register" && <AvatarChooser value={avatarId} onChange={setAvatarId} />}
-      {error && (
+    <section className="account-card account-auth-card google-sign-in-card">
+      <span className="google-sign-in-seal" aria-hidden="true">
+        <GoogleMark />
+      </span>
+      <div>
+        <p className="eyebrow">One secure sign-in</p>
+        <h2>Continue with Google</h2>
+        <p className="account-dialog-intro">
+          Your verified Google email connects your game history across devices. We never receive
+          your Google password.
+        </p>
+      </div>
+      {message && (
         <p className="form-error" role="alert">
           <Icon name="warning" size={18} aria-hidden="true" />
-          <span>{error}</span>
+          <span>{message}</span>
         </p>
       )}
-      <Button className="account-submit" loading={busy} type="submit">
-        {mode === "register" ? "Create account" : "Sign in"}
-      </Button>
+      <GoogleSignInLink intent="login" />
       <p className="account-switch">
-        {mode === "register" ? (
-          <>
-            Already registered? <Link href="/login">Sign in</Link>
-          </>
-        ) : (
-          <>
-            New here? <Link href="/register">Create an account</Link>
-          </>
-        )}
+        New players get an account automatically after Google verifies their email.
       </p>
-    </form>
+    </section>
   );
 }

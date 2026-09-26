@@ -10,7 +10,13 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
-import { ApiError, createIdempotencyKey, errorMessage, participantApi } from "../api/client";
+import {
+  ApiError,
+  createIdempotencyKey,
+  errorMessage,
+  participantApi,
+  userApi,
+} from "../api/client";
 import type {
   GameSnapshot,
   PublicPackSummary,
@@ -28,6 +34,7 @@ import {
 import { uploadEvidenceObject } from "../image/upload-evidence-object";
 import { avatarById, type AvatarId } from "../../shared/avatars";
 import { PlayerAvatar } from "./player-avatar";
+import { GoogleSignInLink } from "./google-sign-in";
 import {
   Badge,
   Banner,
@@ -2513,6 +2520,23 @@ function TerminalView({
   const [easterEgg, setEasterEgg] = useState(0);
   const [showResults, setShowResults] = useState(false);
   const [showVotes, setShowVotes] = useState(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  useEffect(() => {
+    if (game.phase !== "game_over") return;
+    const storageKey = `imposter-game:guest-upgrade:${game.id}`;
+    if (window.sessionStorage.getItem(storageKey)) return;
+    let active = true;
+    userApi.me().catch((cause: unknown) => {
+      if (active && cause instanceof ApiError && cause.status === 401) setUpgradeOpen(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, [game.id, game.phase]);
+  const keepPlayingAsGuest = () => {
+    window.sessionStorage.setItem(`imposter-game:guest-upgrade:${game.id}`, "dismissed");
+    setUpgradeOpen(false);
+  };
   const summary = game.resultSummary;
   const won =
     game.winner === "crew"
@@ -2712,6 +2736,25 @@ function TerminalView({
           </div>
         </section>
       </div>
+      <Dialog
+        open={upgradeOpen}
+        title="Keep this case in your history?"
+        onClose={keepPlayingAsGuest}
+      >
+        <div className="play-choice-dialog guest-upgrade-dialog">
+          <p>
+            Continue with Google to attach this completed game, your stats, and this room to your
+            private dashboard.
+          </p>
+          <div className="play-choice-actions">
+            <GoogleSignInLink intent="post_game" />
+            <Button variant="secondary" onClick={keepPlayingAsGuest}>
+              Keep playing as guest
+            </Button>
+          </div>
+          <small>You can still view results, replay, or leave without creating an account.</small>
+        </div>
+      </Dialog>
     </>
   );
 }

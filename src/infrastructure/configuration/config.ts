@@ -5,6 +5,11 @@ const booleanString = z
   .default("false")
   .transform((value) => value === "true");
 
+const optionalNonEmptyString = z.preprocess(
+  (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+  z.string().trim().min(1).optional(),
+);
+
 const configSchema = z
   .object({
     APP_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -44,6 +49,12 @@ const configSchema = z
     PARTICIPANT_SESSION_TTL_SECONDS: z.coerce.number().int().min(300).max(86400).default(7200),
     USER_SESSION_TOKEN_PEPPER: z.string().min(32).default("development-only-user-session-pepper"),
     USER_SESSION_TTL_SECONDS: z.coerce.number().int().min(3600).max(31536000).default(2592000),
+    GOOGLE_OAUTH_CLIENT_ID: optionalNonEmptyString,
+    GOOGLE_OAUTH_CLIENT_SECRET: optionalNonEmptyString,
+    GOOGLE_OAUTH_REDIRECT_URI: z.preprocess(
+      (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+      z.string().url().optional(),
+    ),
     ROOM_LOBBY_TTL_SECONDS: z.coerce.number().int().min(300).max(86400).default(7200),
     ROOM_CODE_COOLDOWN_SECONDS: z.coerce.number().int().min(0).max(604800).default(86400),
     HOST_DISCONNECT_GRACE_SECONDS: z.coerce.number().int().min(5).max(600).default(30),
@@ -91,6 +102,9 @@ const configSchema = z
       ],
       ["USER_SESSION_TOKEN_PEPPER", values.USER_SESSION_TOKEN_PEPPER.includes("development-only")],
       ["METRICS_BEARER_TOKEN", !values.METRICS_BEARER_TOKEN],
+      ["GOOGLE_OAUTH_CLIENT_ID", !values.GOOGLE_OAUTH_CLIENT_ID],
+      ["GOOGLE_OAUTH_CLIENT_SECRET", !values.GOOGLE_OAUTH_CLIENT_SECRET],
+      ["GOOGLE_OAUTH_REDIRECT_URI", !values.GOOGLE_OAUTH_REDIRECT_URI],
       ["SERVICE_VERSION", values.SERVICE_VERSION === "development"],
       ["CORS_ALLOWED_ORIGINS", values.CORS_ALLOWED_ORIGINS.trim().length === 0],
       ["CSP_IMAGE_SOURCES", values.CSP_IMAGE_SOURCES.trim().length === 0],
@@ -140,6 +154,16 @@ const configSchema = z
         });
       }
     }
+    if (
+      values.GOOGLE_OAUTH_REDIRECT_URI &&
+      new URL(values.GOOGLE_OAUTH_REDIRECT_URI).protocol !== "https:"
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["GOOGLE_OAUTH_REDIRECT_URI"],
+        message: "must use HTTPS in production",
+      });
+    }
   })
   .transform((values) => ({
     appEnv: values.APP_ENV,
@@ -178,6 +202,9 @@ const configSchema = z
     participantSessionTtlSeconds: values.PARTICIPANT_SESSION_TTL_SECONDS,
     userSessionTokenPepper: values.USER_SESSION_TOKEN_PEPPER,
     userSessionTtlSeconds: values.USER_SESSION_TTL_SECONDS,
+    googleOAuthClientId: values.GOOGLE_OAUTH_CLIENT_ID,
+    googleOAuthClientSecret: values.GOOGLE_OAUTH_CLIENT_SECRET,
+    googleOAuthRedirectUri: values.GOOGLE_OAUTH_REDIRECT_URI,
     roomLobbyTtlSeconds: values.ROOM_LOBBY_TTL_SECONDS,
     roomCodeCooldownSeconds: values.ROOM_CODE_COOLDOWN_SECONDS,
     hostDisconnectGraceSeconds: values.HOST_DISCONNECT_GRACE_SECONDS,

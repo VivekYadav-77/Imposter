@@ -119,18 +119,6 @@ export async function apiRequest<T>(
 
 const json = (body: unknown) => JSON.stringify(body);
 export const userApi = {
-  register: (body: { email: string; password: string; displayName: string; avatarId: AvatarId }) =>
-    apiRequest<{ user: UserProfile; linkStatus: string | null }>("/api/v1/accounts", {
-      method: "POST",
-      body: json(body),
-      retry: false,
-    }),
-  login: (email: string, password: string) =>
-    apiRequest<{ user: UserProfile; linkStatus: string | null }>("/api/v1/account-sessions", {
-      method: "POST",
-      body: json({ email, password }),
-      retry: false,
-    }),
   me: () => apiRequest<UserProfile>("/api/v1/me", { retry: false }),
   updateProfile: (body: { displayName?: string; avatarId?: AvatarId }) =>
     apiRequest<UserProfile>("/api/v1/me", { method: "PATCH", body: json(body), retry: false }),
@@ -151,16 +139,10 @@ export const userApi = {
     apiRequest<void>(`/api/v1/me/sessions/${id}`, { method: "DELETE", retry: false }),
   revokeOthers: () =>
     apiRequest<void>("/api/v1/me/sessions/others", { method: "DELETE", retry: false }),
-  changePassword: (currentPassword: string, newPassword: string) =>
-    apiRequest<void>("/api/v1/me/password", {
-      method: "PUT",
-      body: json({ currentPassword, newPassword }),
-      retry: false,
-    }),
   logout: () =>
     apiRequest<void>("/api/v1/account-sessions/current", { method: "DELETE", retry: false }),
-  deleteAccount: (password: string) =>
-    apiRequest<void>("/api/v1/me", { method: "DELETE", body: json({ password }), retry: false }),
+  deleteAccount: () =>
+    apiRequest<void>("/api/v1/me", { method: "DELETE", body: "{}", retry: false }),
 };
 export const participantApi = {
   createRoom: (

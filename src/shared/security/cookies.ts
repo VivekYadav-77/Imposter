@@ -3,6 +3,7 @@ import type { IncomingMessage } from "node:http";
 export const ADMIN_COOKIE_NAME = "__Host-admin_session";
 export const PARTICIPANT_COOKIE_NAME = "__Host-participant_session";
 export const USER_COOKIE_NAME = "__Host-user_session";
+export const OAUTH_COOKIE_NAME = "__Host-oauth_transaction";
 
 export function readCookie(request: IncomingMessage, name: string): string | null {
   const header = request.headers.cookie;
@@ -35,4 +36,12 @@ export function userSessionCookie(token: string, maxAgeSeconds: number): string 
 }
 export function clearUserSessionCookie(): string {
   return `${USER_COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict`;
+}
+
+export function oauthTransactionCookie(state: string, maxAgeSeconds = 600): string {
+  return `${OAUTH_COOKIE_NAME}=${encodeURIComponent(state)}; Path=/; Max-Age=${maxAgeSeconds}; HttpOnly; Secure; SameSite=Lax`;
+}
+
+export function clearOAuthTransactionCookie(): string {
+  return `${OAUTH_COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`;
 }

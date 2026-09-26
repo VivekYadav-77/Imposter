@@ -2203,6 +2203,59 @@ html[data-theme="light"] .dashboard-page {
   width: 100%;
   margin-top: 2px;
 }
+.google-sign-in-card {
+  align-content: center;
+  min-height: 330px;
+}
+.google-sign-in-seal {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--account-line);
+  border-radius: 18px;
+  background: var(--account-soft);
+}
+.google-sign-in-card h2 {
+  margin: 5px 0 8px;
+  font: 800 clamp(1.8rem, 4vw, 2.6rem) var(--display);
+  text-transform: uppercase;
+}
+.google-auth-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 48px;
+  border: 1px solid #747775;
+  background: #fff;
+  color: #1f1f1f;
+  text-decoration: none;
+}
+.google-auth-button:hover {
+  border-color: #5f6368;
+  background: #f8faff;
+  color: #1f1f1f;
+  box-shadow: 0 1px 3px rgb(60 64 67 / 30%);
+}
+.google-auth-button:focus-visible {
+  outline: 3px solid color-mix(in srgb, #4285f4 45%, transparent);
+  outline-offset: 2px;
+}
+.google-mark {
+  width: 26px;
+  height: 26px;
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  background: #fff;
+}
+.google-mark svg {
+  width: 19px;
+  height: 19px;
+  display: block;
+}
 .account-avatar-choice {
   display: grid;
   gap: 7px;
@@ -4145,6 +4198,42 @@ html[data-theme="light"] .dashboard-page {
   justify-content: flex-end;
   gap: 10px;
   margin-top: 20px;
+}
+.dialog:has(.play-choice-dialog) {
+  width: min(calc(100% - 24px), 500px);
+}
+.play-choice-dialog {
+  display: grid;
+  gap: 18px;
+}
+.play-choice-dialog > p,
+.play-choice-dialog > small {
+  margin: 0;
+  color: var(--muted);
+}
+.play-choice-dialog > small {
+  line-height: 1.5;
+}
+.play-choice-actions {
+  display: grid;
+  gap: 10px;
+}
+.play-choice-actions .button {
+  width: 100%;
+  min-height: 50px;
+}
+
+@media (max-width: 520px) {
+  .dialog:has(.play-choice-dialog) {
+    width: calc(100% - 16px);
+    max-height: calc(100dvh - max(16px, env(safe-area-inset-top)));
+    margin: auto auto max(8px, env(safe-area-inset-bottom));
+    padding: 18px 16px max(18px, env(safe-area-inset-bottom));
+    border-radius: 20px;
+  }
+  .play-choice-actions .button {
+    min-height: 52px;
+  }
 }
 .task-description {
   font-size: 1.1rem;

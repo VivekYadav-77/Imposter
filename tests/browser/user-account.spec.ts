@@ -179,38 +179,30 @@ async function mockAccountApi(page: Page) {
   });
 }
 
-test("registration keeps the primary action close and uses an accessible avatar dialog", async ({
-  page,
-}) => {
+test("Google is the only player sign-in method", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/login");
+  const google = page.getByRole("link", { name: "Continue with Google" });
+  await expect(google).toHaveAttribute("href", "/api/v1/auth/google/start?intent=login");
+  await expect(page.getByLabel("Password")).toHaveCount(0);
   await page.goto("/register");
-
-  const submit = page.getByRole("button", { name: "Create account" });
-  const submitBox = await submit.boundingBox();
-  expect(submitBox).not.toBeNull();
-  expect(submitBox!.y + submitBox!.height).toBeLessThanOrEqual(844);
-
-  await page.getByRole("button", { name: /Fox Selected operative/ }).click();
-  const dialog = page.getByRole("dialog", { name: "Choose your operative" });
-  await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole("radio")).toHaveCount(18);
-  await dialog.getByRole("radio", { name: /Owl/ }).click();
-  await expect(dialog).toBeHidden();
-  await expect(page.getByRole("button", { name: /Owl Selected operative/ })).toBeVisible();
-
-  await page.getByRole("textbox", { name: "Password" }).fill("a secure password");
-  await page.getByRole("button", { name: "Show password" }).click();
-  await expect(page.getByRole("textbox", { name: "Password" })).toHaveAttribute("type", "text");
+  await expect(page).toHaveURL(/\/login$/);
 });
 
-test("avatar dialog stays contained and usable on the narrowest supported phone", async ({
+test("play choice stays contained and usable on the narrowest supported phone", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 320, height: 720 });
-  await page.goto("/register");
-  await page.getByRole("button", { name: /Fox Selected operative/ }).click();
+  await page.route("**/api/v1/me", async (route) => {
+    await route.fulfill({
+      status: 401,
+      contentType: "application/json",
+      body: JSON.stringify({ error: { code: "USER_SESSION_INVALID", message: "Sign in." } }),
+    });
+  });
+  await page.goto("/play?entry=1");
 
-  const dialog = page.getByRole("dialog", { name: "Choose your operative" });
+  const dialog = page.getByRole("dialog", { name: "Choose how to play" });
   await expect(dialog).toBeVisible();
   const box = await dialog.boundingBox();
   expect(box).not.toBeNull();
@@ -219,14 +211,57 @@ test("avatar dialog stays contained and usable on the narrowest supported phone"
   expect(box!.x + box!.width).toBeLessThanOrEqual(312);
   expect(box!.y + box!.height).toBeLessThanOrEqual(712);
 
-  const options = await dialog.getByRole("radio").evaluateAll((radios) =>
-    radios.map((radio) => {
-      const bounds = radio.getBoundingClientRect();
+  const options = await dialog.locator(".play-choice-actions .button").evaluateAll((buttons) =>
+    buttons.map((button) => {
+      const bounds = button.getBoundingClientRect();
       return { width: bounds.width, height: bounds.height };
     }),
   );
-  expect(options).toHaveLength(18);
+  expect(options).toHaveLength(2);
   expect(options.every(({ width, height }) => width >= 44 && height >= 44)).toBe(true);
+  const accessibility = await new AxeBuilder({ page }).include(".dialog").analyze();
+  expect(
+    accessibility.violations.filter(
+      (violation) => violation.impact === "critical" || violation.impact === "serious",
+    ),
+  ).toEqual([]);
+  await dialog.getByRole("button", { name: "Play as a guest" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole("button", { name: "Create room" })).toBeVisible();
+});
+
+test("play choice remains within phone, tablet, laptop, and desktop viewports", async ({
+  page,
+}) => {
+  await page.route("**/api/v1/me", (route) =>
+    route.fulfill({
+      status: 401,
+      contentType: "application/json",
+      body: JSON.stringify({ error: { code: "USER_SESSION_INVALID", message: "Sign in." } }),
+    }),
+  );
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 768, height: 1024 },
+    { width: 1366, height: 768 },
+    { width: 1920, height: 1080 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.goto("/play?entry=1");
+    const dialog = page.getByRole("dialog", { name: "Choose how to play" });
+    await expect(dialog).toBeVisible();
+    const box = await dialog.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.y).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width);
+    expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height);
+    const overflow = await page.locator("html").evaluate((element) => ({
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+    }));
+    expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth + 1);
+  }
 });
 
 test("desktop dashboard uses the available content canvas", async ({ page }) => {
@@ -246,35 +281,121 @@ test("desktop dashboard uses the available content canvas", async ({ page }) => 
   expect(widths.main).toBeGreaterThanOrEqual(widths.available * 0.9);
 });
 
-test("auth forms prevent duplicate submission and preserve their API payloads", async ({
-  page,
-}) => {
-  let requests = 0;
-  let body: unknown;
-  await page.route("**/api/v1/accounts", async (route) => {
-    requests += 1;
-    body = route.request().postDataJSON();
-    await new Promise((resolve) => setTimeout(resolve, 100));
+test("signed-in players bypass the play choice", async ({ page }) => {
+  await mockAccountApi(page);
+  await page.route("**/api/v1/rooms/current", async (route) => {
     await route.fulfill({
-      status: 200,
+      status: 401,
       contentType: "application/json",
-      body: JSON.stringify({ data: {} }),
+      body: JSON.stringify({ error: { code: "SESSION_INVALID", message: "No active room." } }),
     });
   });
-  await mockAccountApi(page);
-  await page.goto("/register");
-  await page.getByLabel("Display name").fill("Nova");
-  await page.getByLabel("Email").fill("nova@example.com");
-  await page.getByRole("textbox", { name: "Password" }).fill("a secure password");
-  await page.getByRole("button", { name: "Create account" }).dblclick();
-  await expect(page).toHaveURL(/\/dashboard$/);
-  expect(requests).toBe(1);
-  expect(body).toEqual({
-    email: "nova@example.com",
-    password: "a secure password",
-    displayName: "Nova",
-    avatarId: "fox",
-  });
+  await page.goto("/play?entry=1");
+  await expect(page.getByRole("dialog", { name: "Choose how to play" })).toBeHidden();
+  await expect(page.getByRole("button", { name: "Create room" })).toBeVisible();
+});
+
+test("completed guests can save the game with Google or keep playing as a guest", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const room = {
+    id: "room-1",
+    code: "Q7KM2",
+    status: "completed",
+    participants: [],
+    self: {
+      participantId: "participant-1",
+      nickname: "Nova",
+      avatarId: "fox",
+      isHost: true,
+      capabilities: [],
+    },
+    gameId: "game-1",
+  };
+  const game = {
+    id: "game-1",
+    roomId: "room-1",
+    phase: "game_over",
+    stateVersion: 9,
+    winner: "crew",
+    endReason: "tasks_completed",
+    participants: [
+      {
+        id: "participant-1",
+        nickname: "Nova",
+        avatarId: "fox",
+        isHost: true,
+        lifeStatus: "alive",
+      },
+    ],
+    self: {
+      participantId: "participant-1",
+      avatarId: "fox",
+      role: "crew",
+      lifeStatus: "alive",
+      capabilities: [],
+      killableParticipantIds: [],
+      knownEliminatedParticipantIds: [],
+      crewRole: null,
+    },
+    assignments: [],
+    progress: { percent: 100 },
+    meetingRules: {
+      durationSeconds: 60,
+      votingMode: "timed",
+      voteVisibility: "private",
+      requiresCompletedTask: false,
+      maxPerPlayer: 1,
+      calledBySelf: 0,
+      remainingForSelf: 1,
+      hasCompletedTask: true,
+    },
+    meeting: null,
+    resultSummary: {
+      durationSeconds: 420,
+      completedTasks: 3,
+      totalTasks: 3,
+      players: [
+        {
+          id: "participant-1",
+          nickname: "Nova",
+          avatarId: "fox",
+          role: "crew",
+          crewRole: null,
+          lifeStatus: "alive",
+          completedTasks: 3,
+          totalTasks: 3,
+        },
+      ],
+    },
+  };
+  await page.route("**/api/v1/rooms/current", (route) =>
+    route.fulfill({ contentType: "application/json", body: JSON.stringify({ data: room }) }),
+  );
+  await page.route("**/api/v1/games/current/snapshot", (route) =>
+    route.fulfill({ contentType: "application/json", body: JSON.stringify({ data: game }) }),
+  );
+  await page.route("**/api/v1/me", (route) =>
+    route.fulfill({
+      status: 401,
+      contentType: "application/json",
+      body: JSON.stringify({ error: { code: "USER_SESSION_INVALID", message: "Sign in." } }),
+    }),
+  );
+
+  await page.goto("/room");
+  const dialog = page.getByRole("dialog", { name: "Keep this case in your history?" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("link", { name: "Continue with Google" })).toHaveAttribute(
+    "href",
+    "/api/v1/auth/google/start?intent=post_game",
+  );
+  await dialog.getByRole("button", { name: "Keep playing as guest" }).click();
+  await expect(dialog).toBeHidden();
+  await page.reload();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole("heading", { name: "Crew wins" })).toBeVisible();
 });
 
 test("mobile dashboard navigation is active, reachable, and does not cover the page end", async ({
@@ -320,13 +441,8 @@ test("settings tabs support arrow keys and destructive confirmation", async ({ p
   const profileTab = page.getByRole("tab", { name: "Profile" });
   await profileTab.focus();
   await profileTab.press("ArrowRight");
-  await expect(page.getByRole("tab", { name: "Security" })).toHaveAttribute(
-    "aria-selected",
-    "true",
-  );
-  await page.getByRole("tab", { name: "Account" }).click();
-  await page.getByRole("textbox", { name: "Confirm password" }).fill("a secure password");
-  await page.getByRole("button", { name: "Delete account" }).click();
+  await expect(page.getByRole("tab", { name: "Devices" })).toHaveAttribute("aria-selected", "true");
+  await page.goto("/dashboard/settings?reauthenticated=1");
   const dialog = page.getByRole("dialog", { name: "Delete your account?" });
   await expect(dialog).toBeVisible();
   await dialog.getByRole("button", { name: "Cancel" }).click();
@@ -378,7 +494,6 @@ for (const theme of ["light", "dark"] as const) {
       await mockAccountApi(page);
       for (const visual of [
         { name: "login", path: "/login" },
-        { name: "register", path: "/register" },
         { name: "overview", path: "/dashboard" },
         { name: "history", path: "/dashboard/history" },
         { name: "result", path: "/dashboard/history/game-1" },

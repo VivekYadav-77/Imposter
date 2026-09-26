@@ -8,14 +8,8 @@ import type { AppConfig } from "../infrastructure/configuration/config.js";
 import type { Metrics } from "../infrastructure/observability/metrics.js";
 import { MemoryRateLimiter } from "../infrastructure/security/rate-limiter.js";
 import type { AdminAuthService } from "../modules/admin-auth/service.js";
-import type { UserAuthService, UserPrincipal } from "../modules/user-auth/service.js";
-import {
-  registerUserSchema,
-  loginUserSchema,
-  updateProfileSchema,
-  changePasswordSchema,
-  confirmPasswordSchema,
-} from "../modules/user-auth/schemas.js";
+import type { OAuthIntent, UserAuthService, UserPrincipal } from "../modules/user-auth/service.js";
+import { updateProfileSchema } from "../modules/user-auth/schemas.js";
 import {
   createPackSchema,
   loginSchema,
@@ -56,8 +50,11 @@ import {
   participantSessionCookie,
   readCookie,
   USER_COOKIE_NAME,
+  OAUTH_COOKIE_NAME,
   userSessionCookie,
   clearUserSessionCookie,
+  oauthTransactionCookie,
+  clearOAuthTransactionCookie,
 } from "../shared/security/cookies.js";
 import { readJsonBody } from "./body.js";
 import { sendError, sendJson } from "./http.js";
@@ -213,9 +210,10 @@ export function createApiHandler(dependencies: ApiDependencies): ApiHandler {
       } else if (
         dependencies.userAuth &&
         dependencies.rooms &&
-        (path.startsWith("/api/v1/accounts") ||
-          path.startsWith("/api/v1/account-sessions") ||
-          path.startsWith("/api/v1/me"))
+        (path.startsWith("/api/v1/auth/google/") ||
+          path === "/api/v1/account-sessions/current" ||
+          path === "/api/v1/me" ||
+          path.startsWith("/api/v1/me/"))
       ) {
         await handleUserRoute(
           request,
@@ -570,46 +568,72 @@ async function handleUserRoute(
   const method = request.method ?? "GET";
   if (["POST", "PATCH", "PUT", "DELETE"].includes(method) && readCookie(request, USER_COOKIE_NAME))
     validateOriginForCookieMutation(request, config);
-  if (method === "POST" && path === "/api/v1/accounts") {
-    const body = await validatedBody(request, config.maxJsonBodyBytes, registerUserSchema);
-    const created = await users.register(body, userRequestMeta(request, config));
+  if (method === "GET" && path === "/api/v1/auth/google/start") {
+    const url = new URL(request.url ?? path, "http://localhost");
+    const intentValue = url.searchParams.get("intent") ?? "login";
+    const intents: OAuthIntent[] = ["login", "play", "post_game", "delete"];
+    if (!intents.includes(intentValue as OAuthIntent))
+      throw new ApplicationError(422, "VALIDATION_FAILED", "Choose a valid sign-in intent.");
+    const intent = intentValue as OAuthIntent;
     const participant = await participantPrincipalOptional(request, rooms);
-    const linkStatus = participant
-      ? await users.claimParticipant(
-          { userId: created.user.id, sessionId: created.session.sessionId },
-          participant.participantId,
-        )
-      : null;
-    response.setHeader(
-      "Set-Cookie",
-      userSessionCookie(created.session.token, config.userSessionTtlSeconds),
+    const currentUser = await users.authenticate(readCookie(request, USER_COOKIE_NAME));
+    const transaction = await users.beginGoogleAuth(
+      intent,
+      participant?.participantId ?? null,
+      currentUser,
     );
-    sendJson(
-      response,
-      201,
-      successEnvelope({ user: created.user, linkStatus }, requestId),
-      requestId,
-    );
+    response.statusCode = 302;
+    response.setHeader("Location", transaction.authorizationUrl);
+    response.setHeader("Cache-Control", "no-store");
+    response.setHeader("Set-Cookie", oauthTransactionCookie(transaction.state));
+    response.setHeader("X-Request-ID", requestId);
+    response.end();
     return;
   }
-  if (method === "POST" && path === "/api/v1/account-sessions") {
-    const body = await validatedBody(request, config.maxJsonBodyBytes, loginUserSchema);
-    const logged = await users.login(body, userRequestMeta(request, config));
-    const principal = { userId: logged.user.id, sessionId: logged.session.sessionId };
-    const participant = await participantPrincipalOptional(request, rooms);
-    const linkStatus = participant
-      ? await users.claimParticipant(principal, participant.participantId)
-      : null;
-    response.setHeader(
-      "Set-Cookie",
-      userSessionCookie(logged.session.token, config.userSessionTtlSeconds),
-    );
-    sendJson(
-      response,
-      200,
-      successEnvelope({ user: logged.user, linkStatus }, requestId),
-      requestId,
-    );
+  if (method === "GET" && path === "/api/v1/auth/google/callback") {
+    const url = new URL(request.url ?? path, "http://localhost");
+    const state = url.searchParams.get("state");
+    const code = url.searchParams.get("code");
+    const providerError = url.searchParams.get("error");
+    if (providerError || !state || !code) {
+      const reason = providerError === "access_denied" ? "cancelled" : "invalid_response";
+      response.statusCode = 302;
+      response.setHeader("Location", `/login?authError=${reason}`);
+      response.setHeader("Set-Cookie", clearOAuthTransactionCookie());
+      response.setHeader("X-Request-ID", requestId);
+      response.end();
+      return;
+    }
+    try {
+      const completed = await users.completeGoogleAuth({
+        state,
+        cookieState: readCookie(request, OAUTH_COOKIE_NAME),
+        code,
+        meta: userRequestMeta(request, config),
+      });
+      if (completed.session && completed.participantId)
+        await users.claimParticipant(
+          { userId: completed.user.id, sessionId: completed.session.sessionId },
+          completed.participantId,
+        );
+      const cookies = [clearOAuthTransactionCookie()];
+      if (completed.session)
+        cookies.unshift(userSessionCookie(completed.session.token, config.userSessionTtlSeconds));
+      response.statusCode = 302;
+      response.setHeader("Location", completed.returnTo);
+      response.setHeader("Set-Cookie", cookies);
+      response.setHeader("Cache-Control", "no-store");
+      response.setHeader("X-Request-ID", requestId);
+      response.end();
+    } catch (error) {
+      const code = error instanceof ApplicationError ? error.code : "GOOGLE_AUTH_FAILED";
+      response.statusCode = 302;
+      response.setHeader("Location", `/login?authError=${encodeURIComponent(code.toLowerCase())}`);
+      response.setHeader("Set-Cookie", clearOAuthTransactionCookie());
+      response.setHeader("Cache-Control", "no-store");
+      response.setHeader("X-Request-ID", requestId);
+      response.end();
+    }
     return;
   }
   const principal = await requireUser(request, users);
@@ -628,16 +652,9 @@ async function handleUserRoute(
     return;
   }
   if (method === "DELETE" && path === "/api/v1/me") {
-    const body = await validatedBody(request, config.maxJsonBodyBytes, confirmPasswordSchema);
-    await users.deleteAccount(principal, body.password);
+    await validatedBody(request, config.maxJsonBodyBytes, emptyBodySchema);
+    await users.deleteAccount(principal);
     response.setHeader("Set-Cookie", clearUserSessionCookie());
-    response.statusCode = 204;
-    response.end();
-    return;
-  }
-  if (method === "PUT" && path === "/api/v1/me/password") {
-    const body = await validatedBody(request, config.maxJsonBodyBytes, changePasswordSchema);
-    await users.changePassword(principal, body.currentPassword, body.newPassword);
     response.statusCode = 204;
     response.end();
     return;

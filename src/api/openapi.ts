@@ -767,33 +767,32 @@ export const openApiDocument: OpenAPIObject = {
         },
       },
     },
-    "/api/v1/accounts": {
-      post: {
-        operationId: "registerUser",
-        requestBody: {
-          required: true,
-          content: {
-            "application/json": {
-              schema: {
-                type: "object",
-                required: ["email", "password", "displayName", "avatarId"],
-                properties: {
-                  email: { type: "string", format: "email" },
-                  password: { type: "string", minLength: 12, maxLength: 128 },
-                  displayName: { type: "string", minLength: 1, maxLength: 24 },
-                  avatarId: { $ref: "#/components/schemas/AvatarId" },
-                },
-              },
-            },
+    "/api/v1/auth/google/start": {
+      get: {
+        operationId: "startGoogleSignIn",
+        parameters: [
+          {
+            name: "intent",
+            in: "query",
+            schema: { type: "string", enum: ["login", "play", "post_game", "delete"] },
           },
+        ],
+        responses: {
+          "302": { description: "Redirect to Google authorization" },
+          "422": error,
+          "503": error,
         },
-        responses: { "201": envelope({ type: "object" }), "409": error, "422": error },
       },
     },
-    "/api/v1/account-sessions": {
-      post: {
-        operationId: "loginUser",
-        responses: { "200": envelope({ type: "object" }), "401": error, "422": error },
+    "/api/v1/auth/google/callback": {
+      get: {
+        operationId: "completeGoogleSignIn",
+        parameters: [
+          { name: "state", in: "query", schema: { type: "string" } },
+          { name: "code", in: "query", schema: { type: "string" } },
+          { name: "error", in: "query", schema: { type: "string" } },
+        ],
+        responses: { "302": { description: "Redirect to the safe application destination" } },
       },
     },
     "/api/v1/account-sessions/current": {
@@ -817,7 +816,11 @@ export const openApiDocument: OpenAPIObject = {
       delete: {
         operationId: "deleteUserAccount",
         security: userSecurity,
-        responses: { "204": { description: "Account deleted" }, "401": error },
+        responses: {
+          "204": { description: "Account deleted after recent Google re-authentication" },
+          "401": error,
+          "403": error,
+        },
       },
     },
     "/api/v1/me/dashboard": {
@@ -876,13 +879,6 @@ export const openApiDocument: OpenAPIObject = {
           },
         ],
         responses: { "204": { description: "Session revoked" }, "401": error },
-      },
-    },
-    "/api/v1/me/password": {
-      put: {
-        operationId: "changeUserPassword",
-        security: userSecurity,
-        responses: { "204": { description: "Password changed" }, "401": error, "422": error },
       },
     },
     "/api/v1/me/participations/{participantId}/rejoin": {

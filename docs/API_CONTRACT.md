@@ -15,12 +15,14 @@
 
 ### Authentication
 
-Optional player accounts use the independent `__Host-user_session` Secure,
-HttpOnly, SameSite=Strict cookie. `POST /api/v1/accounts` registers and signs in;
-`POST /api/v1/account-sessions` signs in; and account-scoped profile, dashboard,
-history, rejoin, password, and device-session operations live under `/api/v1/me`.
-Email is an unverified login identifier in v1 and cannot be changed or recovered.
-Room participant credentials remain separate, so guest gameplay is unchanged.
+Optional player accounts use Google OpenID Connect and the independent
+`__Host-user_session` Secure, HttpOnly, SameSite=Strict cookie. Google sign-in
+starts at `GET /api/v1/auth/google/start` and returns through the single-use
+`GET /api/v1/auth/google/callback`. Account-scoped profile, dashboard, history,
+rejoin, deletion, and device-session operations live under `/api/v1/me`.
+Only verified Google email addresses are accepted. Room participant credentials
+remain separate, so guest gameplay is unchanged and can be claimed after sign-in.
+Player email/password registration and sign-in endpoints do not exist.
 
 - Participant API: `Authorization: Bearer <opaque-participant-token>` or equivalent same-origin Secure HttpOnly web cookie.
 - Admin API: Secure HttpOnly admin session cookie.

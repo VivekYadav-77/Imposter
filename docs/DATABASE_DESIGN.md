@@ -18,8 +18,13 @@ The exact DDL and query library will be selected in Phase 1. Names below are the
 
 ## 2. Domain diagrams
 
-`user_accounts` stores optional persistent identities and scrypt password hashes;
-`user_sessions` stores hashed opaque credentials and revocation data.
+`user_accounts` stores optional persistent player profiles; `user_identities` maps
+Google's stable subject to those accounts, and `user_sessions` stores hashed opaque
+credentials, revocation data, and recent re-authentication time. Short-lived
+`oauth_transactions` preserve state, nonce, intent, and an optional guest participant
+claim across the Google redirect without storing Google access or refresh tokens.
+The nullable legacy password-hash column is retained only for rollback compatibility
+and is not read by public authentication code.
 `participants.user_id` remains nullable for guests and uses `ON DELETE SET NULL`.
 Rooms may own multiple immutable game rounds, with current gameplay selecting the
 latest `(room_id, started_at)` row.

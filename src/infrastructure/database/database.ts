@@ -129,7 +129,7 @@ export interface UserAccountsTable {
   email: string;
   display_name: string;
   default_avatar_id: AvatarId;
-  password_hash: string;
+  password_hash: string | null;
   status: "active" | "disabled";
   created_at: Timestamp;
   updated_at: Timestamp;
@@ -144,6 +144,30 @@ export interface UserSessionsTable {
   expires_at: Timestamp;
   last_used_at: NullableTimestamp;
   revoked_at: NullableTimestamp;
+  reauthenticated_at: NullableTimestamp;
+}
+
+export interface UserIdentitiesTable {
+  id: string;
+  user_id: string;
+  provider: "google";
+  provider_subject: string;
+  email: string;
+  created_at: Timestamp;
+  updated_at: Timestamp;
+}
+
+export interface OAuthTransactionsTable {
+  state_hash: string;
+  nonce: string;
+  intent: "login" | "play" | "post_game" | "delete";
+  participant_id: string | null;
+  current_user_id: string | null;
+  current_session_id: string | null;
+  return_to: string;
+  expires_at: Timestamp;
+  consumed_at: NullableTimestamp;
+  created_at: Timestamp;
 }
 
 export interface ParticipantSessionsTable {
@@ -356,6 +380,8 @@ export interface JobsTable {
 export interface DatabaseSchema {
   "app.user_accounts": UserAccountsTable;
   "app.user_sessions": UserSessionsTable;
+  "app.user_identities": UserIdentitiesTable;
+  "app.oauth_transactions": OAuthTransactionsTable;
   "app.admin_users": AdminUsersTable;
   "app.admin_sessions": AdminSessionsTable;
   "app.task_packs": TaskPacksTable;

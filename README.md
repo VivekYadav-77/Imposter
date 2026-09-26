@@ -12,7 +12,7 @@ The backend gameplay loop and production-readiness baseline are complete. HTTP `
 
 ## Local setup
 
-1. Copy `.env.example` to `.env` and set a local `DATABASE_URL`. Do not commit it.
+1. Copy `.env.example` to `.env`, set a local `DATABASE_URL`, and add a Google OAuth Web client ID, client secret, and the exact local callback URI. Do not commit it.
 2. Install PostgreSQL 16 or newer locally, start it, and create the database named in `DATABASE_URL`.
 3. Run `npm ci`.
 4. Run `npm run migrate:up`.
@@ -21,6 +21,8 @@ The backend gameplay loop and production-readiness baseline are complete. HTTP `
 7. Check `GET http://127.0.0.1:3000/health/live` and `/health/ready`.
 
 Uploaded evidence is stored under `EVIDENCE_LOCAL_DIRECTORY` (default: `.data/evidence`). Keep that directory writable by the application and include it in your server backup policy if the files must survive a server loss.
+
+For local Google sign-in, register `http://localhost:3000/api/v1/auth/google/callback` (or the exact host and port you use) as an authorized redirect URI. Production must use the HTTPS callback configured by `GOOGLE_OAUTH_REDIRECT_URI`.
 
 The application deliberately fails startup when required configuration is absent. Production API documentation is disabled unless `EXPOSE_API_DOCS=true` is explicitly set.
 

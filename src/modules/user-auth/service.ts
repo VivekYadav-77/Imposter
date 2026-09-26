@@ -3,28 +3,38 @@ import { sql } from "kysely";
 import type { Database } from "../../infrastructure/database/database.js";
 import type { AppConfig } from "../../infrastructure/configuration/config.js";
 import { ApplicationError } from "../../shared/errors/application-error.js";
-import { hashPassword, verifyPassword } from "../../shared/security/password.js";
 import { createOpaqueToken, hashSecret } from "../../shared/security/tokens.js";
 import type { AvatarId } from "../../shared/avatars.js";
-import { MemoryLoginThrottle } from "../admin-auth/throttle.js";
+import {
+  createGoogleIdentityProvider,
+  type GoogleIdentity,
+  type GoogleIdentityProvider,
+} from "./google-oauth.js";
 
-const DUMMY_HASH = `scrypt$32768$8$1$${Buffer.alloc(16).toString("base64url")}$${Buffer.alloc(64).toString("base64url")}`;
 export interface UserPrincipal {
   userId: string;
   sessionId: string;
 }
 type RequestMeta = { ip: string; userAgent: string };
+export type OAuthIntent = "login" | "play" | "post_game" | "delete";
+
+const OAUTH_TRANSACTION_TTL_MS = 10 * 60 * 1000;
+const DELETION_REAUTH_TTL_MS = 5 * 60 * 1000;
+const OAUTH_RETURN_TO: Record<OAuthIntent, string> = {
+  login: "/dashboard",
+  play: "/dashboard",
+  post_game: "/dashboard",
+  delete: "/dashboard/settings?reauthenticated=1",
+};
 
 export class UserAuthService {
-  private readonly throttle: MemoryLoginThrottle;
+  private readonly google: GoogleIdentityProvider | null;
   constructor(
     private readonly db: Database,
     private readonly config: AppConfig,
+    google?: GoogleIdentityProvider | null,
   ) {
-    this.throttle = new MemoryLoginThrottle(
-      config.adminLoginMaxAttempts,
-      config.adminLoginWindowSeconds,
-    );
+    this.google = google === undefined ? createGoogleIdentityProvider(config) : google;
   }
   private tokenHash(token: string) {
     return hashSecret(token, this.config.userSessionTokenPepper);
@@ -49,36 +59,197 @@ export class UserAuthService {
         expires_at: expiresAt,
         last_used_at: now,
         revoked_at: null,
+        reauthenticated_at: null,
       })
       .execute();
     return { token, expiresAt: expiresAt.toISOString(), sessionId: id };
   }
-  async register(
-    input: { email: string; password: string; displayName: string; avatarId: AvatarId },
-    meta: RequestMeta,
+  async beginGoogleAuth(
+    intent: OAuthIntent,
+    participantId: string | null,
+    principal: UserPrincipal | null,
   ) {
-    const existing = await this.db
-      .selectFrom("app.user_accounts")
-      .select("id")
-      .where("email", "=", input.email)
-      .executeTakeFirst();
-    if (existing)
+    if (!this.google)
       throw new ApplicationError(
-        409,
-        "EMAIL_IN_USE",
-        "An account already uses that email address.",
+        503,
+        "GOOGLE_AUTH_UNAVAILABLE",
+        "Google sign-in is not configured yet.",
       );
-    const id = randomUUID();
-    try {
+    if (intent === "delete" && !principal)
+      throw new ApplicationError(401, "USER_SESSION_INVALID", "Sign in to continue.");
+    const state = createOpaqueToken();
+    const nonce = createOpaqueToken();
+    const expiresAt = new Date(Date.now() + OAUTH_TRANSACTION_TTL_MS);
+    await this.db
+      .deleteFrom("app.oauth_transactions")
+      .where("expires_at", "<", new Date())
+      .execute();
+    await this.db
+      .insertInto("app.oauth_transactions")
+      .values({
+        state_hash: this.tokenHash(state),
+        nonce,
+        intent,
+        participant_id: intent === "delete" ? null : participantId,
+        current_user_id: principal?.userId ?? null,
+        current_session_id: principal?.sessionId ?? null,
+        return_to: OAUTH_RETURN_TO[intent],
+        expires_at: expiresAt,
+        consumed_at: null,
+      })
+      .execute();
+    return {
+      state,
+      expiresAt: expiresAt.toISOString(),
+      authorizationUrl: this.google.authorizationUrl({ state, nonce }),
+    };
+  }
+
+  async completeGoogleAuth(input: {
+    state: string;
+    cookieState: string | null;
+    code: string;
+    meta: RequestMeta;
+  }) {
+    if (!this.google)
+      throw new ApplicationError(503, "GOOGLE_AUTH_UNAVAILABLE", "Google sign-in is unavailable.");
+    if (!input.cookieState || input.cookieState !== input.state)
+      throw new ApplicationError(
+        400,
+        "OAUTH_STATE_INVALID",
+        "This sign-in attempt is no longer valid. Please try again.",
+      );
+    const transaction = await this.db
+      .updateTable("app.oauth_transactions")
+      .set({ consumed_at: new Date() })
+      .where("state_hash", "=", this.tokenHash(input.state))
+      .where("consumed_at", "is", null)
+      .where("expires_at", ">", new Date())
+      .returningAll()
+      .executeTakeFirst();
+    if (!transaction)
+      throw new ApplicationError(
+        400,
+        "OAUTH_TRANSACTION_EXPIRED",
+        "This sign-in attempt expired or was already used. Please try again.",
+      );
+    const identity = await this.google.exchange(input.code, transaction.nonce);
+    if (!identity.emailVerified)
+      throw new ApplicationError(
+        401,
+        "GOOGLE_EMAIL_UNVERIFIED",
+        "A verified Google email address is required.",
+      );
+
+    if (transaction.intent === "delete") {
+      const linked = await this.db
+        .selectFrom("app.user_identities")
+        .select("user_id")
+        .where("provider", "=", "google")
+        .where("provider_subject", "=", identity.subject)
+        .executeTakeFirst();
+      if (
+        !linked ||
+        linked.user_id !== transaction.current_user_id ||
+        !transaction.current_session_id
+      )
+        throw new ApplicationError(
+          403,
+          "REAUTH_ACCOUNT_MISMATCH",
+          "Use the same Google account that is signed in to this dashboard.",
+        );
+      await this.db
+        .updateTable("app.user_sessions")
+        .set({ reauthenticated_at: new Date() })
+        .where("id", "=", transaction.current_session_id)
+        .where("user_id", "=", linked.user_id)
+        .where("revoked_at", "is", null)
+        .execute();
+      return {
+        intent: transaction.intent,
+        returnTo: transaction.return_to,
+        participantId: null,
+        user: await this.profileById(linked.user_id),
+        session: null,
+      };
+    }
+
+    const userId = await this.resolveGoogleAccount(identity);
+    return {
+      intent: transaction.intent,
+      returnTo: transaction.return_to,
+      participantId: transaction.participant_id,
+      user: await this.profileById(userId),
+      session: await this.issue(userId, input.meta),
+    };
+  }
+
+  private async resolveGoogleAccount(identity: GoogleIdentity): Promise<string> {
+    const linked = await this.db
+      .selectFrom("app.user_identities as i")
+      .innerJoin("app.user_accounts as u", "u.id", "i.user_id")
+      .select(["i.user_id as userId", "u.status"])
+      .where("i.provider", "=", "google")
+      .where("i.provider_subject", "=", identity.subject)
+      .executeTakeFirst();
+    if (linked) {
+      if (linked.status !== "active")
+        throw new ApplicationError(403, "ACCOUNT_DISABLED", "This account is disabled.");
+      await this.db
+        .updateTable("app.user_identities")
+        .set({ email: identity.email, updated_at: new Date() })
+        .where("provider", "=", "google")
+        .where("provider_subject", "=", identity.subject)
+        .execute();
+      return linked.userId;
+    }
+
+    let account = await this.db
+      .selectFrom("app.user_accounts")
+      .select(["id", "status"])
+      .where("email", "=", identity.email)
+      .executeTakeFirst();
+    if (account?.status === "disabled")
+      throw new ApplicationError(403, "ACCOUNT_DISABLED", "This account is disabled.");
+    const userId = account?.id ?? randomUUID();
+    if (!account) {
+      const fallbackName = identity.email.split("@")[0] || "Player";
+      const displayName = (identity.name || fallbackName).replace(/\s+/g, " ").trim().slice(0, 24);
       await this.db
         .insertInto("app.user_accounts")
         .values({
-          id,
-          email: input.email,
-          display_name: input.displayName,
-          default_avatar_id: input.avatarId,
-          password_hash: await hashPassword(input.password),
+          id: userId,
+          email: identity.email,
+          display_name: displayName || "Player",
+          default_avatar_id: "fox",
+          password_hash: null,
           status: "active",
+          updated_at: new Date(),
+        })
+        .execute();
+      account = { id: userId, status: "active" };
+    }
+    const existingProvider = await this.db
+      .selectFrom("app.user_identities")
+      .select("provider_subject")
+      .where("provider", "=", "google")
+      .where("user_id", "=", userId)
+      .executeTakeFirst();
+    if (existingProvider && existingProvider.provider_subject !== identity.subject)
+      throw new ApplicationError(
+        409,
+        "GOOGLE_IDENTITY_CONFLICT",
+        "That email is already connected to another Google account.",
+      );
+    try {
+      await this.db
+        .insertInto("app.user_identities")
+        .values({
+          id: randomUUID(),
+          user_id: userId,
+          provider: "google",
+          provider_subject: identity.subject,
+          email: identity.email,
           updated_at: new Date(),
         })
         .execute();
@@ -86,35 +257,12 @@ export class UserAuthService {
       if ((error as { code?: string }).code === "23505")
         throw new ApplicationError(
           409,
-          "EMAIL_IN_USE",
-          "An account already uses that email address.",
+          "GOOGLE_IDENTITY_CONFLICT",
+          "That Google account is already connected elsewhere.",
         );
       throw error;
     }
-    return { user: await this.profileById(id), session: await this.issue(id, meta) };
-  }
-  async login(input: { email: string; password: string }, meta: RequestMeta) {
-    const throttleKey = hashSecret(`${input.email}:${meta.ip}`, this.config.userSessionTokenPepper);
-    const limit = this.throttle.check(throttleKey);
-    if (!limit.allowed)
-      throw new ApplicationError(429, "RATE_LIMITED", "Too many login attempts. Try again later.", {
-        retryAfterSeconds: limit.retryAfterSeconds,
-      });
-    const account = await this.db
-      .selectFrom("app.user_accounts")
-      .selectAll()
-      .where("email", "=", input.email)
-      .executeTakeFirst();
-    const valid = await verifyPassword(input.password, account?.password_hash ?? DUMMY_HASH);
-    if (!account || account.status !== "active" || !valid) {
-      this.throttle.recordFailure(throttleKey);
-      throw new ApplicationError(401, "INVALID_CREDENTIALS", "The email or password is invalid.");
-    }
-    this.throttle.clear(throttleKey);
-    return {
-      user: await this.profileById(account.id),
-      session: await this.issue(account.id, meta),
-    };
+    return userId;
   }
   async authenticate(token: string | null): Promise<UserPrincipal | null> {
     if (!token) return null;
@@ -197,27 +345,6 @@ export class UserAuthService {
       .execute();
     return "linked";
   }
-  async changePassword(principal: UserPrincipal, currentPassword: string, newPassword: string) {
-    const account = await this.db
-      .selectFrom("app.user_accounts")
-      .select("password_hash")
-      .where("id", "=", principal.userId)
-      .executeTakeFirstOrThrow();
-    if (!(await verifyPassword(currentPassword, account.password_hash)))
-      throw new ApplicationError(401, "INVALID_PASSWORD", "The current password is incorrect.");
-    await this.db
-      .updateTable("app.user_accounts")
-      .set({ password_hash: await hashPassword(newPassword), updated_at: new Date() })
-      .where("id", "=", principal.userId)
-      .execute();
-    await this.db
-      .updateTable("app.user_sessions")
-      .set({ revoked_at: new Date() })
-      .where("user_id", "=", principal.userId)
-      .where("id", "!=", principal.sessionId)
-      .where("revoked_at", "is", null)
-      .execute();
-  }
   async sessions(principal: UserPrincipal) {
     const rows = await this.db
       .selectFrom("app.user_sessions")
@@ -253,14 +380,23 @@ export class UserAuthService {
       .where("revoked_at", "is", null)
       .execute();
   }
-  async deleteAccount(principal: UserPrincipal, password: string) {
-    const account = await this.db
-      .selectFrom("app.user_accounts")
-      .select("password_hash")
-      .where("id", "=", principal.userId)
-      .executeTakeFirstOrThrow();
-    if (!(await verifyPassword(password, account.password_hash)))
-      throw new ApplicationError(401, "INVALID_PASSWORD", "The password is incorrect.");
+  async deleteAccount(principal: UserPrincipal) {
+    const session = await this.db
+      .selectFrom("app.user_sessions")
+      .select("reauthenticated_at")
+      .where("id", "=", principal.sessionId)
+      .where("user_id", "=", principal.userId)
+      .where("revoked_at", "is", null)
+      .executeTakeFirst();
+    if (
+      !session?.reauthenticated_at ||
+      Date.now() - new Date(session.reauthenticated_at).getTime() > DELETION_REAUTH_TTL_MS
+    )
+      throw new ApplicationError(
+        403,
+        "RECENT_GOOGLE_AUTH_REQUIRED",
+        "Confirm your Google account again before deleting your account.",
+      );
     await this.db.deleteFrom("app.user_accounts").where("id", "=", principal.userId).execute();
   }
   async dashboard(principal: UserPrincipal) {

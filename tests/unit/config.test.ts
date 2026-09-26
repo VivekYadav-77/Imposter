@@ -35,6 +35,9 @@ describe("loadConfig", () => {
       CORS_ALLOWED_ORIGINS: "https://game.example",
       CSP_IMAGE_SOURCES: "https://evidence.example",
       TRUST_PROXY: "true",
+      GOOGLE_OAUTH_CLIENT_ID: "google-client-id",
+      GOOGLE_OAUTH_CLIENT_SECRET: "google-client-secret",
+      GOOGLE_OAUTH_REDIRECT_URI: "https://game.example/api/v1/auth/google/callback",
     });
     expect(config.appEnv).toBe("production");
     expect(config.serviceVersion).toBe("sha-123");
@@ -48,5 +51,25 @@ describe("loadConfig", () => {
         HTTP_HEADERS_TIMEOUT_MS: "2000",
       }),
     ).toThrow(/HTTP_HEADERS_TIMEOUT_MS/);
+  });
+
+  it("requires an HTTPS Google callback in production", () => {
+    expect(() =>
+      loadConfig({
+        APP_ENV: "production",
+        DATABASE_URL: "postgresql://localhost/game",
+        ADMIN_SESSION_TOKEN_PEPPER: "admin-production-pepper-at-least-32-chars",
+        PARTICIPANT_SESSION_TOKEN_PEPPER: "participant-production-pepper-32-chars",
+        USER_SESSION_TOKEN_PEPPER: "user-production-pepper-at-least-32-chars",
+        METRICS_BEARER_TOKEN: "metrics-production-token-at-least-32-chars",
+        SERVICE_VERSION: "sha-123",
+        CORS_ALLOWED_ORIGINS: "https://game.example",
+        CSP_IMAGE_SOURCES: "https://evidence.example",
+        TRUST_PROXY: "true",
+        GOOGLE_OAUTH_CLIENT_ID: "google-client-id",
+        GOOGLE_OAUTH_CLIENT_SECRET: "google-client-secret",
+        GOOGLE_OAUTH_REDIRECT_URI: "http://game.example/api/v1/auth/google/callback",
+      }),
+    ).toThrow(/GOOGLE_OAUTH_REDIRECT_URI/);
   });
 });
