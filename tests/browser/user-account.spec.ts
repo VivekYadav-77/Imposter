@@ -85,10 +85,10 @@ const dashboard = {
       avatarId: "owl",
       roomId: "room-2",
       code: "AX9P4",
-      status: "completed",
+      status: "expired",
       isHost: false,
       expiresAt: fixedTime,
-      rejoinable: false,
+      rejoinable: true,
     },
   ],
   recentGames: games,
@@ -281,6 +281,20 @@ test("desktop dashboard uses the available content canvas", async ({ page }) => 
     };
   });
   expect(widths.main).toBeGreaterThanOrEqual(widths.available * 0.9);
+});
+
+test("dashboard can reopen a previously played room", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockAccountApi(page);
+  await page.goto("/dashboard");
+  const oldRoom = page.locator(".room-history-card", { hasText: "Room AX9P4" });
+  await expect(oldRoom.getByRole("button", { name: "Reopen room" })).toBeVisible();
+  const rejoinRequest = page.waitForRequest((request) =>
+    request.url().includes("/api/v1/me/participations/participant-2/rejoin"),
+  );
+  await oldRoom.getByRole("button", { name: "Reopen room" }).click();
+  await rejoinRequest;
+  await expect(page).toHaveURL(/\/room$/);
 });
 
 test("signed-in players enter through the dashboard and can start there", async ({ page }) => {

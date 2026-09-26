@@ -1050,56 +1050,152 @@ export class RoomService {
     participantId: string,
     key: string,
   ): Promise<SessionIssueDto> {
-    const result = await inTransaction(this.database, async (trx) => {
-      const participant = await trx
-        .selectFrom("app.participants as p")
-        .innerJoin("app.rooms as r", "r.id", "p.room_id")
-        .select(["p.id", "p.room_id", "r.status", "r.expires_at"])
-        .where("p.id", "=", participantId)
-        .where("p.user_id", "=", userId)
-        .where("p.membership_status", "=", "joined")
-        .forUpdate()
-        .executeTakeFirst();
-      if (!participant)
-        throw new ApplicationError(
-          404,
-          "ROOM_NOT_FOUND",
-          "That room is not linked to your account.",
-        );
-      if (participant.status === "expired" || new Date(participant.expires_at) <= new Date())
-        throw new ApplicationError(409, "ROOM_EXPIRED", "That room is available in history only.");
-      if (["completed", "abandoned"].includes(participant.status)) {
-        await trx
-          .updateTable("app.rooms")
-          .set({
-            status: "lobby",
-            last_activity_at: new Date(),
-            expires_at: new Date(Date.now() + this.config.roomLobbyTtlSeconds * 1000),
-          })
-          .where("id", "=", participant.room_id)
-          .execute();
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      try {
+        const result = await inTransaction(this.database, async (trx) => {
+          const participant = await trx
+            .selectFrom("app.participants as p")
+            .innerJoin("app.rooms as r", "r.id", "p.room_id")
+            .select([
+              "p.id",
+              "p.room_id",
+              "p.nickname",
+              "p.normalized_nickname",
+              "p.avatar_id",
+              "p.membership_status",
+              "r.status",
+              "r.expires_at",
+              "r.max_players",
+              "r.host_participant_id",
+            ])
+            .where("p.id", "=", participantId)
+            .where("p.user_id", "=", userId)
+            .where("p.membership_status", "!=", "removed")
+            .forUpdate()
+            .executeTakeFirst();
+          if (!participant)
+            throw new ApplicationError(
+              404,
+              "ROOM_NOT_FOUND",
+              "That room is not linked to your account.",
+            );
+
+          const now = new Date();
+          const terminalRoom =
+            participant.status === "completed" ||
+            participant.status === "abandoned" ||
+            participant.status === "expired" ||
+            new Date(participant.expires_at) <= now;
+          const expiresAt = terminalRoom
+            ? new Date(now.getTime() + this.config.roomLobbyTtlSeconds * 1000)
+            : new Date(participant.expires_at);
+
+          if (participant.membership_status === "left") {
+            const [joined, identityConflict, activeAccountSeat] = await Promise.all([
+              trx
+                .selectFrom("app.participants")
+                .select(sql<number>`count(*)::int`.as("count"))
+                .where("room_id", "=", participant.room_id)
+                .where("membership_status", "=", "joined")
+                .executeTakeFirstOrThrow(),
+              trx
+                .selectFrom("app.participants")
+                .select("id")
+                .where("room_id", "=", participant.room_id)
+                .where("membership_status", "=", "joined")
+                .where((eb) =>
+                  eb.or([
+                    eb("normalized_nickname", "=", participant.normalized_nickname),
+                    eb("avatar_id", "=", participant.avatar_id),
+                  ]),
+                )
+                .executeTakeFirst(),
+              trx
+                .selectFrom("app.participants")
+                .select("id")
+                .where("room_id", "=", participant.room_id)
+                .where("user_id", "=", userId)
+                .where("membership_status", "=", "joined")
+                .where("id", "!=", participant.id)
+                .executeTakeFirst(),
+            ]);
+            if (activeAccountSeat)
+              throw new ApplicationError(
+                409,
+                "ROOM_REJOIN_CONFLICT",
+                "Your account already has an active seat in this room.",
+              );
+            if (joined.count >= participant.max_players)
+              throw new ApplicationError(409, "ROOM_FULL", "That room is currently full.");
+            if (identityConflict)
+              throw new ApplicationError(
+                409,
+                "ROOM_REJOIN_CONFLICT",
+                "Your old nickname or operative is now in use in this room.",
+              );
+          }
+
+          await trx
+            .updateTable("app.participants")
+            .set({ membership_status: "joined", disconnected_at: null, last_seen_at: now })
+            .where("id", "=", participant.id)
+            .execute();
+
+          if (terminalRoom) {
+            const activeHost = participant.host_participant_id
+              ? await trx
+                  .selectFrom("app.participants")
+                  .select("id")
+                  .where("id", "=", participant.host_participant_id)
+                  .where("membership_status", "=", "joined")
+                  .executeTakeFirst()
+              : null;
+            await trx
+              .updateTable("app.rooms")
+              .set({
+                code: roomCode(),
+                status: "lobby",
+                host_participant_id: activeHost?.id ?? participant.id,
+                last_activity_at: now,
+                expires_at: expiresAt,
+              })
+              .where("id", "=", participant.room_id)
+              .execute();
+          } else if (!participant.host_participant_id) {
+            await trx
+              .updateTable("app.rooms")
+              .set({ host_participant_id: participant.id, last_activity_at: now })
+              .where("id", "=", participant.room_id)
+              .execute();
+          }
+
+          const sessionId = randomUUID();
+          const issued = await this.issueIn(trx, participant.id, sessionId, key, expiresAt);
+          const principal = {
+            participantId: participant.id,
+            roomId: participant.room_id,
+            sessionId,
+          };
+          const snapshot = await this.snapshotWith(trx, principal);
+          return {
+            room: snapshot,
+            participant: snapshot.self,
+            sessionToken: issued.token,
+            sessionExpiresAt: issued.expiresAt.toISOString(),
+          };
+        });
+        this.events.roomChanged(result.room.id);
+        return result;
+      } catch (error) {
+        if ((error as { code?: string }).code === "23505") continue;
+        throw error;
       }
-      const sessionId = randomUUID();
-      const issued = await this.issueIn(
-        trx,
-        participant.id,
-        sessionId,
-        key,
-        participant.status === "completed" || participant.status === "abandoned"
-          ? new Date(Date.now() + this.config.roomLobbyTtlSeconds * 1000)
-          : participant.expires_at,
-      );
-      const principal = { participantId: participant.id, roomId: participant.room_id, sessionId };
-      const snapshot = await this.snapshotWith(trx, principal);
-      return {
-        room: snapshot,
-        participant: snapshot.self,
-        sessionToken: issued.token,
-        sessionExpiresAt: issued.expiresAt.toISOString(),
-      };
-    });
-    this.events.roomChanged(result.room.id);
-    return result;
+    }
+    throw new ApplicationError(
+      503,
+      "ROOM_CODE_UNAVAILABLE",
+      "A fresh room code could not be allocated. Please retry.",
+    );
   }
 
   async revoke(principal: ParticipantPrincipal): Promise<void> {

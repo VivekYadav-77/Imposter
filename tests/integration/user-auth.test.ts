@@ -111,6 +111,23 @@ describeWithDatabase("optional player accounts", () => {
       roomId: guest.room.id,
       rejoinable: true,
     });
+    const guestPrincipal = await rooms.authenticate(guest.sessionToken);
+    await rooms.leave(guestPrincipal!, `leave-${suffix}`);
+    const pastRoom = (await users.dashboard(principal!)).rooms.find(
+      (room) => room.roomId === guest.room.id,
+    );
+    expect(pastRoom).toMatchObject({ status: "expired", rejoinable: true });
+    const reopened = await rooms.rejoinForUser(
+      principal!.userId,
+      guest.participant.participantId,
+      `reopen-${suffix}`,
+    );
+    expect(reopened.room).toMatchObject({ id: guest.room.id, status: "lobby" });
+    expect(reopened.room.code).not.toBe(guest.room.code);
+    expect(reopened.room.self).toMatchObject({
+      participantId: guest.participant.participantId,
+      isHost: true,
+    });
     const secondStart = await users.beginGoogleAuth("login", null, null);
     const second = await users.completeGoogleAuth({
       state: secondStart.state,

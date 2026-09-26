@@ -417,7 +417,9 @@ export class UserAuthService {
         "r.last_activity_at",
       ])
       .where("p.user_id", "=", principal.userId)
-      .where("p.membership_status", "=", "joined")
+      // Keep rooms in the dashboard after a player deliberately leaves. A linked participant
+      // remains the authorization boundary; removed participants are intentionally excluded.
+      .where("p.membership_status", "!=", "removed")
       .orderBy("r.last_activity_at", "desc")
       .execute();
     const games = await this.history(principal, 5);
@@ -457,7 +459,8 @@ export class UserAuthService {
         status: r.status,
         isHost: r.host_participant_id === r.participantId,
         expiresAt: new Date(r.expires_at).toISOString(),
-        rejoinable: r.status !== "expired" && new Date(r.expires_at) > new Date(),
+        // Expired completed rooms can be reopened as a new lobby by their linked players.
+        rejoinable: true,
       })),
       recentGames: games.items,
       stats: {

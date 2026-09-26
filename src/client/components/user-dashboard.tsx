@@ -181,7 +181,11 @@ function RoomCard({
       </div>
       {room.rejoinable ? (
         <Button loading={busy} onClick={onRejoin}>
-          {room.status === "completed" || room.status === "abandoned" ? "Rematch" : "Rejoin"}
+          {room.status === "expired"
+            ? "Reopen room"
+            : room.status === "completed" || room.status === "abandoned"
+              ? "Rematch"
+              : "Rejoin"}
         </Button>
       ) : (
         <span className="room-history-state">History only</span>
@@ -211,6 +215,8 @@ export function DashboardOverview() {
   );
   const primaryRoom = rooms[0];
   const additionalRooms = rooms.slice(1);
+  const visibleAdditionalRooms = additionalRooms.slice(0, 2);
+  const hiddenAdditionalRooms = additionalRooms.slice(2);
   const stats = [
     { label: "Games", value: data.stats.games, icon: "trophy" as const },
     { label: "Win rate", value: `${data.stats.winRate}%`, icon: "verdict" as const },
@@ -275,8 +281,16 @@ export function DashboardOverview() {
                 busy={rejoining === primaryRoom.participantId}
                 onRejoin={() => void rejoin(primaryRoom)}
               />
+              {visibleAdditionalRooms.map((room) => (
+                <RoomCard
+                  room={room}
+                  key={room.participantId}
+                  busy={rejoining === room.participantId}
+                  onRejoin={() => void rejoin(room)}
+                />
+              ))}
               {roomsExpanded &&
-                additionalRooms.map((room) => (
+                hiddenAdditionalRooms.map((room) => (
                   <RoomCard
                     room={room}
                     key={room.participantId}
@@ -284,7 +298,7 @@ export function DashboardOverview() {
                     onRejoin={() => void rejoin(room)}
                   />
                 ))}
-              {additionalRooms.length > 0 && (
+              {hiddenAdditionalRooms.length > 0 && (
                 <button
                   className="dashboard-disclosure"
                   type="button"
@@ -293,7 +307,7 @@ export function DashboardOverview() {
                 >
                   {roomsExpanded
                     ? "Hide other rooms"
-                    : `Show ${additionalRooms.length} other room${additionalRooms.length === 1 ? "" : "s"}`}
+                    : `Show ${hiddenAdditionalRooms.length} older room${hiddenAdditionalRooms.length === 1 ? "" : "s"}`}
                   <Icon name="chevron" size={17} aria-hidden="true" />
                 </button>
               )}

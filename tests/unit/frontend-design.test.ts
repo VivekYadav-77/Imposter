@@ -244,6 +244,19 @@ describe("frontend design foundations", () => {
     expect(roomClient).toContain('window.addEventListener("beforeunload", warnBeforeExit)');
   });
 
+  it("keeps previously played rooms visible and reopenable from the dashboard", async () => {
+    const [dashboard, users, rooms] = await Promise.all([
+      readFile("src/client/components/user-dashboard.tsx", "utf8"),
+      readFile("src/modules/user-auth/service.ts", "utf8"),
+      readFile("src/modules/rooms/service.ts", "utf8"),
+    ]);
+    expect(dashboard).toContain("const visibleAdditionalRooms = additionalRooms.slice(0, 2)");
+    expect(dashboard).toContain('"Reopen room"');
+    expect(users).toContain('.where("p.membership_status", "!=", "removed")');
+    expect(rooms).toContain('.set({ membership_status: "joined", disconnected_at: null');
+    expect(rooms).toContain('status: "lobby"');
+  });
+
   it("shows duration only for timed voting and explains connected-voter quorum", async () => {
     const roomClient = await readFile("src/client/components/room-client.tsx", "utf8");
     expect(roomClient).not.toContain('"Maximum wait"');
