@@ -351,6 +351,10 @@ function LobbyView({
   const [leaving, setLeaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const [roleInfo, setRoleInfo] = useState<PublicPackSummary["roles"][number] | null>(null);
+  const pendingSettings = useRef<Record<string, unknown>>({});
+  const settingsTimer = useRef<number | null>(null);
+  const settingsSaving = useRef(false);
+  const settingsSavePromise = useRef<Promise<void> | null>(null);
   const canSettings = room.self.capabilities.includes("change_settings");
   const canStart = room.self.capabilities.includes("start_game");
   const startDisabled =
@@ -374,20 +378,85 @@ function LobbyView({
         .then((r) => setPacks(r.data))
         .catch((e: unknown) => onError(errorMessage(e)));
   }, [canSettings, onError]);
-  const update = async (body: Record<string, unknown>) => {
+  const flushSettings = useCallback(async (): Promise<boolean> => {
+    if (settingsSaving.current) {
+      await settingsSavePromise.current;
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+      if (Object.keys(pendingSettings.current).length > 0) return flushSettings();
+      return true;
+    }
+    if (Object.keys(pendingSettings.current).length === 0) return true;
+    if (settingsTimer.current !== null) {
+      window.clearTimeout(settingsTimer.current);
+      settingsTimer.current = null;
+    }
+    const body = pendingSettings.current;
+    pendingSettings.current = {};
+    settingsSaving.current = true;
+    let saved = false;
     setBusy(true);
     try {
-      setRoom((await participantApi.updateSettings(body)).data);
-      gameToast("Game setting saved.");
+      const request = participantApi.updateSettings(body);
+      settingsSavePromise.current = request.then(
+        () => undefined,
+        () => undefined,
+      );
+      setRoom((await request).data);
+      saved = true;
+      if (Object.keys(pendingSettings.current).length === 0) gameToast("Game settings saved.");
     } catch (e) {
+      pendingSettings.current = { ...body, ...pendingSettings.current };
       onError(errorMessage(e));
     } finally {
+      settingsSaving.current = false;
+      settingsSavePromise.current = null;
       setBusy(false);
+      if (saved && Object.keys(pendingSettings.current).length > 0)
+        settingsTimer.current = window.setTimeout(() => void flushSettings(), 650);
     }
+    return saved;
+  }, [onError, setRoom]);
+  const update = (body: Record<string, unknown>) => {
+    const next = { ...pendingSettings.current, ...body };
+    if (body.taskCounts && typeof body.taskCounts === "object") {
+      const changed = Object.fromEntries(
+        Object.entries(body.taskCounts).filter(
+          ([key, value]) =>
+            room.settings.taskCounts[key as keyof typeof room.settings.taskCounts] !== value,
+        ),
+      );
+      next.taskCounts = {
+        ...room.settings.taskCounts,
+        ...(pendingSettings.current.taskCounts as Record<string, unknown> | undefined),
+        ...changed,
+      };
+    }
+    if (body.roleCounts && typeof body.roleCounts === "object") {
+      const changed = Object.fromEntries(
+        Object.entries(body.roleCounts).filter(
+          ([key, value]) => room.settings.roleCounts[key] !== value,
+        ),
+      );
+      next.roleCounts = {
+        ...room.settings.roleCounts,
+        ...(pendingSettings.current.roleCounts as Record<string, unknown> | undefined),
+        ...changed,
+      };
+    }
+    pendingSettings.current = next;
+    if (settingsTimer.current !== null) window.clearTimeout(settingsTimer.current);
+    settingsTimer.current = window.setTimeout(() => void flushSettings(), 650);
   };
+  useEffect(
+    () => () => {
+      if (settingsTimer.current !== null) window.clearTimeout(settingsTimer.current);
+    },
+    [],
+  );
   const start = async () => {
     setBusy(true);
     try {
+      if (!(await flushSettings())) return;
       onStart((await participantApi.start()).data);
       gameToast("Game started. Keep your role private.", "info");
     } catch (e) {
@@ -494,7 +563,7 @@ function LobbyView({
                 <p className="eyebrow">Host setup</p>
                 <h2>Game settings</h2>
                 <p className="settings-intro">
-                  Configure the round below. Every change saves automatically.
+                  Configure the round below. Changes are grouped and saved when you pause.
                 </p>
               </div>
               <div className="settings-heading-actions">
@@ -1012,6 +1081,60 @@ function formatDuration(seconds: number): string {
   return minutes ? `${minutes}m ${remainder ? `${remainder}s` : ""}`.trim() : `${seconds}s`;
 }
 
+function CompactCountdown({
+  deadline,
+  readyLabel,
+}: {
+  deadline: string | null;
+  readyLabel: string;
+}) {
+  const [remaining, setRemaining] = useState(0);
+  useEffect(() => {
+    const calculate = () =>
+      setRemaining(
+        deadline ? Math.max(0, Math.ceil((new Date(deadline).getTime() - Date.now()) / 1000)) : 0,
+      );
+    calculate();
+    const timer = window.setInterval(calculate, 1000);
+    return () => window.clearInterval(timer);
+  }, [deadline]);
+  if (!deadline || remaining === 0) return <>{readyLabel}</>;
+  const minutes = Math.floor(remaining / 60);
+  const seconds = String(remaining % 60).padStart(2, "0");
+  return (
+    <>
+      {minutes}:{seconds}
+    </>
+  );
+}
+
+function ProgressDonut({ value }: { value: number }) {
+  const percent = Math.max(0, Math.min(100, Math.round(value)));
+  return (
+    <div
+      className="mobile-progress-donut"
+      role="progressbar"
+      aria-label="Crew progress"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={percent}
+    >
+      <svg viewBox="0 0 44 44" aria-hidden="true">
+        <circle className="donut-track" cx="22" cy="22" r="18" />
+        <circle
+          className="donut-value"
+          cx="22"
+          cy="22"
+          r="18"
+          pathLength="100"
+          strokeDasharray={`${percent} 100`}
+        />
+      </svg>
+      <strong>{percent}%</strong>
+    </div>
+  );
+}
+
 function GameView({
   game,
   setGame,
@@ -1052,9 +1175,10 @@ function GameView({
     if (meetingId && meetingId !== previousMeetingId.current) playMeetingAlert();
     previousMeetingId.current = meetingId;
 
-    // Progress is shared even when evidence photos are private. Announce every newly accepted
-    // upload from that shared counter without exposing the uploader or the photo itself.
-    if (game.progress.percent > previousProgress.current) playGameSound("upload");
+    // A shared upload sound can reveal private evidence activity. Only public evidence is
+    // announced room-wide; the uploader still receives local upload feedback below.
+    if (game.evidenceVisibility === "public" && game.progress.percent > previousProgress.current)
+      playGameSound("upload");
     previousProgress.current = game.progress.percent;
 
     if (!roleAcknowledged) {
@@ -1188,14 +1312,15 @@ function TaskView({
 }) {
   const [assignmentId, setAssignmentId] = useState<string | null>(null);
   const [killTarget, setKillTarget] = useState<string | null>(null);
+  const [killPickerOpen, setKillPickerOpen] = useState(false);
   const [gallery, setGallery] = useState(false);
   const [roleInfo, setRoleInfo] = useState(false);
   const [mobilePanel, setMobilePanel] = useState<"status" | null>(null);
   const [confirmMeeting, setConfirmMeeting] = useState(false);
   const [meetingBusy, setMeetingBusy] = useState(false);
-  const [covertOpen, setCovertOpen] = useState(false);
   const [ownProofs, setOwnProofs] = useState<Submission[]>([]);
   const [taskPreview, setTaskPreview] = useState<{ src: string; alt: string } | null>(null);
+  const [uploadingAssignments, setUploadingAssignments] = useState<Set<string>>(() => new Set());
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -1210,6 +1335,12 @@ function TaskView({
         if (cancelled) return;
         const proofs = response.data.filter((item) => item.uploader.id === game.self.participantId);
         setOwnProofs(proofs);
+        setUploadingAssignments((current) => {
+          const next = new Set(current);
+          for (const proof of proofs)
+            if (proof.processingStatus !== "pending") next.delete(proof.assignmentId);
+          return next;
+        });
         if (proofs.some((item) => item.processingStatus === "pending"))
           refreshTimer = window.setTimeout(() => void refreshOwnProofs(), 1_250);
       } catch (error) {
@@ -1245,6 +1376,7 @@ function TaskView({
       playGameSound("kill");
       gameToast("Elimination recorded. Your identity remains hidden.", "info");
       setKillTarget(null);
+      setKillPickerOpen(false);
     } catch (e) {
       onError(errorMessage(e));
       setKillTarget(null);
@@ -1300,9 +1432,7 @@ function TaskView({
                   {game.self.lifeStatus === "alive" ? "Your assignments" : "Ghost assignments"}
                 </h1>
               </div>
-              <Button variant="ghost" onClick={() => setGallery(true)}>
-                <Icon name="evidence" size={18} /> Evidence
-              </Button>
+              <ProgressDonut value={game.progress.percent} />
             </div>
             {game.self.lifeStatus !== "alive" && (
               <section className="eliminated-banner" role="status" aria-live="polite">
@@ -1365,7 +1495,15 @@ function TaskView({
                         else setAssignmentId(task.id);
                       }}
                     >
-                      {proof?.image ? (
+                      {uploadingAssignments.has(task.id) ? (
+                        <span
+                          className="task-upload-loader"
+                          role="status"
+                          aria-label="Uploading photo"
+                        >
+                          <Icon name="uploading" size={23} />
+                        </span>
+                      ) : proof?.image ? (
                         <img src={proof.image.url} alt="" />
                       ) : (
                         <span aria-hidden="true">
@@ -1384,42 +1522,31 @@ function TaskView({
               onClose={() => setTaskPreview(null)}
             />
             {game.self.role === "imposter" && game.self.lifeStatus === "alive" && (
-              <section className={`covert-console ${covertOpen ? "is-open" : ""}`}>
-                {!covertOpen ? (
-                  <button className="covert-cover" onClick={() => setCovertOpen(true)}>
-                    <span aria-hidden="true">
-                      <Icon name="lock" size={22} />
-                    </span>
-                    <strong>Private utility</strong>
-                    <small>Tap to unlock · shield this screen</small>
-                  </button>
-                ) : (
-                  <>
-                    <div className="covert-console-heading">
-                      <div>
-                        <p className="eyebrow">Impostor console</p>
-                        <h2>{canKill ? "Target acquisition" : "Systems recharging"}</h2>
-                      </div>
-                      <button className="covert-lock" onClick={() => setCovertOpen(false)}>
-                        Lock
-                      </button>
-                    </div>
-                    {!killReady && game.cooldowns.killAvailableAt && (
-                      <Timer deadline={game.cooldowns.killAvailableAt} label="Available in" />
-                    )}
-                    <GameSelect
-                      className="target-select-field"
-                      label="Living crew target"
-                      value={killTarget ?? ""}
-                      placeholder="Select one crew member…"
-                      disabled={!canKill}
-                      options={game.participants
-                        .filter((player) => game.self.killableParticipantIds.includes(player.id))
-                        .map((player) => ({ value: player.id, label: player.nickname }))}
-                      onChange={(id) => setKillTarget(id || null)}
+              <section className="kill-action-card">
+                <div>
+                  <p className="eyebrow">Impostor ability</p>
+                  <strong>
+                    {canKill ? "Choose a living crew member" : "Elimination recharging"}
+                  </strong>
+                </div>
+                <Button
+                  className="kill-open-button"
+                  variant="danger"
+                  disabled={!canKill}
+                  onClick={() => {
+                    setKillTarget(null);
+                    setKillPickerOpen(true);
+                  }}
+                >
+                  <Icon name={canKill ? "ghost" : "cooldown"} size={19} />
+                  <span>Kill</span>
+                  <small>
+                    <CompactCountdown
+                      deadline={game.cooldowns.killAvailableAt}
+                      readyLabel="Ready"
                     />
-                  </>
-                )}
+                  </small>
+                </Button>
               </section>
             )}
           </div>
@@ -1547,7 +1674,16 @@ function TaskView({
         >
           <Icon name={meetingReady ? "meeting" : "cooldown"} size={20} />
           <span>Meeting</span>
-          <small>{game.meetingRules.remainingForSelf}</small>
+          <small>
+            {meetingReady ? (
+              `${game.meetingRules.remainingForSelf} left`
+            ) : (
+              <CompactCountdown
+                deadline={game.cooldowns.meetingAvailableAt}
+                readyLabel="Unavailable"
+              />
+            )}
+          </small>
         </button>
       </nav>
       <Drawer
@@ -1649,6 +1785,14 @@ function TaskView({
         setGame={setGame}
         onClose={() => setAssignmentId(null)}
         onError={onError}
+        onUploadStart={(id) => setUploadingAssignments((current) => new Set(current).add(id))}
+        onUploadFinish={(id) =>
+          setUploadingAssignments((current) => {
+            const next = new Set(current);
+            next.delete(id);
+            return next;
+          })
+        }
       />
       <EvidenceGallery
         open={gallery}
@@ -1656,15 +1800,53 @@ function TaskView({
         game={game}
         onError={onError}
       />
-      <ConfirmDialog
-        open={Boolean(killTarget)}
-        onClose={() => setKillTarget(null)}
-        onConfirm={() => void kill()}
-        title="Eliminate this player?"
-        description={`Only the eliminated player will be notified. Your next elimination is available after the ${formatDuration(game.cooldowns.killCooldownSeconds)} adaptive cooldown.`}
-        confirmLabel="Eliminate player"
-        dangerous
-      />
+      <Dialog
+        open={killPickerOpen}
+        title="Choose a target"
+        onClose={() => setKillPickerOpen(false)}
+      >
+        <div className="kill-target-dialog">
+          <p className="muted">
+            Select one living crew member. This list scrolls while the popup stays a consistent
+            size.
+          </p>
+          <div className="kill-target-list" role="radiogroup" aria-label="Living crew targets">
+            {game.participants
+              .filter((player) => game.self.killableParticipantIds.includes(player.id))
+              .map((player) => (
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={killTarget === player.id}
+                  className={killTarget === player.id ? "selected" : ""}
+                  key={player.id}
+                  onClick={() => setKillTarget(player.id)}
+                >
+                  <IdentityToken name={player.nickname} avatarId={player.avatarId} />
+                  <span>
+                    <strong>{player.nickname}</strong>
+                    <small>Living crew member</small>
+                  </span>
+                  <span className="target-check" aria-hidden="true">
+                    <Icon name={killTarget === player.id ? "check" : "ghost"} size={18} />
+                  </span>
+                </button>
+              ))}
+          </div>
+          <p className="kill-privacy-note">
+            <Icon name="lock" size={15} /> Only the eliminated player is notified. Cooldown after
+            this action: {formatDuration(game.cooldowns.killCooldownSeconds)}.
+          </p>
+          <div className="dialog-actions">
+            <Button variant="secondary" onClick={() => setKillPickerOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="danger" disabled={!killTarget} onClick={() => void kill()}>
+              Eliminate player
+            </Button>
+          </div>
+        </div>
+      </Dialog>
       <ConfirmDialog
         open={confirmMeeting}
         onClose={() => setConfirmMeeting(false)}
@@ -1697,6 +1879,8 @@ function UploadDialog({
   setGame,
   onClose,
   onError,
+  onUploadStart,
+  onUploadFinish,
 }: {
   open: boolean;
   assignment: GameSnapshot["assignments"][number] | null;
@@ -1704,6 +1888,8 @@ function UploadDialog({
   setGame: (game: GameSnapshot) => void;
   onClose: () => void;
   onError: (message: string) => void;
+  onUploadStart: (assignmentId: string) => void;
+  onUploadFinish: (assignmentId: string) => void;
 }) {
   const activeUploads = useRef(new Set<AbortController>());
   useEffect(() => {
@@ -1715,7 +1901,9 @@ function UploadDialog({
   if (!assignment) return null;
   const upload = async (file: File) => {
     const controller = new AbortController();
+    let confirmed = false;
     activeUploads.current.add(controller);
+    onUploadStart(assignment.id);
     onClose();
     gameToast("Photo selected. Uploading in the background…", "info");
     try {
@@ -1762,6 +1950,7 @@ function UploadDialog({
       }
       const latest = await participantApi.snapshot(undefined, controller.signal);
       setGame(latest.data);
+      confirmed = true;
       playGameSound("upload");
       gameToast("Photo uploaded to this task.");
     } catch (e) {
@@ -1774,6 +1963,7 @@ function UploadDialog({
       );
     } finally {
       activeUploads.current.delete(controller);
+      if (!confirmed) onUploadFinish(assignment.id);
     }
   };
   return (

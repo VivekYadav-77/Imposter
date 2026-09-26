@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { MAX_TASKS_PER_MAP, MIN_ACTIVE_TASKS_PER_PUBLISHED_MAP } from "../../shared/task-packs";
 import { downloadableTaskCsv, parseTaskCsv, type CsvImportResult } from "../admin/csv";
 import { adminApi, ApiError, errorMessage } from "../api/client";
-import type { AdminPack, AdminPackSummary, PackStatus } from "../api/types";
+import type { AdminAccountSummary, AdminPack, AdminPackSummary, PackStatus } from "../api/types";
 import {
   Badge,
   Banner,
@@ -21,6 +21,7 @@ import {
 } from "./ui";
 import type { MapRole, TaskDifficulty } from "../api/types";
 import { useAdminFeedback } from "./admin-feedback";
+import { GoogleMark } from "./google-sign-in";
 
 export function AdminLogin() {
   const router = useRouter();
@@ -29,6 +30,16 @@ export function AdminLogin() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [googleError, setGoogleError] = useState("");
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get("authError");
+    if (!code) return;
+    setGoogleError(
+      code === "forbidden"
+        ? "That Google account is not provisioned as an administrator."
+        : "Google sign-in could not be completed. Please try again.",
+    );
+  }, []);
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setBusy(true);
@@ -103,7 +114,17 @@ export function AdminLogin() {
           <h1>Map administration</h1>
           <p className="muted">Sign in with a pre-provisioned administrator account.</p>
         </div>
-        {error && <Banner tone="danger">{error}</Banner>}
+        {(error || googleError) && <Banner tone="danger">{error || googleError}</Banner>}
+        <a
+          className="button google-auth-button admin-google-auth"
+          href="/api/v1/admin/auth/google/start"
+        >
+          <GoogleMark />
+          Continue with Google
+        </a>
+        <div className="admin-login-divider">
+          <span>or use email and password</span>
+        </div>
         <Field
           label="Email"
           type="email"
@@ -144,6 +165,127 @@ export function AdminLogin() {
         </p>
       </form>
     </div>
+  );
+}
+
+export function AdminUsers() {
+  const router = useRouter();
+  const { notify } = useAdminFeedback();
+  const [users, setUsers] = useState<AdminAccountSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  useEffect(() => {
+    const controller = new AbortController();
+    adminApi
+      .users(controller.signal)
+      .then((response) => setUsers(response.data))
+      .catch((cause: unknown) => {
+        if (cause instanceof Error && cause.name === "AbortError") return;
+        if (cause instanceof ApiError && cause.status === 401) router.replace("/admin/login");
+        else
+          notify({ title: "Could not load users", message: errorMessage(cause), tone: "danger" });
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [notify, router]);
+  const normalized = search.trim().toLowerCase();
+  const visible = users.filter(
+    (user) =>
+      !normalized ||
+      user.displayName.toLowerCase().includes(normalized) ||
+      user.email.toLowerCase().includes(normalized),
+  );
+  const date = (value: string | null) =>
+    value
+      ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(value))
+      : "Never";
+  return (
+    <>
+      <div className="admin-toolbar">
+        <div>
+          <p className="eyebrow">Account directory</p>
+          <h1>Platform users</h1>
+          <p className="muted">Review registered player accounts and account activity.</p>
+        </div>
+        <Badge tone="info">{loading ? "Loading" : `${users.length} accounts`}</Badge>
+      </div>
+      <section className="admin-stats admin-user-stats" aria-label="User overview">
+        <article>
+          <span>Total accounts</span>
+          <strong>{loading ? "—" : users.length}</strong>
+          <small>registered players</small>
+        </article>
+        <article>
+          <span>Active</span>
+          <strong>{loading ? "—" : users.filter((user) => user.status === "active").length}</strong>
+          <small>able to sign in</small>
+        </article>
+        <article>
+          <span>Played</span>
+          <strong>{loading ? "—" : users.filter((user) => user.gamesPlayed > 0).length}</strong>
+          <small>with game history</small>
+        </article>
+      </section>
+      <section className="filter-bar admin-user-filter" aria-label="User filters">
+        <Field
+          label="Search users"
+          placeholder="Name or email"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+        <div className="filter-summary">
+          <span aria-live="polite">
+            {loading
+              ? "Loading accounts…"
+              : `${visible.length} user${visible.length === 1 ? "" : "s"} shown`}
+          </span>
+        </div>
+      </section>
+      {loading ? (
+        <SkeletonList />
+      ) : visible.length === 0 ? (
+        <EmptyState title="No users found" description="Try another name or email address." />
+      ) : (
+        <div className="admin-table-wrap admin-users-table-wrap">
+          <table className="admin-table admin-users-table">
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Status</th>
+                <th>Games</th>
+                <th>Joined</th>
+                <th>Last active</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visible.map((user) => (
+                <tr key={user.id}>
+                  <td data-label="User">
+                    <span className="admin-user-identity">
+                      <span aria-hidden="true">{user.displayName.slice(0, 1).toUpperCase()}</span>
+                      <span>
+                        <strong>{user.displayName}</strong>
+                        <small>{user.email}</small>
+                      </span>
+                    </span>
+                  </td>
+                  <td data-label="Status">
+                    <Badge tone={user.status === "active" ? "success" : "neutral"}>
+                      {user.status}
+                    </Badge>
+                  </td>
+                  <td data-label="Games">{user.gamesPlayed}</td>
+                  <td data-label="Joined">{date(user.createdAt)}</td>
+                  <td data-label="Last active">{date(user.lastActiveAt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
   );
 }
 

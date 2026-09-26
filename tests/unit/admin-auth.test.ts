@@ -15,6 +15,7 @@ class FakeRepository implements AdminAuthRepository {
   principal: AdminPrincipal | null = null;
   audits: AuditEvent[] = [];
   revoked: string[] = [];
+  googleTransaction: { stateHash: string; nonce: string } | null = null;
 
   findUserByEmail(email: string) {
     return Promise.resolve(this.user?.email === email ? this.user : null);
@@ -44,6 +45,16 @@ class FakeRepository implements AdminAuthRepository {
   audit(event: AuditEvent) {
     this.audits.push(event);
     return Promise.resolve();
+  }
+  createGoogleTransaction(input: { stateHash: string; nonce: string }) {
+    this.googleTransaction = input;
+    return Promise.resolve();
+  }
+  consumeGoogleTransaction(stateHash: string) {
+    if (this.googleTransaction?.stateHash !== stateHash) return Promise.resolve(null);
+    const transaction = { nonce: this.googleTransaction.nonce };
+    this.googleTransaction = null;
+    return Promise.resolve(transaction);
   }
 }
 
@@ -102,5 +113,57 @@ describe("administrator authentication", () => {
     await expect(service.login(input)).rejects.toMatchObject({ code: "INVALID_CREDENTIALS" });
     await expect(service.login(input)).rejects.toMatchObject({ code: "INVALID_CREDENTIALS" });
     await expect(service.login(input)).rejects.toMatchObject({ code: "RATE_LIMITED", status: 429 });
+  });
+
+  it("allows Google sign-in only for a pre-provisioned active administrator", async () => {
+    const repository = new FakeRepository();
+    repository.user = {
+      id: "admin-1",
+      email: "owner@example.com",
+      passwordHash: await hashPassword("unused password"),
+      status: "active",
+    };
+    const google = {
+      authorizationUrl: ({ state }: { state: string }) =>
+        `https://accounts.example/?state=${state}`,
+      exchange: async () => ({
+        subject: "google-owner",
+        email: "owner@example.com",
+        emailVerified: true,
+        name: "Owner",
+      }),
+    };
+    const service = new AdminAuthService(
+      repository,
+      new MemoryLoginThrottle(5, 900),
+      "x".repeat(32),
+      3600,
+      google,
+    );
+    const transaction = await service.beginGoogleLogin();
+    const session = await service.completeGoogleLogin({
+      state: transaction.state,
+      cookieState: transaction.state,
+      code: "one-time-code",
+      ip: "127.0.0.1",
+      requestId: "req-google",
+    });
+    expect(session.token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(repository.audits.at(-1)).toMatchObject({
+      adminUserId: "admin-1",
+      action: "admin.google_login",
+      outcome: "success",
+    });
+    repository.user = null;
+    const denied = await service.beginGoogleLogin();
+    await expect(
+      service.completeGoogleLogin({
+        state: denied.state,
+        cookieState: denied.state,
+        code: "another-code",
+        ip: "127.0.0.1",
+        requestId: "req-google-denied",
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN", status: 403 });
   });
 });

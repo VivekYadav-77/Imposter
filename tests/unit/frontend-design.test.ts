@@ -86,13 +86,15 @@ describe("frontend design foundations", () => {
     );
   });
 
-  it("uses constrained custom dropdowns for map and elimination choices", async () => {
+  it("uses a custom map dropdown and a scrollable elimination dialog", async () => {
     const [room, ui, css] = await Promise.all([
       readFile("src/client/components/room-client.tsx", "utf8"),
       readFile("src/client/components/ui.tsx", "utf8"),
       readFile("app/game-command-center.css", "utf8"),
     ]);
-    expect(room.match(/<GameSelect/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(room.match(/<GameSelect/g)?.length).toBeGreaterThanOrEqual(1);
+    expect(room).toContain('className="kill-target-list"');
+    expect(room).toContain('role="radiogroup" aria-label="Living crew targets"');
     expect(room).not.toContain("<select");
     expect(ui).toContain("data-placement={placement}");
     expect(ui).toContain('event.key === "ArrowDown"');
@@ -218,12 +220,10 @@ describe("frontend design foundations", () => {
     expect(roomClient).toContain("window.clearTimeout(refreshTimer)");
   });
 
-  it("announces accepted evidence to every player without revealing private evidence", async () => {
+  it("announces accepted evidence room-wide only when evidence is public", async () => {
     const roomClient = await readFile("src/client/components/room-client.tsx", "utf8");
-    expect(roomClient).toContain("Progress is shared even when evidence photos are private");
-    expect(roomClient).toContain(
-      'if (game.progress.percent > previousProgress.current) playGameSound("upload")',
-    );
+    expect(roomClient).toContain("A shared upload sound can reveal private evidence activity");
+    expect(roomClient).toContain('game.evidenceVisibility === "public"');
     expect(roomClient.indexOf("previousProgress.current = game.progress.percent")).toBeLessThan(
       roomClient.indexOf("if (!roleAcknowledged)"),
     );

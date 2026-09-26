@@ -44,6 +44,7 @@ export interface GameSnapshotDto {
   };
   assignments: GameAssignmentDto[];
   progress: { percent: number };
+  evidenceVisibility: "private" | "public";
   cooldowns: {
     killAvailableAt: string | null;
     meetingAvailableAt: string | null;

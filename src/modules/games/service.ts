@@ -392,6 +392,7 @@ export class GameService {
         "rooms.meeting_duration_seconds",
         "rooms.meeting_voting_mode",
         "rooms.vote_visibility",
+        "rooms.evidence_visibility",
         "rooms.meeting_task_requirement",
         "rooms.meeting_cooldown_seconds",
         "rooms.imposter_cooldown_seconds",
@@ -573,6 +574,7 @@ export class GameService {
         difficulty: assignment.difficulty_snapshot,
       })),
       progress: { percent: Math.round(taskProgress * 100) },
+      evidenceVisibility: game.evidence_visibility,
       cooldowns: {
         killAvailableAt: game.kill_available_at ? iso(game.kill_available_at) : null,
         meetingAvailableAt: game.meeting_available_at ? iso(game.meeting_available_at) : null,

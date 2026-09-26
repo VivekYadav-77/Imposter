@@ -11,6 +11,17 @@ export interface AdminUserRecord {
   status: "active" | "disabled";
 }
 
+export interface AdminAccountSummary {
+  id: string;
+  email: string;
+  displayName: string;
+  avatarId: string;
+  status: "active" | "disabled";
+  createdAt: string;
+  lastActiveAt: string | null;
+  gamesPlayed: number;
+}
+
 export interface AuditEvent {
   adminUserId?: string;
   action: string;
@@ -36,4 +47,11 @@ export interface AdminAuthRepository {
   touchSuccessfulLogin(adminUserId: string, now: Date): Promise<void>;
   deleteExpiredSessions(now: Date): Promise<number>;
   audit(event: AuditEvent): Promise<void>;
+  createGoogleTransaction?(input: {
+    stateHash: string;
+    nonce: string;
+    expiresAt: Date;
+  }): Promise<void>;
+  consumeGoogleTransaction?(stateHash: string, now: Date): Promise<{ nonce: string } | null>;
+  listUserAccounts?(): Promise<AdminAccountSummary[]>;
 }

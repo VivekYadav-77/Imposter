@@ -128,6 +128,16 @@ export interface DashboardData {
     survivalRate: number;
   };
 }
+export interface AdminAccountSummary {
+  id: string;
+  email: string;
+  displayName: string;
+  avatarId: string;
+  status: "active" | "disabled";
+  createdAt: string;
+  lastActiveAt: string | null;
+  gamesPlayed: number;
+}
 export interface UserSession {
   id: string;
   deviceLabel: string;
@@ -275,6 +285,7 @@ export interface GameSnapshot {
     difficulty: TaskDifficulty;
   }>;
   progress: { percent: number };
+  evidenceVisibility: "private" | "public";
   cooldowns: {
     killAvailableAt: string | null;
     meetingAvailableAt: string | null;

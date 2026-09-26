@@ -595,6 +595,16 @@ export const openApiDocument: OpenAPIObject = {
         },
       },
     },
+    "/api/v1/admin/auth/google/start": {
+      get: {
+        operationId: "startAdminGoogleSignIn",
+        summary: "Start Google sign-in for a pre-provisioned administrator",
+        responses: {
+          "302": { description: "Redirect to Google authorization" },
+          "503": error,
+        },
+      },
+    },
     "/api/v1/admin/sessions/current": {
       delete: {
         operationId: "deleteAdminSession",
@@ -675,6 +685,19 @@ export const openApiDocument: OpenAPIObject = {
           "403": error,
           "409": error,
           "422": error,
+        },
+      },
+    },
+    "/api/v1/admin/users": {
+      get: {
+        operationId: "listRegisteredUsers",
+        security: adminSecurity,
+        responses: {
+          "200": envelope({
+            type: "array",
+            items: { $ref: "#/components/schemas/AdminAccountSummary" },
+          }),
+          "401": error,
         },
       },
     },
@@ -1222,6 +1245,7 @@ export const openApiDocument: OpenAPIObject = {
           "self",
           "assignments",
           "progress",
+          "evidenceVisibility",
           "cooldowns",
           "meetingRules",
           "meeting",
@@ -1321,6 +1345,7 @@ export const openApiDocument: OpenAPIObject = {
             required: ["percent"],
             properties: { percent: { type: "integer", minimum: 0, maximum: 100 } },
           },
+          evidenceVisibility: { type: "string", enum: ["private", "public"] },
           cooldowns: {
             type: "object",
             additionalProperties: false,
@@ -1496,6 +1521,30 @@ export const openApiDocument: OpenAPIObject = {
         properties: {
           email: { type: "string", format: "email", maxLength: 254 },
           password: { type: "string", minLength: 1, maxLength: 128, writeOnly: true },
+        },
+      },
+      AdminAccountSummary: {
+        type: "object",
+        additionalProperties: false,
+        required: [
+          "id",
+          "email",
+          "displayName",
+          "avatarId",
+          "status",
+          "createdAt",
+          "lastActiveAt",
+          "gamesPlayed",
+        ],
+        properties: {
+          id: { type: "string", format: "uuid" },
+          email: { type: "string", format: "email" },
+          displayName: { type: "string" },
+          avatarId: { $ref: "#/components/schemas/AvatarId" },
+          status: { type: "string", enum: ["active", "disabled"] },
+          createdAt: { type: "string", format: "date-time" },
+          lastActiveAt: { type: ["string", "null"], format: "date-time" },
+          gamesPlayed: { type: "integer", minimum: 0 },
         },
       },
       PackItemInput: {

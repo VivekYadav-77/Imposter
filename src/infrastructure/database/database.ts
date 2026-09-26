@@ -32,6 +32,14 @@ export interface AdminSessionsTable {
   created_ip_hash: string | null;
 }
 
+export interface AdminOAuthTransactionsTable {
+  state_hash: string;
+  nonce: string;
+  expires_at: Timestamp;
+  consumed_at: NullableTimestamp;
+  created_at: Timestamp;
+}
+
 export interface TaskPacksTable {
   id: string;
   created_by_admin_id: string;
@@ -384,6 +392,7 @@ export interface DatabaseSchema {
   "app.oauth_transactions": OAuthTransactionsTable;
   "app.admin_users": AdminUsersTable;
   "app.admin_sessions": AdminSessionsTable;
+  "app.admin_oauth_transactions": AdminOAuthTransactionsTable;
   "app.task_packs": TaskPacksTable;
   "app.task_pack_items": TaskPackItemsTable;
   "app.admin_audit_events": AdminAuditEventsTable;

@@ -55,6 +55,9 @@ import {
   clearUserSessionCookie,
   oauthTransactionCookie,
   clearOAuthTransactionCookie,
+  ADMIN_OAUTH_COOKIE_NAME,
+  adminOAuthTransactionCookie,
+  clearAdminOAuthTransactionCookie,
 } from "../shared/security/cookies.js";
 import { readJsonBody } from "./body.js";
 import { sendError, sendJson } from "./http.js";
@@ -207,6 +210,18 @@ export function createApiHandler(dependencies: ApiDependencies): ApiHandler {
           response.setHeader("X-Request-ID", requestId);
           response.end(Buffer.from(object.bytes));
         } else throw new ApplicationError(405, "METHOD_NOT_ALLOWED", "That method is not allowed.");
+      } else if (
+        dependencies.adminAuth &&
+        dependencies.taskPacks &&
+        (path === "/api/v1/admin/auth/google/start" ||
+          (path === "/api/v1/auth/google/callback" &&
+            Boolean(readCookie(request, ADMIN_OAUTH_COOKIE_NAME))))
+      ) {
+        await handlePhaseTwoRoute(request, response, path, requestId, {
+          ...dependencies,
+          adminAuth: dependencies.adminAuth,
+          taskPacks: dependencies.taskPacks,
+        });
       } else if (
         dependencies.userAuth &&
         dependencies.rooms &&
@@ -994,6 +1009,54 @@ async function handlePhaseTwoRoute(
 ): Promise<void> {
   const method = request.method ?? "GET";
   const url = new URL(request.url ?? "/", "http://localhost");
+  if (method === "GET" && path === "/api/v1/admin/auth/google/start") {
+    const transaction = await dependencies.adminAuth.beginGoogleLogin();
+    response.statusCode = 302;
+    response.setHeader("Location", transaction.authorizationUrl);
+    response.setHeader("Cache-Control", "no-store");
+    response.setHeader("Set-Cookie", adminOAuthTransactionCookie(transaction.state));
+    response.setHeader("X-Request-ID", requestId);
+    response.end();
+    return;
+  }
+  if (method === "GET" && path === "/api/v1/auth/google/callback") {
+    const state = url.searchParams.get("state");
+    const code = url.searchParams.get("code");
+    const providerError = url.searchParams.get("error");
+    if (providerError || !state || !code) {
+      response.statusCode = 302;
+      response.setHeader("Location", "/admin/login?authError=cancelled");
+      response.setHeader("Set-Cookie", clearAdminOAuthTransactionCookie());
+      response.end();
+      return;
+    }
+    try {
+      const session = await dependencies.adminAuth.completeGoogleLogin({
+        state,
+        cookieState: readCookie(request, ADMIN_OAUTH_COOKIE_NAME),
+        code,
+        ip: trustedClientAddress(request, dependencies.config),
+        requestId,
+      });
+      response.statusCode = 302;
+      response.setHeader("Location", "/admin/task-packs");
+      response.setHeader("Set-Cookie", [
+        adminSessionCookie(session.token, session.maxAgeSeconds),
+        clearAdminOAuthTransactionCookie(),
+      ]);
+      response.setHeader("Cache-Control", "no-store");
+      response.end();
+    } catch (error) {
+      const code =
+        error instanceof ApplicationError ? error.code.toLowerCase() : "google_auth_failed";
+      response.statusCode = 302;
+      response.setHeader("Location", `/admin/login?authError=${encodeURIComponent(code)}`);
+      response.setHeader("Set-Cookie", clearAdminOAuthTransactionCookie());
+      response.setHeader("Cache-Control", "no-store");
+      response.end();
+    }
+    return;
+  }
   if (method === "POST" && path === "/api/v1/admin/sessions") {
     const body = await validatedBody(request, dependencies.config.maxJsonBodyBytes, loginSchema);
     const session = await dependencies.adminAuth.login({
@@ -1089,6 +1152,15 @@ async function handlePhaseTwoRoute(
         requestId,
         nextCursor(offset, rows.length, limit, fingerprint),
       ),
+      requestId,
+    );
+    return;
+  }
+  if (method === "GET" && path === "/api/v1/admin/users") {
+    sendJson(
+      response,
+      200,
+      successEnvelope(await dependencies.adminAuth.listUserAccounts(), requestId),
       requestId,
     );
     return;

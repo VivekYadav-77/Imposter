@@ -439,8 +439,10 @@ export class UserAuthService {
         sql<number>`count(distinct g.id) filter (where gp.role = 'imposter')::int`.as(
           "imposterGames",
         ),
-        sql<number>`count(ta.id) filter (where ta.status = 'completed')::int`.as("tasksCompleted"),
-        sql<number>`count(ta.id)::int`.as("tasksTotal"),
+        sql<number>`count(ta.id) filter (where gp.role = 'crew' and ta.status = 'completed')::int`.as(
+          "tasksCompleted",
+        ),
+        sql<number>`count(ta.id) filter (where gp.role = 'crew')::int`.as("tasksTotal"),
         sql<number>`count(distinct g.id) filter (where gp.life_status = 'alive')::int`.as(
           "survived",
         ),

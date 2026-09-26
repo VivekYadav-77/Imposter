@@ -2418,6 +2418,27 @@
         }
       }
     },
+    "/api/v1/admin/auth/google/start": {
+      "get": {
+        "operationId": "startAdminGoogleSignIn",
+        "summary": "Start Google sign-in for a pre-provisioned administrator",
+        "responses": {
+          "302": {
+            "description": "Redirect to Google authorization"
+          },
+          "503": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/admin/sessions/current": {
       "delete": {
         "operationId": "deleteAdminSession",
@@ -2807,6 +2828,66 @@
             }
           },
           "422": {
+            "description": "Safe error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/users": {
+      "get": {
+        "operationId": "listRegisteredUsers",
+        "security": [
+          {
+            "adminCookie": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AdminAccountSummary"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "requestId",
+                        "serverTime"
+                      ],
+                      "properties": {
+                        "requestId": {
+                          "type": "string"
+                        },
+                        "serverTime": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
             "description": "Safe error envelope",
             "content": {
               "application/json": {
@@ -4714,6 +4795,7 @@
           "self",
           "assignments",
           "progress",
+          "evidenceVisibility",
           "cooldowns",
           "meetingRules",
           "meeting",
@@ -4955,6 +5037,13 @@
                 "maximum": 100
               }
             }
+          },
+          "evidenceVisibility": {
+            "type": "string",
+            "enum": [
+              "private",
+              "public"
+            ]
           },
           "cooldowns": {
             "type": "object",
@@ -5373,6 +5462,58 @@
             "minLength": 1,
             "maxLength": 128,
             "writeOnly": true
+          }
+        }
+      },
+      "AdminAccountSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "email",
+          "displayName",
+          "avatarId",
+          "status",
+          "createdAt",
+          "lastActiveAt",
+          "gamesPlayed"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "avatarId": {
+            "$ref": "#/components/schemas/AvatarId"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "disabled"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastActiveAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "gamesPlayed": {
+            "type": "integer",
+            "minimum": 0
           }
         }
       },

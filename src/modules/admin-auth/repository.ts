@@ -1,7 +1,13 @@
 import { randomUUID } from "node:crypto";
 
 import type { Database } from "../../infrastructure/database/database.js";
-import type { AdminAuthRepository, AdminPrincipal, AdminUserRecord, AuditEvent } from "./types.js";
+import type {
+  AdminAccountSummary,
+  AdminAuthRepository,
+  AdminPrincipal,
+  AdminUserRecord,
+  AuditEvent,
+} from "./types.js";
 
 export class PostgresAdminAuthRepository implements AdminAuthRepository {
   constructor(private readonly database: Database) {}
@@ -91,5 +97,81 @@ export class PostgresAdminAuthRepository implements AdminAuthRepository {
         metadata: event.metadata ?? {},
       })
       .execute();
+  }
+
+  async createGoogleTransaction(input: {
+    stateHash: string;
+    nonce: string;
+    expiresAt: Date;
+  }): Promise<void> {
+    await this.database
+      .deleteFrom("app.admin_oauth_transactions")
+      .where("expires_at", "<", new Date())
+      .execute();
+    await this.database
+      .insertInto("app.admin_oauth_transactions")
+      .values({
+        state_hash: input.stateHash,
+        nonce: input.nonce,
+        expires_at: input.expiresAt,
+        consumed_at: null,
+      })
+      .execute();
+  }
+
+  async consumeGoogleTransaction(stateHash: string, now: Date): Promise<{ nonce: string } | null> {
+    return (
+      (await this.database
+        .updateTable("app.admin_oauth_transactions")
+        .set({ consumed_at: now })
+        .where("state_hash", "=", stateHash)
+        .where("consumed_at", "is", null)
+        .where("expires_at", ">", now)
+        .returning("nonce")
+        .executeTakeFirst()) ?? null
+    );
+  }
+
+  async listUserAccounts(): Promise<AdminAccountSummary[]> {
+    const rows = await this.database
+      .selectFrom("app.user_accounts as users")
+      .leftJoin("app.participants as participants", "participants.user_id", "users.id")
+      .leftJoin(
+        "app.game_participants as game_players",
+        "game_players.participant_id",
+        "participants.id",
+      )
+      .leftJoin("app.user_sessions as sessions", "sessions.user_id", "users.id")
+      .select((expression) => [
+        "users.id",
+        "users.email",
+        "users.display_name",
+        "users.default_avatar_id",
+        "users.status",
+        "users.created_at",
+        expression.fn.max("sessions.last_used_at").as("lastActiveAt"),
+        expression.fn.count("game_players.game_id").distinct().as("gamesPlayed"),
+      ])
+      .groupBy([
+        "users.id",
+        "users.email",
+        "users.display_name",
+        "users.default_avatar_id",
+        "users.status",
+        "users.created_at",
+      ])
+      .orderBy("users.created_at", "desc")
+      .limit(500)
+      .execute();
+    return rows.map((row) => ({
+      id: row.id,
+      email: row.email,
+      displayName: row.display_name,
+      avatarId: row.default_avatar_id,
+      status: row.status,
+      createdAt: new Date(row.created_at).toISOString(),
+      lastActiveAt: row.lastActiveAt ? new Date(row.lastActiveAt).toISOString() : null,
+      gamesPlayed: Number(row.gamesPlayed),
+    }));
   }
 }

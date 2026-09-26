@@ -9,6 +9,7 @@ import { Brand, Icon } from "./ui";
 
 const links = [
   { href: "/admin/task-packs", label: "Dashboard", exact: true },
+  { href: "/admin/users", label: "Users", exact: true },
   { href: "/admin/task-packs/new", label: "New map", exact: true },
 ];
 

@@ -293,6 +293,8 @@ export const adminApi = {
     }),
   logout: () =>
     apiRequest<void>("/api/v1/admin/sessions/current", { method: "DELETE", retry: false }),
+  users: (signal?: AbortSignal) =>
+    apiRequest<import("./types").AdminAccountSummary[]>("/api/v1/admin/users", { signal }),
   list: (query = "", signal?: AbortSignal) =>
     apiRequest<AdminPackSummary[]>(`/api/v1/admin/task-packs${query ? `?${query}` : ""}`, {
       signal,

@@ -16,6 +16,7 @@ import { InMemoryMetrics } from "../infrastructure/observability/metrics.js";
 import { PostgresAdminAuthRepository } from "../modules/admin-auth/repository.js";
 import { AdminAuthService } from "../modules/admin-auth/service.js";
 import { UserAuthService } from "../modules/user-auth/service.js";
+import { createGoogleIdentityProvider } from "../modules/user-auth/google-oauth.js";
 import { MemoryLoginThrottle } from "../modules/admin-auth/throttle.js";
 import { TaskPackRepository } from "../modules/task-packs/repository.js";
 import { RoomService } from "../modules/rooms/service.js";
@@ -60,6 +61,7 @@ async function main(): Promise<void> {
     new MemoryLoginThrottle(config.adminLoginMaxAttempts, config.adminLoginWindowSeconds),
     config.adminSessionTokenPepper,
     config.adminSessionTtlSeconds,
+    createGoogleIdentityProvider(config),
   );
   const taskPacks = new TaskPackRepository(database.db);
   const rooms = new RoomService(database.db, config);
