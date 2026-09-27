@@ -73,6 +73,7 @@ class ApiClient(
         command: CommandRequest,
         deserializer: KSerializer<T>,
     ): ApiResult<T> {
+        val requestBody = command.body.toRequestBody(JSON_MEDIA_TYPE)
         val request =
             Request.Builder()
                 .url(
@@ -81,7 +82,7 @@ class ApiClient(
                         .addEncodedPathSegments(command.encodedPath.trimStart('/'))
                         .build()
                 )
-                .post(command.body.toRequestBody(JSON_MEDIA_TYPE))
+                .method(command.method.name, requestBody)
                 .header("Idempotency-Key", command.idempotencyKey)
                 .header("X-Session-Transport", "bearer")
         return execute(command.routeTemplate, request, deserializer)

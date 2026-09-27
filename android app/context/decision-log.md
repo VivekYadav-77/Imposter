@@ -110,6 +110,15 @@ Use IDs `ADR-A-###`. Status is `proposed`, `approved`, `superseded`, or `rejecte
 - **Reason:** These concerns share the authenticated application-session lifecycle and must be testable without a composable or feature screen. A single core boundary avoids leaking transport DTOs or bearer credentials into navigation/saved state while preserving command-specific retry semantics from the frozen contract.
 - **Consequences:** Feature modules observe repositories and bootstrap destinations instead of owning sockets or cached gameplay state. `409` responses require refresh/user confirmation, revocation clears all sensitive state and stops reconnection, and future persistence must not cache private role/evidence snapshots.
 
+### ADR-A-016 — Lobby settings commit behavior
+
+- **Status:** approved by Phase 4 implementation request
+- **Date:** 2026-09-28
+- **Approver:** product owner delegated best-fit product and technical choices
+- **Decision:** Host lobby settings use an explicit Apply action. While an entry or settings command is active, duplicate submission and background room polling are suppressed; conflicts refresh the authoritative room before another user decision.
+- **Reason:** A visible commit boundary makes several related room rules understandable, avoids partially applied setup, and prevents delayed polling or mutation responses from replacing newer state.
+- **Consequences:** Draft settings remain local until Apply succeeds. A failed or conflicting Apply preserves the draft and presents the server-safe error; realtime or polling snapshots replace only committed room state.
+
 ## Adding a decision
 
 Copy this structure:

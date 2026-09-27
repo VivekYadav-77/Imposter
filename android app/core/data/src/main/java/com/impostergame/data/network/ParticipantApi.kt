@@ -2,13 +2,17 @@ package com.impostergame.data.network
 
 import com.impostergame.data.model.ApiEnvelope
 import com.impostergame.data.model.GameSnapshot
+import com.impostergame.data.model.PublicTaskPack
 import com.impostergame.data.model.RoomCreationInput
+import com.impostergame.data.model.RoomJoinOptions
 import com.impostergame.data.model.RoomMembershipInput
+import com.impostergame.data.model.RoomSettingsInput
 import com.impostergame.data.model.RoomSnapshot
 import com.impostergame.data.model.SessionCredential
 import com.impostergame.data.model.SessionIssue
 import com.impostergame.data.repository.GameSnapshotSource
 import com.impostergame.data.repository.RoomSnapshotSource
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -38,25 +42,80 @@ class ParticipantApi(
             )
             .map { it?.data }
 
-    suspend fun createRoom(input: RoomCreationInput): ApiResult<SessionIssue> =
+    suspend fun createRoom(
+        input: RoomCreationInput,
+        idempotencyKey: String = UuidIdGenerator.create(),
+    ): ApiResult<SessionIssue> =
         executeSessionCommand(
-            commands.create(
+            CommandRequest(
                 routeTemplate = "/api/v1/rooms",
                 encodedPath = "/api/v1/rooms",
                 body = json.encodeToString(input).encodeToByteArray(),
+                idempotencyKey = idempotencyKey,
             )
         )
 
-    suspend fun joinRoom(code: String, input: RoomMembershipInput): ApiResult<SessionIssue> {
+    suspend fun joinRoom(
+        code: String,
+        input: RoomMembershipInput,
+        idempotencyKey: String = UuidIdGenerator.create(),
+    ): ApiResult<SessionIssue> {
         require(ROOM_CODE.matches(code)) { "Room code must contain six ASCII letters or digits" }
         return executeSessionCommand(
-            commands.create(
+            CommandRequest(
                 routeTemplate = "/api/v1/rooms/{code}/participants",
                 encodedPath = "/api/v1/rooms/${code.uppercase()}/participants",
                 body = json.encodeToString(input).encodeToByteArray(),
+                idempotencyKey = idempotencyKey,
             )
         )
     }
+
+    suspend fun joinOptions(code: String): ApiResult<RoomJoinOptions> {
+        require(ROOM_CODE.matches(code)) { "Room code must contain six ASCII letters or digits" }
+        return client
+            .get(
+                routeTemplate = "/api/v1/rooms/{code}/join-options",
+                encodedPath = "/api/v1/rooms/${code.uppercase()}/join-options",
+                deserializer = ApiEnvelope.serializer(RoomJoinOptions.serializer()),
+            )
+            .map { it.data }
+    }
+
+    suspend fun updateSettings(input: RoomSettingsInput): ApiResult<RoomSnapshot> =
+        client
+            .command(
+                commands.create(
+                    routeTemplate = "/api/v1/rooms/current/settings",
+                    encodedPath = "/api/v1/rooms/current/settings",
+                    body = json.encodeToString(input).encodeToByteArray(),
+                    method = CommandMethod.PATCH,
+                ),
+                ApiEnvelope.serializer(RoomSnapshot.serializer()),
+            )
+            .map { it.data }
+
+    suspend fun startGame(): ApiResult<GameSnapshot> =
+        client
+            .command(
+                commands.create(
+                    routeTemplate = "/api/v1/rooms/current/start",
+                    encodedPath = "/api/v1/rooms/current/start",
+                    body = EMPTY_JSON,
+                ),
+                ApiEnvelope.serializer(GameSnapshot.serializer()),
+            )
+            .map { it.data }
+
+    suspend fun taskPacks(): ApiResult<List<PublicTaskPack>> =
+        client
+            .get(
+                routeTemplate = "/api/v1/task-packs",
+                encodedPath = "/api/v1/task-packs",
+                query = mapOf("limit" to "50"),
+                deserializer = ApiEnvelope.serializer(ListSerializer(PublicTaskPack.serializer())),
+            )
+            .map { it.data }
 
     suspend fun rotateSession(): ApiResult<SessionCredential> =
         client

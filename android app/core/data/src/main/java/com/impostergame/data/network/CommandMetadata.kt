@@ -8,7 +8,13 @@ data class CommandRequest(
     val body: ByteArray,
     val idempotencyKey: String,
     val expectedStateVersion: Long? = null,
+    val method: CommandMethod = CommandMethod.POST,
 )
+
+enum class CommandMethod {
+    POST,
+    PATCH,
+}
 
 fun interface IdGenerator {
     fun create(): String
@@ -24,6 +30,7 @@ class CommandFactory(private val ids: IdGenerator = UuidIdGenerator) {
         encodedPath: String,
         body: ByteArray,
         expectedStateVersion: Long? = null,
+        method: CommandMethod = CommandMethod.POST,
     ): CommandRequest =
         CommandRequest(
             routeTemplate = routeTemplate,
@@ -31,5 +38,6 @@ class CommandFactory(private val ids: IdGenerator = UuidIdGenerator) {
             body = body.copyOf(),
             idempotencyKey = ids.create(),
             expectedStateVersion = expectedStateVersion,
+            method = method,
         )
 }

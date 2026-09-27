@@ -3,6 +3,15 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+val configuredApiBaseUrl =
+    providers
+        .gradleProperty("IMPOSTER_API_BASE_URL")
+        .orElse(providers.environmentVariable("IMPOSTER_API_BASE_URL"))
+        .orElse("")
+        .get()
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+
 android {
     namespace = "com.impostergame.android"
     compileSdk = 36
@@ -23,7 +32,7 @@ android {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
             buildConfigField("String", "ENVIRONMENT", "\"debug\"")
-            buildConfigField("String", "API_BASE_URL", "\"\"")
+            buildConfigField("String", "API_BASE_URL", "\"$configuredApiBaseUrl\"")
         }
         create("staging") {
             initWith(getByName("debug"))
@@ -32,14 +41,14 @@ android {
             isDebuggable = false
             matchingFallbacks += listOf("debug")
             buildConfigField("String", "ENVIRONMENT", "\"staging\"")
-            buildConfigField("String", "API_BASE_URL", "\"\"")
+            buildConfigField("String", "API_BASE_URL", "\"$configuredApiBaseUrl\"")
         }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             isDebuggable = false
             buildConfigField("String", "ENVIRONMENT", "\"release\"")
-            buildConfigField("String", "API_BASE_URL", "\"\"")
+            buildConfigField("String", "API_BASE_URL", "\"$configuredApiBaseUrl\"")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
@@ -83,6 +92,8 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.okhttp)
 
     val composeBom = platform(libs.androidx.compose.bom)
     implementation(composeBom)
@@ -92,6 +103,7 @@ dependencies {
     implementation(libs.androidx.compose.material3)
 
     testImplementation(libs.junit4)
+    testImplementation(libs.kotlinx.coroutines.test)
 
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.espresso.core)

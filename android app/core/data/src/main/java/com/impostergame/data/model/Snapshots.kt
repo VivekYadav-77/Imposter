@@ -206,10 +206,41 @@ data class RoomCreationInput(
     val nickname: String,
     val avatarId: String? = null,
     val minPlayers: Int = 3,
-    val maxPlayers: Int = 12,
+    val maxPlayers: Int = 15,
 )
 
 @Serializable data class RoomMembershipInput(val nickname: String, val avatarId: String? = null)
+
+@Serializable
+data class RoomJoinOptions(val availableAvatarIds: List<String>, val spotsRemaining: Int)
+
+@Serializable
+data class RoomSettingsInput(
+    val selectedTaskPackId: String? = null,
+    val taskPhaseSeconds: Int? = null,
+    val meetingsPerPlayer: Int? = null,
+    val meetingDurationSeconds: Int? = null,
+    val meetingVotingMode: String? = null,
+    val voteVisibility: String? = null,
+    val evidenceVisibility: String? = null,
+    val imposterMeetingTaskRequirement: String? = null,
+    val meetingCooldownSeconds: Int? = null,
+    val imposterCooldownSeconds: Int? = null,
+    val imposterCount: Int? = null,
+    val taskCounts: Map<String, Int>? = null,
+    val roleCounts: Map<String, Int>? = null,
+)
+
+@Serializable
+data class PublicTaskPack(
+    val id: String,
+    val name: String,
+    val description: String?,
+    val activeTaskCount: Int,
+    val difficultyTaskCounts: DifficultyTaskCounts,
+    val revision: Int,
+    val roles: List<MapRole>,
+)
 
 @Serializable
 data class SessionCredential(val sessionToken: String, val sessionExpiresAt: String) {

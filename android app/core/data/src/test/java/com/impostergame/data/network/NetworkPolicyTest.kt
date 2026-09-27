@@ -126,4 +126,74 @@ class NetworkPolicyTest {
             server.close()
         }
     }
+
+    @Test
+    fun patchCommandUsesPatchAndKeepsItsIdempotencyKey() = runTest {
+        val server = MockWebServer()
+        server.enqueue(
+            MockResponse.Builder()
+                .code(200)
+                .body(
+                    """{"data":{"participantId":"p","nickname":"n","avatarId":"fox","isHost":true,"capabilities":[]},"meta":{"requestId":"r","serverTime":"2026-09-27T00:00:00Z"}}"""
+                )
+                .build()
+        )
+        server.start()
+        try {
+            val client =
+                ApiClient(
+                    server.url("/").toString().toHttpUrl(),
+                    credentialProvider = { "secret" },
+                    allowInsecureLocalDebug = true,
+                )
+            client.command(
+                CommandRequest(
+                    routeTemplate = "/api/v1/rooms/current/settings",
+                    encodedPath = "/api/v1/rooms/current/settings",
+                    body = "{\"taskPhaseSeconds\":600}".encodeToByteArray(),
+                    idempotencyKey = "same-command-key",
+                    method = CommandMethod.PATCH,
+                ),
+                ApiEnvelope.serializer(ParticipantSelf.serializer()),
+            )
+
+            val request = server.takeRequest()
+            assertEquals("PATCH", request.method)
+            assertEquals("same-command-key", request.headers["Idempotency-Key"])
+            assertEquals("{\"taskPhaseSeconds\":600}", request.body?.utf8())
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
+    fun joinOptionsNormalizesCodeAndDecodesAvailability() = runTest {
+        val server = MockWebServer()
+        server.enqueue(
+            MockResponse.Builder()
+                .code(200)
+                .body(
+                    """{"data":{"availableAvatarIds":["fox","owl"],"spotsRemaining":2},"meta":{"requestId":"r","serverTime":"2026-09-27T00:00:00Z"}}"""
+                )
+                .build()
+        )
+        server.start()
+        try {
+            val api =
+                ParticipantApi(
+                    ApiClient(
+                        server.url("/").toString().toHttpUrl(),
+                        credentialProvider = { null },
+                        allowInsecureLocalDebug = true,
+                    )
+                )
+            val result = api.joinOptions("ab12cd") as ApiResult.Success
+
+            assertEquals(listOf("fox", "owl"), result.value.availableAvatarIds)
+            assertEquals(2, result.value.spotsRemaining)
+            assertEquals("/api/v1/rooms/AB12CD/join-options", server.takeRequest().url.encodedPath)
+        } finally {
+            server.close()
+        }
+    }
 }
