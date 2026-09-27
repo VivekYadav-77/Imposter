@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="player_color_coral">Coral</string>
+    <string name="player_color_gold">Gold</string>
+    <string name="player_color_blue">Blue</string>
+    <string name="player_color_violet">Violet</string>
+    <string name="player_color_teal">Teal</string>
+    <string name="player_color_green">Green</string>
+    <string name="player_color_bronze">Bronze</string>
+    <string name="player_color_rose">Rose</string>
+    <string name="player_color_indigo">Indigo</string>
+    <string name="player_color_cyan">Cyan</string>
+    <string name="player_color_red">Red</string>
+    <string name="player_color_lime">Lime</string>
+    <string name="player_color_amber">Amber</string>
+    <string name="player_color_magenta">Magenta</string>
+    <string name="player_color_purple">Purple</string>
+    <string name="player_color_slate">Slate</string>
+    <string name="player_color_orange">Orange</string>
+    <string name="player_color_sea_green">Sea green</string>
+    <string name="player_color_unknown">Unknown color</string>
+
+    <string name="player_status_selected">Selected</string>
+    <string name="player_status_disconnected">Disconnected</string>
+    <string name="player_status_dead">Eliminated</string>
+    <string name="player_status_ejected">Ejected</string>
+    <string name="player_status_host">Host</string>
+    <string name="player_status_self">You</string>
+    <string name="player_badge_selected">✓</string>
+    <string name="player_badge_disconnected">!</string>
+    <string name="player_badge_dead">×</string>
+    <string name="player_badge_ejected">↗</string>
+    <string name="player_badge_host">H</string>
+    <string name="player_badge_self">ME</string>
+    <string name="player_avatar_description">%1$s, %2$s</string>
+
+    <string name="connection_connected">Connected</string>
+    <string name="connection_reconnecting">Reconnecting</string>
+    <string name="connection_offline">Offline</string>
+    <string name="loading">Loading</string>
+    <string name="retry">Try again</string>
+    <string name="cancel">Cancel</string>
+    <string name="confirm">Confirm</string>
+    <string name="state_not_selected">Not selected</string>
+    <string name="upload_idle">Ready for evidence</string>
+    <string name="upload_preparing">Preparing photo</string>
+    <string name="upload_requesting_intent">Preparing secure upload</string>
+    <string name="upload_uploading">Uploading evidence</string>
+    <string name="upload_confirming">Confirming submission</string>
+    <string name="upload_processing">Processing evidence</string>
+    <string name="upload_complete">Evidence accepted</string>
+    <string name="upload_retryable_failure">Upload interrupted. Try again</string>
+    <string name="upload_terminal_failure">Evidence could not be accepted</string>
+</resources>

@@ -21,3 +21,5 @@ dependencyResolutionManagement {
 rootProject.name = "ImposterGameAndroid"
 
 include(":app")
+
+include(":core:designsystem")

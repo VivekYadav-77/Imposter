@@ -1,0 +1,118 @@
+package com.impostergame.designsystem.component
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.impostergame.designsystem.R
+import com.impostergame.designsystem.theme.GameShapes
+import com.impostergame.designsystem.theme.GameSpacing
+import com.impostergame.designsystem.theme.LocalGameSemanticColors
+
+enum class UploadState {
+    Idle,
+    Preparing,
+    RequestingIntent,
+    Uploading,
+    Confirming,
+    Processing,
+    Complete,
+    RetryableFailure,
+    TerminalFailure,
+}
+
+@Composable
+fun TaskCard(
+    title: String,
+    description: String,
+    modifier: Modifier = Modifier,
+    uploadState: UploadState = UploadState.Idle,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = GameShapes.medium,
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 1.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(GameSpacing.md),
+            verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
+        ) {
+            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(
+                description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            UploadStateIndicator(uploadState)
+            if (actionLabel != null && onAction != null) {
+                GameButton(text = actionLabel, onClick = onAction)
+            }
+        }
+    }
+}
+
+@Composable
+fun UploadStateIndicator(state: UploadState, modifier: Modifier = Modifier) {
+    val semantic = LocalGameSemanticColors.current
+    val labelResource =
+        when (state) {
+            UploadState.Idle -> R.string.upload_idle
+            UploadState.Preparing -> R.string.upload_preparing
+            UploadState.RequestingIntent -> R.string.upload_requesting_intent
+            UploadState.Uploading -> R.string.upload_uploading
+            UploadState.Confirming -> R.string.upload_confirming
+            UploadState.Processing -> R.string.upload_processing
+            UploadState.Complete -> R.string.upload_complete
+            UploadState.RetryableFailure -> R.string.upload_retryable_failure
+            UploadState.TerminalFailure -> R.string.upload_terminal_failure
+        }
+    val label = stringResource(labelResource)
+    val working =
+        state in
+            setOf(
+                UploadState.Preparing,
+                UploadState.RequestingIntent,
+                UploadState.Uploading,
+                UploadState.Confirming,
+                UploadState.Processing,
+            )
+    val color =
+        when (state) {
+            UploadState.Complete -> semantic.success
+            UploadState.RetryableFailure -> semantic.warning
+            UploadState.TerminalFailure -> semantic.danger
+            else -> MaterialTheme.colorScheme.primary
+        }
+
+    Column(
+        modifier = modifier.fillMaxWidth().semantics { contentDescription = label },
+        verticalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (working)
+                CircularProgressIndicator(modifier = Modifier.padding(2.dp), strokeWidth = 2.dp)
+            Text(label, color = color, style = MaterialTheme.typography.labelLarge)
+        }
+        if (working) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+    }
+}

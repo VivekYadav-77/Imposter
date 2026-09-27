@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.android.application) apply false
+    alias(libs.plugins.android.library) apply false
     alias(libs.plugins.kotlin.compose) apply false
     alias(libs.plugins.spotless)
 }
@@ -30,11 +31,11 @@ spotless {
 tasks.register("staticAnalysis") {
     group = "verification"
     description = "Runs deterministic formatting checks and Android lint."
-    dependsOn("spotlessCheck", ":app:lintDebug")
+    dependsOn("spotlessCheck", ":app:lintDebug", ":core:designsystem:lintDebug")
 }
 
 tasks.register("quality") {
     group = "verification"
     description = "Runs all local Phase 1 quality checks."
-    dependsOn("staticAnalysis", ":app:testDebugUnitTest")
+    dependsOn("staticAnalysis", ":app:testDebugUnitTest", ":core:designsystem:testDebugUnitTest")
 }

@@ -5,12 +5,12 @@ Update status only with a link to implemented code and passing tests. Status val
 | ID | Requirement | Phase | Primary verification | Status |
 |---|---|---:|---|---|
 | AND-001 | Native Kotlin Android client with reproducible build | 1 | Clean CI build and debug APK | in progress |
-| AND-002 | Same canonical crewmate SVG for every player | 2 | Vector geometry/golden test | planned |
+| AND-002 | Same canonical crewmate SVG for every player | 2 | Vector geometry/golden test | in progress |
 | AND-003 | Unique stable color per room participant | 0, 2, 4 | Contract conflict + palette/UI tests | blocked |
-| AND-004 | No website animal avatar visuals/names in Android | 2, 8 | Asset/string scan and UI review | planned |
-| AND-005 | Compact portrait layout | 2, 4–6 | Screenshot and usability tests | planned |
-| AND-006 | Compact landscape layout | 2, 4–6 | Screenshot and usability tests | planned |
-| AND-007 | Foldable/tablet-safe adaptive behavior | 2, 7 | Window/hinge test matrix | planned |
+| AND-004 | No website animal avatar visuals/names in Android | 2, 8 | Asset/string scan and UI review | in progress |
+| AND-005 | Compact portrait layout | 2, 4–6 | Screenshot and usability tests | in progress |
+| AND-006 | Compact landscape layout | 2, 4–6 | Screenshot and usability tests | in progress |
+| AND-007 | Foldable/tablet-safe adaptive behavior | 2, 7 | Window/hinge test matrix | in progress |
 | AND-008 | Guest create and join | 4 | Staging integration/E2E | planned |
 | AND-009 | Secure session resume | 3, 7 | Process-death/reconnect tests | planned |
 | AND-010 | Host lobby setup and start | 4 | Multi-device E2E | planned |
@@ -26,7 +26,7 @@ Update status only with a link to implemented code and passing tests. Status val
 | AND-020 | Meeting and terminal result | 6 | End-reason/reconnect tests | planned |
 | AND-021 | Server-authoritative snapshot/resync | 3 | Version-gap integration tests | planned |
 | AND-022 | Idempotent mutation retry | 3 | Request-policy tests | planned |
-| AND-023 | TalkBack and non-color semantics | 2, 7 | Manual + automated accessibility checks | planned |
-| AND-024 | Large text, contrast, reduced motion/sound | 2, 7 | Accessibility matrix | planned |
+| AND-023 | TalkBack and non-color semantics | 2, 7 | Manual + automated accessibility checks | in progress |
+| AND-024 | Large text, contrast, reduced motion/sound | 2, 7 | Accessibility matrix | in progress |
 | AND-025 | Token/role/vote/evidence privacy | 1, 3, 5–8 | Redaction/threat-model review | planned |
 | AND-026 | Release, monitoring, rollback | 8 | Release-candidate checklist | planned |

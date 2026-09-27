@@ -1,57 +1,62 @@
 # Current Android implementation state
 
-**Last updated:** 2026-09-27 22:26 +05:30
-**Overall status:** Phase 1 foundation started; build verification blocked on local Android SDK license acceptance
-**Active phase:** Phase 1 — Android project foundation
-**Active plan:** [`../plan/phase-01-foundation.md`](../plan/phase-01-foundation.md)
+**Last updated:** 2026-09-27 23:16 +05:30
+**Overall status:** Phase 2 implemented in source; compilation and device verification blocked on local Android SDK license acceptance
+**Active phase:** Phase 2 — design system, adaptive shell, and avatar system
+**Active plan:** [`../plan/phase-02-design-system-adaptive-ui.md`](../plan/phase-02-design-system-adaptive-ui.md)
 **Last verified commit:** not recorded
-**Android build status:** Gradle configuration and formatting pass; APK compilation not yet run
+**Android build status:** Gradle configuration and formatting pass; Android compilation has not run
 
 ## Completed and verified
 
-- [x] Kotlin DSL project and pinned Gradle wrapper created under `android app/`.
-- [x] AGP 9 built-in Kotlin, Compose compiler, stable Compose BOM, and Java 17 toolchain configured.
-- [x] Single-activity Compose bootstrap shell created with light/dark theme support.
-- [x] `debug`, `staging`, and `release` build types created without endpoints or credentials.
-- [x] Release shrinking/resource optimization and cleartext denial configured.
-- [x] Deterministic Spotless formatting and aggregate verification tasks created.
-- [x] Backup/data-transfer exclusion baseline added for app-private data.
-- [x] Gradle wrapper and Android command-line-tools downloads verified by SHA-256.
+- [x] Dedicated `core:designsystem` Android/Compose module configured and consumed by `app`.
+- [x] Semantic light, dark, and high-contrast themes plus spacing, shape, elevation, motion, touch-target, and accessibility preference tokens created.
+- [x] Canonical 192×192 crewmate vector and single tintable `PlayerAvatar` API created.
+- [x] All 18 legacy wire IDs map centrally to neutral labels and distinct light/dark colors; no animal labels appear in Android UI resources.
+- [x] Player selection, disconnected, eliminated, ejected, host, and self states have non-color text/shape treatment.
+- [x] Reusable top bar, buttons/loading, player cards, task/upload states, banners, validation, snackbar, state panels, confirmation dialog, modal sheet, and screenshot-protected sensitive surface created.
+- [x] Available-bounds adaptive scaffold supports compact portrait, compact-height two-pane landscape, expanded layouts, safe drawing insets, IME, persistent bottom action, bounded content widths, and an explicit vertical-hinge gap.
+- [x] Preview catalog covers compact portrait/landscape, medium, expanded, hinge, light/dark, 100/150/200% text, reduced feedback preferences, and RTL.
+- [x] Host-side and instrumented tests were added for mapping, geometry, contrast, color-vision transforms, adaptive breakpoints, touch targets, semantics, and portrait/landscape rendered captures.
 
 ## Session handoff
 
-**Date/time:** 2026-09-27 22:26 +05:30
+**Date/time:** 2026-09-27 23:16 +05:30
 **Agent/session:** Codex
-**Active phase:** [Phase 1](../plan/phase-01-foundation.md)
-**Milestone:** 1.1 toolchain and project creation
-**Status:** partial
+**Active phase:** [Phase 2](../plan/phase-02-design-system-adaptive-ui.md)
+**Milestone:** design-system foundations, canonical avatar, reusable components, and adaptive reference shell
+**Status:** partial — source complete, build/device verification blocked
 
 ### Changed
 
-- `settings.gradle.kts`, `build.gradle.kts`, `gradle/`: pinned build, dependency, formatting, and toolchain configuration.
-- `app/`: safe single-activity Compose bootstrap shell, build types, privacy defaults, and launch/unit test skeletons.
-- `README.md`: reproducible setup and command reference.
-- `context/decision-log.md`: approved technical support and toolchain choices.
+- `core/designsystem/`: new isolated design-system module, documentation, components, previews, and tests.
+- `app/`: uses the shared theme/catalog and updated launch assertion.
+- Gradle settings/catalog/root checks: register the module and include its lint/unit tests in quality gates.
+- `context/decision-log.md`: approve the API v1 color mapping and adaptive ownership policy.
+- `context/requirements-traceability.md`: mark Phase 2 requirements in progress pending executable verification.
 
 ### Verified
 
-- `.\gradlew.bat help --stacktrace` — pass.
-- `.\gradlew.bat spotlessCheck help` — pass.
-- `.\gradlew.bat build --dry-run` — blocked because Android SDK Platform 36 is not installed.
-- Android SDK command-line tools `15859902` — downloaded from Google and checksum matched `90ae805d…04a`.
-- SDK package installation — intentionally stopped at Google's license prompt; no SDK license was accepted by the agent.
+- `.\gradlew.bat spotlessApply spotlessCheck` — pass.
+- `.\gradlew.bat tasks --all` — pass; app and design-system build/test/lint tasks register.
+- `git diff --check -- 'android app'` — pass.
+- Android UI/resource animal-name scan — pass; no legacy animal display names found.
+- Cleartext source scan — pass; only the Android XML namespace URI appears.
+- `.\gradlew.bat :core:designsystem:testDebugUnitTest --stacktrace` — blocked before compilation: `SDK location not found`.
 
 ### Decisions added
 
-- ADR-A-012 — Android support baseline.
-- ADR-A-013 — Phase 1 build toolchain.
+- ADR-A-010 — Player color palette and wire mapping.
+- ADR-A-014 — Design-system and adaptive-layout ownership.
 
 ### Remaining issues
 
-- The product owner must accept the Android SDK license before Platform 36, Build Tools 36.0.0, and Platform Tools can be installed and the APK/tests can be compiled.
-- Phase 0 gameplay decisions ADR-A-005 through ADR-A-011 remain unresolved and block later gameplay behavior, but not the bootstrap foundation.
-- Phase 1.2 architecture seams, 1.3 CI, and 1.4 observability are not started.
+- Google Android SDK license acceptance is still required before Platform 36, Build Tools 36.0.0, and Platform Tools can be installed.
+- Source has not yet been compiled, linted, rendered by Layoutlib, or exercised on an emulator/device; Phase 2 exit criteria therefore remain unverified.
+- Screenshot tests capture and inspect key portrait/landscape compositions but are not approved pixel baselines until they run on the pinned test device configuration.
+- The app shell still needs platform folding-feature observation to supply actual hinge bounds to the design-system seam.
+- Phase 0 gameplay decisions ADR-A-005 through ADR-A-009 and ADR-A-011 remain unresolved.
 
 ### Next action
 
-Accept the Android SDK license, install `platforms;android-36`, `build-tools;36.0.0`, and `platform-tools`, then run `spotlessCheck`, `testDebugUnitTest`, `lintDebug`, `assembleDebug`, and the release configuration check.
+After the product owner accepts the Android SDK license, install API 36 components, create `local.properties`, run design-system unit/lint/build checks, render previews, run instrumented tests on compact portrait and landscape devices, and fix all compile/visual/accessibility failures before marking Phase 2 verified.

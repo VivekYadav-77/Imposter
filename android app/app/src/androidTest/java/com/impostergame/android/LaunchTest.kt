@@ -14,6 +14,6 @@ class LaunchTest {
 
     @Test
     fun bootstrapShellLaunches() {
-        composeRule.onNodeWithText("Getting things ready").assertIsDisplayed()
+        composeRule.onNodeWithText("Design system").assertIsDisplayed()
     }
 }

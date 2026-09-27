@@ -1,6 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Imposter Game</string>
-    <string name="bootstrap_title">Getting things ready</string>
-    <string name="bootstrap_message">Checking for a game to resume…</string>
 </resources>
