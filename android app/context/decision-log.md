@@ -101,6 +101,15 @@ Use IDs `ADR-A-###`. Status is `proposed`, `approved`, `superseded`, or `rejecte
 - **Reason:** Central ownership prevents feature drift, while available bounds and hinge data support phones, resizing, tablets, and foldables without orientation/device-name branches.
 - **Consequences:** Features consume design-system APIs rather than defining independent colors or breakpoints. Platform folding-feature observation will feed the existing hinge seam when the application shell gains lifecycle integration.
 
+### ADR-A-015 — Phase 3 client-core ownership and credential protection
+
+- **Status:** approved
+- **Date:** 2026-09-27
+- **Approver:** product owner delegated best-fit product and technical choices
+- **Decision:** Keep API v1 DTOs, safe HTTP policy, participant-session contracts, authoritative snapshot repositories, Socket.IO session coordination, and bootstrap routing in a UI-independent JVM `core:data` module, with the Android Keystore implementation isolated in `core:session`. Use AES-256-GCM with a non-exportable Android Keystore key, store only ciphertext/IV/expiry in non-backed-up private preferences, and fail closed after key invalidation or corrupt storage. Keep mutation idempotency keys on immutable command instances and make conflict handling explicit rather than globally retrying requests.
+- **Reason:** These concerns share the authenticated application-session lifecycle and must be testable without a composable or feature screen. A single core boundary avoids leaking transport DTOs or bearer credentials into navigation/saved state while preserving command-specific retry semantics from the frozen contract.
+- **Consequences:** Feature modules observe repositories and bootstrap destinations instead of owning sockets or cached gameplay state. `409` responses require refresh/user confirmation, revocation clears all sensitive state and stops reconnection, and future persistence must not cache private role/evidence snapshots.
+
 ## Adding a decision
 
 Copy this structure:

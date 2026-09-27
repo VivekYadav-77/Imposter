@@ -23,3 +23,7 @@ rootProject.name = "ImposterGameAndroid"
 include(":app")
 
 include(":core:designsystem")
+
+include(":core:data")
+
+include(":core:session")
