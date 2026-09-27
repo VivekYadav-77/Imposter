@@ -61,6 +61,7 @@ import com.impostergame.android.entry.EntryDestination
 import com.impostergame.android.entry.EntryLobbyUiState
 import com.impostergame.android.entry.EntryLobbyViewModel
 import com.impostergame.android.entry.LobbySettingsDraft
+import com.impostergame.android.gameplay.GameplayViewModel
 import com.impostergame.data.model.RoomParticipant
 import com.impostergame.data.model.RoomSnapshot
 import com.impostergame.designsystem.avatar.PlayerAvatar
@@ -76,6 +77,7 @@ import com.impostergame.designsystem.theme.ImposterGameTheme
 @Composable
 fun ImposterGameApp(
     viewModel: EntryLobbyViewModel,
+    gameplayViewModel: GameplayViewModel,
     onCopyCode: (String) -> Unit,
     onShareCode: (String) -> Unit,
 ) {
@@ -89,8 +91,7 @@ fun ImposterGameApp(
                 EntryDestination.JOIN,
                 EntryDestination.CREATE -> EntryScreen(state, viewModel)
                 EntryDestination.LOBBY -> LobbyScreen(state, viewModel, onCopyCode, onShareCode)
-                EntryDestination.GAME ->
-                    PlaceholderScreen("Game starting", "Your role is being prepared.")
+                EntryDestination.GAME -> GameplayScreen(gameplayViewModel)
                 EntryDestination.RESULTS ->
                     PlaceholderScreen("Game results", "Your results are ready.")
             }
@@ -587,7 +588,7 @@ private fun LobbyAction(state: EntryLobbyUiState, viewModel: EntryLobbyViewModel
 }
 
 @Composable
-private fun Message(message: String?, modifier: Modifier = Modifier) {
+internal fun Message(message: String?, modifier: Modifier = Modifier) {
     if (message != null) {
         Text(
             message,
@@ -603,7 +604,7 @@ private fun Message(message: String?, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun LoadingScreen(label: String) {
+internal fun LoadingScreen(label: String) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             CircularProgressIndicator(Modifier.size(40.dp))
@@ -613,7 +614,7 @@ private fun LoadingScreen(label: String) {
 }
 
 @Composable
-private fun PlaceholderScreen(title: String, body: String) {
+internal fun PlaceholderScreen(title: String, body: String) {
     CenteredScrollableColumn {
         Text(title, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
         Text(body)

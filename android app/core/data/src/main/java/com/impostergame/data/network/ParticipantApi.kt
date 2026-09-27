@@ -1,7 +1,11 @@
 package com.impostergame.data.network
 
 import com.impostergame.data.model.ApiEnvelope
+import com.impostergame.data.model.ConfirmSubmissionInput
+import com.impostergame.data.model.FlagAcknowledgement
+import com.impostergame.data.model.FlagSubmissionInput
 import com.impostergame.data.model.GameSnapshot
+import com.impostergame.data.model.KillInput
 import com.impostergame.data.model.PublicTaskPack
 import com.impostergame.data.model.RoomCreationInput
 import com.impostergame.data.model.RoomJoinOptions
@@ -10,6 +14,10 @@ import com.impostergame.data.model.RoomSettingsInput
 import com.impostergame.data.model.RoomSnapshot
 import com.impostergame.data.model.SessionCredential
 import com.impostergame.data.model.SessionIssue
+import com.impostergame.data.model.Submission
+import com.impostergame.data.model.SubmissionConfirmation
+import com.impostergame.data.model.UploadIntent
+import com.impostergame.data.model.UploadIntentInput
 import com.impostergame.data.repository.GameSnapshotSource
 import com.impostergame.data.repository.RoomSnapshotSource
 import kotlinx.serialization.builtins.ListSerializer
@@ -114,6 +122,80 @@ class ParticipantApi(
                 encodedPath = "/api/v1/task-packs",
                 query = mapOf("limit" to "50"),
                 deserializer = ApiEnvelope.serializer(ListSerializer(PublicTaskPack.serializer())),
+            )
+            .map { it.data }
+
+    suspend fun createUploadIntent(
+        assignmentId: String,
+        input: UploadIntentInput,
+        idempotencyKey: String,
+    ): ApiResult<UploadIntent> =
+        client
+            .command(
+                CommandRequest(
+                    routeTemplate = "/api/v1/task-assignments/{assignmentId}/upload-intents",
+                    encodedPath = "/api/v1/task-assignments/$assignmentId/upload-intents",
+                    body = json.encodeToString(input).encodeToByteArray(),
+                    idempotencyKey = idempotencyKey,
+                ),
+                ApiEnvelope.serializer(UploadIntent.serializer()),
+            )
+            .map { it.data }
+
+    suspend fun confirmSubmission(
+        assignmentId: String,
+        input: ConfirmSubmissionInput,
+        idempotencyKey: String,
+    ): ApiResult<SubmissionConfirmation> =
+        client
+            .command(
+                CommandRequest(
+                    routeTemplate = "/api/v1/task-assignments/{assignmentId}/submissions",
+                    encodedPath = "/api/v1/task-assignments/$assignmentId/submissions",
+                    body = json.encodeToString(input).encodeToByteArray(),
+                    idempotencyKey = idempotencyKey,
+                ),
+                ApiEnvelope.serializer(SubmissionConfirmation.serializer()),
+            )
+            .map { it.data }
+
+    suspend fun submissions(): ApiResult<List<Submission>> =
+        client
+            .get(
+                routeTemplate = "/api/v1/games/current/submissions",
+                encodedPath = "/api/v1/games/current/submissions",
+                query = mapOf("limit" to "50"),
+                deserializer = ApiEnvelope.serializer(ListSerializer(Submission.serializer())),
+            )
+            .map { it.data }
+
+    suspend fun flagSubmission(
+        submissionId: String,
+        input: FlagSubmissionInput,
+        idempotencyKey: String,
+    ): ApiResult<FlagAcknowledgement> =
+        client
+            .command(
+                CommandRequest(
+                    routeTemplate = "/api/v1/submissions/{submissionId}/flags",
+                    encodedPath = "/api/v1/submissions/$submissionId/flags",
+                    body = json.encodeToString(input).encodeToByteArray(),
+                    idempotencyKey = idempotencyKey,
+                ),
+                ApiEnvelope.serializer(FlagAcknowledgement.serializer()),
+            )
+            .map { it.data }
+
+    suspend fun kill(input: KillInput, idempotencyKey: String): ApiResult<GameSnapshot> =
+        client
+            .command(
+                CommandRequest(
+                    routeTemplate = "/api/v1/games/current/kills",
+                    encodedPath = "/api/v1/games/current/kills",
+                    body = json.encodeToString(input).encodeToByteArray(),
+                    idempotencyKey = idempotencyKey,
+                ),
+                ApiEnvelope.serializer(GameSnapshot.serializer()),
             )
             .map { it.data }
 

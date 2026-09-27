@@ -17,20 +17,26 @@ import com.impostergame.android.entry.EntryLobbyGateway
 import com.impostergame.android.entry.EntryLobbyViewModel
 import com.impostergame.android.entry.NetworkEntryLobbyGateway
 import com.impostergame.android.entry.UnavailableEntryLobbyGateway
+import com.impostergame.android.gameplay.EvidenceProcessor
+import com.impostergame.android.gameplay.GameplayGateway
+import com.impostergame.android.gameplay.GameplayViewModel
+import com.impostergame.android.gameplay.NetworkGameplayGateway
+import com.impostergame.android.gameplay.UnavailableGameplayGateway
 import com.impostergame.android.ui.ImposterGameApp
 import com.impostergame.data.network.ApiClient
 import com.impostergame.data.network.ParticipantApi
+import com.impostergame.data.network.SignedUploadClient
 import com.impostergame.data.session.StoredSession
 import com.impostergame.session.AndroidKeystoreSessionStore
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
 class MainActivity : ComponentActivity() {
     private val sessionStore by lazy { AndroidKeystoreSessionStore(applicationContext) }
-    private val gateway: EntryLobbyGateway by lazy {
+    private val participantApi: ParticipantApi? by lazy {
         if (BuildConfig.API_BASE_URL.isBlank()) {
-            UnavailableEntryLobbyGateway("API_BASE_URL is not configured for this build")
+            null
         } else {
-            val client =
+            ParticipantApi(
                 ApiClient(
                     baseUrl = BuildConfig.API_BASE_URL.toHttpUrl(),
                     credentialProvider = {
@@ -38,8 +44,25 @@ class MainActivity : ComponentActivity() {
                     },
                     allowInsecureLocalDebug = BuildConfig.DEBUG,
                 )
-            NetworkEntryLobbyGateway(ParticipantApi(client), sessionStore)
+            )
         }
+    }
+    private val gateway: EntryLobbyGateway by lazy {
+        val api = participantApi
+        if (api == null) {
+            UnavailableEntryLobbyGateway("API_BASE_URL is not configured for this build")
+        } else {
+            NetworkEntryLobbyGateway(api, sessionStore)
+        }
+    }
+    private val gameplayGateway: GameplayGateway by lazy {
+        participantApi?.let {
+            NetworkGameplayGateway(
+                it,
+                SignedUploadClient(allowInsecureLocalDebug = BuildConfig.DEBUG),
+                allowInsecureLocalDebug = BuildConfig.DEBUG,
+            )
+        } ?: UnavailableGameplayGateway("API_BASE_URL is not configured for this build")
     }
     private val entryLobbyViewModel: EntryLobbyViewModel by viewModels {
         object : ViewModelProvider.Factory {
@@ -50,6 +73,13 @@ class MainActivity : ComponentActivity() {
             ): T = EntryLobbyViewModel(gateway, extras.createSavedStateHandle()) as T
         }
     }
+    private val gameplayViewModel: GameplayViewModel by viewModels {
+        object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T =
+                GameplayViewModel(gameplayGateway, EvidenceProcessor(applicationContext)) as T
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -57,10 +87,21 @@ class MainActivity : ComponentActivity() {
         setContent {
             ImposterGameApp(
                 viewModel = entryLobbyViewModel,
+                gameplayViewModel = gameplayViewModel,
                 onCopyCode = ::copyRoomCode,
                 onShareCode = ::shareRoomCode,
             )
         }
+    }
+
+    override fun onPause() {
+        gameplayViewModel.onAppBackgrounded()
+        super.onPause()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (!hasFocus) gameplayViewModel.resealRole()
     }
 
     private fun copyRoomCode(code: String) {

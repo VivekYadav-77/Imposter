@@ -119,6 +119,15 @@ Use IDs `ADR-A-###`. Status is `proposed`, `approved`, `superseded`, or `rejecte
 - **Reason:** A visible commit boundary makes several related room rules understandable, avoids partially applied setup, and prevents delayed polling or mutation responses from replacing newer state.
 - **Consequences:** Draft settings remain local until Apply succeeds. A failed or conflicting Apply preserves the draft and presents the server-safe error; realtime or polling snapshots replace only committed room state.
 
+### ADR-A-017 — Foreground-only evidence pipeline
+
+- **Status:** approved by Phase 5 implementation request
+- **Date:** 2026-09-28
+- **Approver:** product owner delegated best-fit product and technical choices
+- **Decision:** Evidence preparation, upload-intent creation, signed PUT, confirmation, and initial refresh run only while the app is in the foreground. Leaving the foreground cancels active work and presents an explicit retry state using the same command identity. Selected images are bounded, orientation-normalized, flattened, and re-encoded as metadata-free JPEGs in memory; camera captures use scoped cache files with deterministic cancellation and expiry cleanup.
+- **Reason:** The current product has no approved background-upload notification, worker policy, or durable encrypted evidence queue. Foreground-only execution avoids false success, hidden data transfer, and persistence of evidence or signed storage capabilities.
+- **Consequences:** Players must keep the app open during upload. Process death loses the prepared preview and safely returns through bootstrap/role sealing; it never marks a task complete locally. A future background worker requires a separate privacy, notification, retry, and storage decision.
+
 ## Adding a decision
 
 Copy this structure:

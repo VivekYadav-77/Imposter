@@ -243,6 +243,86 @@ data class PublicTaskPack(
 )
 
 @Serializable
+data class EvidencePolicy(
+    val version: String,
+    val minimumAge: Int,
+    val retentionHours: Int,
+    val notice: String,
+)
+
+@Serializable
+data class UploadIntent(
+    val uploadId: String,
+    val expiresAt: String,
+    val method: String,
+    val url: String,
+    val headers: Map<String, String>,
+    val policy: EvidencePolicy,
+) {
+    override fun toString(): String =
+        "UploadIntent(uploadId=$uploadId, expiresAt=$expiresAt, method=$method, url=██REDACTED██, headers=██REDACTED██, policy=$policy)"
+}
+
+@Serializable
+data class UploadIntentInput(
+    val expectedStateVersion: Long,
+    val contentType: String,
+    val byteSize: Long,
+    val checksum: String? = null,
+)
+
+@Serializable
+data class ConfirmSubmissionInput(val expectedStateVersion: Long, val uploadId: String)
+
+@Serializable
+data class SubmissionSummary(
+    val id: String,
+    val assignmentId: String,
+    val processingStatus: String,
+    val reviewStatus: String,
+    val createdAt: String,
+)
+
+@Serializable data class SubmissionUploader(val id: String, val nickname: String)
+
+@Serializable
+data class SubmissionImage(val url: String, val expiresAt: String) {
+    override fun toString(): String = "SubmissionImage(url=██REDACTED██, expiresAt=$expiresAt)"
+}
+
+@Serializable
+data class Submission(
+    val id: String,
+    val assignmentId: String,
+    val uploader: SubmissionUploader,
+    val processingStatus: String,
+    val reviewStatus: String,
+    val createdAt: String,
+    val image: SubmissionImage?,
+    val flaggedBySelf: Boolean,
+)
+
+@Serializable
+data class SubmissionConfirmation(
+    val submission: SubmissionSummary,
+    val assignmentStatus: String,
+    val progress: GameProgress,
+    val stateVersion: Long,
+)
+
+@Serializable
+data class FlagSubmissionInput(val expectedStateVersion: Long, val reason: String? = null)
+
+@Serializable
+data class FlagAcknowledgement(
+    val submissionId: String,
+    val reviewStatus: String,
+    val stateVersion: Long,
+)
+
+@Serializable data class KillInput(val expectedStateVersion: Long, val targetParticipantId: String)
+
+@Serializable
 data class SessionCredential(val sessionToken: String, val sessionExpiresAt: String) {
     override fun toString(): String =
         "SessionCredential(sessionToken=██REDACTED██, sessionExpiresAt=$sessionExpiresAt)"

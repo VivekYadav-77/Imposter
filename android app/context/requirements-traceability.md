@@ -14,12 +14,12 @@ Update status only with a link to implemented code and passing tests. Status val
 | AND-008 | Guest create and join | 4 | Staging integration/E2E | in progress |
 | AND-009 | Secure session resume | 3, 7 | Process-death/reconnect tests | in progress |
 | AND-010 | Host lobby setup and start | 4 | Multi-device E2E | in progress |
-| AND-011 | Private role reveal and automatic reseal | 5, 7 | Lifecycle/privacy tests | planned |
-| AND-012 | Task list and authoritative progress | 5 | Snapshot/UI integration tests | planned |
-| AND-013 | Camera/photo picker evidence flow | 5 | Physical-device upload E2E | planned |
-| AND-014 | Safe background/retry upload behavior | 5, 7 | Failure/process tests | planned |
-| AND-015 | Evidence gallery and authorized flagging | 5 | Visibility/authorization tests | planned |
-| AND-016 | Authorized imposter elimination | 5 | Role/cooldown/race tests | planned |
+| AND-011 | Private role reveal and automatic reseal | 5, 7 | Lifecycle/privacy tests | in progress |
+| AND-012 | Task list and authoritative progress | 5 | Snapshot/UI integration tests | in progress |
+| AND-013 | Camera/photo picker evidence flow | 5 | Physical-device upload E2E | in progress |
+| AND-014 | Safe background/retry upload behavior | 5, 7 | Failure/process tests | in progress |
+| AND-015 | Evidence gallery and authorized flagging | 5 | Visibility/authorization tests | in progress |
+| AND-016 | Authorized imposter elimination | 5 | Role/cooldown/race tests | in progress |
 | AND-017 | Player-called meeting | 0, 5 | Product decision and E2E | blocked |
 | AND-018 | Discussion and evidence review | 6 | Multi-device phase E2E | planned |
 | AND-019 | Private/public ejection voting | 0, 6 | Contract/privacy/race tests | blocked |

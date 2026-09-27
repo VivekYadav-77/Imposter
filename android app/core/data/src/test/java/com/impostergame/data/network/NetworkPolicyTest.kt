@@ -1,7 +1,9 @@
 package com.impostergame.data.network
 
 import com.impostergame.data.model.ApiEnvelope
+import com.impostergame.data.model.EvidencePolicy
 import com.impostergame.data.model.ParticipantSelf
+import com.impostergame.data.model.UploadIntent
 import kotlinx.coroutines.test.runTest
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
@@ -195,5 +197,55 @@ class NetworkPolicyTest {
         } finally {
             server.close()
         }
+    }
+
+    @Test
+    fun signedUploadUsesExactPutInstructionsWithoutParticipantAuthorization() = runTest {
+        val server = MockWebServer()
+        server.enqueue(MockResponse.Builder().code(200).build())
+        server.start()
+        try {
+            val intent =
+                UploadIntent(
+                    uploadId = "upload",
+                    expiresAt = "2026-09-28T01:00:00Z",
+                    method = "PUT",
+                    url = server.url("/private-upload").toString(),
+                    headers = mapOf("X-Upload-Token" to "scoped-value"),
+                    policy = EvidencePolicy("v1", 18, 24, "Temporary evidence"),
+                )
+            assertFalse(intent.toString().contains("scoped-value"))
+            assertFalse(intent.toString().contains("private-upload"))
+            val result =
+                SignedUploadClient(allowInsecureLocalDebug = true)
+                    .upload(intent, "image/jpeg", byteArrayOf(1, 2, 3))
+
+            assertTrue(result is ApiResult.Success)
+            val request = server.takeRequest()
+            assertEquals("PUT", request.method)
+            assertEquals("scoped-value", request.headers["X-Upload-Token"])
+            assertEquals(null, request.headers["Authorization"])
+            assertArrayEquals(byteArrayOf(1, 2, 3), request.body?.toByteArray())
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
+    fun signedUploadRejectsUnknownMethodBeforeNetworkUse() = runTest {
+        val intent =
+            UploadIntent(
+                uploadId = "upload",
+                expiresAt = "2026-09-28T01:00:00Z",
+                method = "POST",
+                url = "https://uploads.example.test/object",
+                headers = emptyMap(),
+                policy = EvidencePolicy("v1", 18, 24, "Temporary evidence"),
+            )
+
+        val result = SignedUploadClient().upload(intent, "image/jpeg", byteArrayOf(1))
+
+        assertTrue(result is ApiResult.Failure)
+        assertTrue((result as ApiResult.Failure).error is ApiFailure.Contract)
     }
 }
