@@ -1,0 +1,40 @@
+plugins {
+    alias(libs.plugins.android.application) apply false
+    alias(libs.plugins.kotlin.compose) apply false
+    alias(libs.plugins.spotless)
+}
+
+spotless {
+    kotlin {
+        target("**/*.kt")
+        targetExclude("**/build/**")
+        ktfmt(libs.versions.ktfmt.get()).kotlinlangStyle()
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
+    kotlinGradle {
+        target("**/*.gradle.kts")
+        targetExclude("**/build/**")
+        ktfmt(libs.versions.ktfmt.get()).kotlinlangStyle()
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
+    format("misc") {
+        target("**/*.md", "**/*.xml", "**/*.yml", "**/*.yaml", "**/*.properties", "**/*.toml")
+        targetExclude("**/build/**", "gradle/wrapper/gradle-wrapper.properties")
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
+}
+
+tasks.register("staticAnalysis") {
+    group = "verification"
+    description = "Runs deterministic formatting checks and Android lint."
+    dependsOn("spotlessCheck", ":app:lintDebug")
+}
+
+tasks.register("quality") {
+    group = "verification"
+    description = "Runs all local Phase 1 quality checks."
+    dependsOn("staticAnalysis", ":app:testDebugUnitTest")
+}
