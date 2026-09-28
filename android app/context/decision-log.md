@@ -174,6 +174,15 @@ Use IDs `ADR-A-###`. Status is `proposed`, `approved`, `superseded`, or `rejecte
 - **Reason:** Transport loss must not strand a resumable credential, and a passing host-only quality task must not hide broken app/device integration. Pixel sampling was not a meaningful visual assertion and physical devices can pause ordinary test activities while locked.
 - **Consequences:** CI now provisions an API 35 emulator for connected tests; local physical-device runs should keep the device awake. Full API 26/31/36 and multi-client acceptance remain separate Phase 8 gates.
 
+### ADR-A-023 — Same-origin relative evidence upload instructions
+
+- **Status:** approved by physical-device contract verification
+- **Date:** 2026-09-28
+- **Approver:** product owner requested complete implementation of `improvementApp1.md`
+- **Decision:** Resolve a relative evidence upload URL against the already validated API origin. Keep absolute upload URLs subject to the existing HTTPS/local-debug policy, and reject protocol-relative URLs, URL credentials, fragments, or a relative resolution that changes origin.
+- **Reason:** API v1 describes the field as a URI and the local object-storage implementation returns a same-origin relative path. The web client resolves that path through the browser origin, while Android previously rejected it before transfer and could never complete a task.
+- **Consequences:** Android supports both same-origin relative capabilities and approved absolute HTTPS upload instructions without attaching participant authorization. Network-policy tests cover relative resolution and fail-closed protocol-relative input; the physical Acer run completed upload and confirmation.
+
 ## Adding a decision
 
 Copy this structure:

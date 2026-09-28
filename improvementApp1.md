@@ -12,7 +12,7 @@
 
 ## Implementation update
 
-**Updated 2026-09-28:** APP-001, APP-002, APP-003, APP-005 through APP-011 are implemented in the current worktree. The physical Acer suite now passes the app tests (including JPEG/PNG/WebP, corrupt, unsupported, oversized, and revoked evidence inputs) and all design-system tests. CI now has a separate connected-device gate. APP-004 remains an acceptance activity: a production-like, independently controlled three-client game still needs to cover every authoritative gameplay branch before release approval.
+**Updated 2026-09-28:** APP-001, APP-002, APP-003, APP-005 through APP-011 are implemented in the current worktree. A follow-up physical run found that valid image preparation was fixed but the relative signed-upload instruction still failed at transfer; Android now resolves same-origin relative upload instructions against the validated API origin. The Acer run reached object upload, submission confirmation, `Evidence accepted`, and a completed assignment. Non-host lobby refreshes now also route authoritative active/completed rooms into gameplay/results. The physical connected suites and the final full multi-client APP-004 acceptance matrix remain required before release approval.
 
 ## Release verdict
 
@@ -40,7 +40,7 @@
 
 | ID      | Priority   | Area                     | Result                                                                                                 |
 | ------- | ---------- | ------------------------ | ------------------------------------------------------------------------------------------------------ |
-| APP-001 | P0 blocker | Evidence upload          | Fixed and covered by six physical-device app tests                                                     |
+| APP-001 | P0 blocker | Evidence upload          | Fixed through accepted submission on the physical Acer plus network and image-source tests             |
 | APP-002 | P1 high    | Test/release gate        | Fixed; `connectedQuality` passes and is required by CI                                                 |
 | APP-003 | P1 high    | Offline/session recovery | Fixed with manual Retry and bounded automatic backoff                                                  |
 | APP-004 | P1 high    | End-to-end acceptance    | Pending production-like three-client acceptance                                                        |

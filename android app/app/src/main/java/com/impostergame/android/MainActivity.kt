@@ -66,9 +66,13 @@ class MainActivity : ComponentActivity() {
     }
     private val gameplayGateway: GameplayGateway by lazy {
         participantApi?.let {
+            val apiBaseUrl = BuildConfig.API_BASE_URL.toHttpUrl()
             NetworkGameplayGateway(
                 it,
-                SignedUploadClient(allowInsecureLocalDebug = BuildConfig.DEBUG),
+                SignedUploadClient(
+                    apiBaseUrl = apiBaseUrl,
+                    allowInsecureLocalDebug = BuildConfig.DEBUG,
+                ),
                 allowInsecureLocalDebug = BuildConfig.DEBUG,
             )
         } ?: UnavailableGameplayGateway("API_BASE_URL is not configured for this build")

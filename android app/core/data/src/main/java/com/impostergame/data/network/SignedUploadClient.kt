@@ -9,6 +9,7 @@ import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.Call
 import okhttp3.Callback
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -18,6 +19,7 @@ import okhttp3.Response
 
 class SignedUploadClient(
     client: OkHttpClient = ApiClient.defaultClient(),
+    private val apiBaseUrl: HttpUrl? = null,
     private val allowInsecureLocalDebug: Boolean = false,
     private val operations: PrivacySafeOperations = PrivacySafeOperations(),
 ) {
@@ -42,7 +44,7 @@ class SignedUploadClient(
             )
         }
         val url =
-            intent.url.toHttpUrlOrNull()
+            resolveUploadUrl(intent.url)
                 ?: return ApiResult.Failure(
                         ApiFailure.Contract(IllegalArgumentException("Invalid signed upload URL"))
                     )
@@ -103,6 +105,30 @@ class SignedUploadClient(
                 )
             }
         }
+    }
+
+    private fun resolveUploadUrl(value: String): HttpUrl? {
+        if (value.startsWith("//")) return null
+        val absolute = value.toHttpUrlOrNull()
+        val resolved = absolute ?: apiBaseUrl?.resolve(value) ?: return null
+        if (
+            resolved.fragment != null ||
+                resolved.username.isNotEmpty() ||
+                resolved.password.isNotEmpty()
+        ) {
+            return null
+        }
+        if (
+            absolute == null &&
+                apiBaseUrl?.let {
+                    resolved.scheme != it.scheme ||
+                        resolved.host != it.host ||
+                        resolved.port != it.port
+                } != false
+        ) {
+            return null
+        }
+        return resolved
     }
 
     private companion object {

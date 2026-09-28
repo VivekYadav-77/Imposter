@@ -30,6 +30,8 @@
 - [x] Removed duplicated host status and dead-link styling; consolidated color, consent, and task-pack accessibility nodes.
 - [x] Enabled predictive back and added publish-time rejection of duplicate/obvious placeholder task descriptions.
 - [x] Added `connectedQuality` and a CI API 35 emulator job; app and design-system connected suites pass on the Acer/API 33 device.
+- [x] Resolved same-origin relative signed-upload instructions against the validated API origin; a physical Acer run reached object transfer, confirmation, `Evidence accepted`, and a completed assignment.
+- [x] Lobby polling now routes non-host participants into gameplay/results when another client changes the authoritative room status.
 
 ## Verification
 
@@ -63,12 +65,12 @@ Configure the protected CI environment and approved staging origin, then execute
 **Date/time:** 2026-09-28 Asia/Calcutta
 **Agent/session:** Codex
 **Active phase:** Phase 8 — end-to-end quality, release, and operations
-**Milestone:** implementation and regression verification of `improvementApp1.md` code-level findings
-**Status:** partial; APP-001 through APP-003 and APP-005 through APP-011 are implemented and locally verified, while APP-004 is an outstanding production-like acceptance run
+**Milestone:** close remaining `improvementApp1.md` evidence and authoritative-transition acceptance gaps
+**Status:** partial; implementable code gaps are repaired and the physical evidence submission passes, while APP-004 remains an outstanding production-like acceptance run
 
 ### Changed
 
-- `app`: evidence decoding, bootstrap recovery, validation focus/scroll, lobby dirty-state action, host labeling, accessibility semantics, explanatory footer, and predictive back.
+- `core:data`/`app`: relative upload URL resolution and authoritative remote-start/result routing, in addition to the prior evidence decoding, bootstrap recovery, form/lobby UX, accessibility, and predictive-back repairs.
 - `app`/`core:designsystem` tests: stable launch/layout assertions, lock-screen-safe test host, evidence source matrix, and resume/backoff unit coverage.
 - Gradle/CI: `connectedQuality` plus a required API 35 emulator job and retained reports.
 - Backend task packs: publish-time duplicate/placeholder validation with unit and integration coverage.
@@ -76,17 +78,18 @@ Configure the protected CI environment and approved staging origin, then execute
 
 ### Verified
 
-- Android `quality` and physical Acer/API 33 `connectedQuality` pass; the full backend/web `npm run check` and task-pack integration tests pass.
+- `gradlew quality connectedQuality --no-parallel --max-workers=1` passes after the follow-up repairs (231 tasks); physical Acer/API 33 evidence upload reaches accepted/completed.
+- `npm run check` passes: formatting, lint, typecheck, 21 files/120 unit tests, OpenAPI, and realtime fixtures.
 
 ### Decisions added
 
-- ADR-A-022 — Recoverable bootstrap and connected-device release gate.
+- ADR-A-023 — Same-origin relative evidence upload instructions.
 
 ### Remaining issues
 
-- APP-004 remains: run the independently controlled three-client gameplay/meeting/results/replay/reconnect matrix on an approved production-like backend.
+- APP-004 remains: run the independently controlled three-client gameplay/meeting/results/replay/reconnect matrix on an approved production-like backend; player-called meeting and replay behavior remain blocked on ADR-A-006 and ADR-A-008.
 - Current published placeholder data must be archived or replaced administratively; the new validator prevents equivalent drafts from being published but intentionally does not mutate live data.
 
 ### Next action
 
-Run APP-004 on approved staging with three independently controlled clients, then record the result in the Phase 8 acceptance ledger before producing the signed candidate.
+Execute APP-004 on approved staging with three independently controlled clients and record the Phase 8 acceptance ledger.

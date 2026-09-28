@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.impostergame.data.model.RoomSettingsInput
 import com.impostergame.data.model.RoomSnapshot
+import com.impostergame.data.model.RoomStatus
 import com.impostergame.data.network.ApiFailure
 import com.impostergame.designsystem.component.ConnectionState
 import java.util.UUID
@@ -386,6 +387,19 @@ class EntryLobbyViewModel(
                 is GatewayResult.Success -> {
                     val old = _state.value.room
                     val new = result.value
+                    when (new.status) {
+                        RoomStatus.ACTIVE -> {
+                            lobbyRefresh?.cancel()
+                            setDestination(EntryDestination.GAME)
+                            return@launch
+                        }
+                        RoomStatus.COMPLETED -> {
+                            lobbyRefresh?.cancel()
+                            setDestination(EntryDestination.RESULTS)
+                            return@launch
+                        }
+                        else -> Unit
+                    }
                     val announcement = rosterAnnouncement(old, new)
                     update {
                         it.copy(

@@ -16,7 +16,7 @@ Update status only with a link to implemented code and passing tests. Status val
 | AND-010 | Host lobby setup and start | 4 | Multi-device E2E | in progress |
 | AND-011 | Private role reveal and automatic reseal | 5, 7 | Lifecycle/privacy tests | in progress |
 | AND-012 | Task list and authoritative progress | 5 | Snapshot/UI integration tests | in progress |
-| AND-013 | Camera/photo picker evidence flow | 5 | [`../app/src/androidTest/java/com/impostergame/android/gameplay/EvidenceProcessorTest.kt`](../app/src/androidTest/java/com/impostergame/android/gameplay/EvidenceProcessorTest.kt), physical-device upload E2E | in progress |
+| AND-013 | Camera/photo picker evidence flow | 5 | [`../app/src/androidTest/java/com/impostergame/android/gameplay/EvidenceProcessorTest.kt`](../app/src/androidTest/java/com/impostergame/android/gameplay/EvidenceProcessorTest.kt), [`../core/data/src/test/java/com/impostergame/data/network/NetworkPolicyTest.kt`](../core/data/src/test/java/com/impostergame/data/network/NetworkPolicyTest.kt), physical-device accepted upload | in progress |
 | AND-014 | Safe background/retry upload behavior | 5, 7 | Failure/process tests | in progress |
 | AND-015 | Evidence gallery and authorized flagging | 5 | Visibility/authorization tests | in progress |
 | AND-016 | Authorized imposter elimination | 5 | Role/cooldown/race tests | in progress |
@@ -24,7 +24,7 @@ Update status only with a link to implemented code and passing tests. Status val
 | AND-018 | Discussion and evidence review | 6 | Multi-device phase E2E | in progress |
 | AND-019 | Private/public ejection voting | 0, 6 | Contract/privacy/race tests | in progress |
 | AND-020 | Meeting and terminal result | 6 | End-reason/reconnect tests | in progress |
-| AND-021 | Server-authoritative snapshot/resync | 3 | Version-gap integration tests | in progress |
+| AND-021 | Server-authoritative snapshot/resync | 3 | Version-gap integration tests; [`../app/src/test/java/com/impostergame/android/entry/EntryLobbyViewModelTest.kt`](../app/src/test/java/com/impostergame/android/entry/EntryLobbyViewModelTest.kt) remote-start routing | in progress |
 | AND-022 | Idempotent mutation retry | 3 | Request-policy tests | in progress |
 | AND-023 | TalkBack and non-color semantics | 2, 7 | [`../core/designsystem/src/androidTest/java/com/impostergame/designsystem/AccessibilityTest.kt`](../core/designsystem/src/androidTest/java/com/impostergame/designsystem/AccessibilityTest.kt), manual traversal; [`phase-07-hardening.md`](phase-07-hardening.md) | in progress |
 | AND-024 | Large text, contrast, reduced motion/sound | 2, 7 | [`phase-07-hardening.md`](phase-07-hardening.md) accessibility matrix | in progress |
