@@ -1,5 +1,6 @@
 package com.impostergame.android.gameplay
 
+import com.impostergame.android.ui.countdownDescription
 import com.impostergame.data.model.Assignment
 import com.impostergame.data.model.Cooldowns
 import com.impostergame.data.model.GamePhase
@@ -122,6 +123,15 @@ class GameplayModelsTest {
             base.copy(endReason = "time_expired").endReasonLabel(),
         )
         assertEquals("The game was abandoned.", base.copy(endReason = "abandoned").endReasonLabel())
+    }
+
+    @Test
+    fun countdownAccessibilityTextChangesOnlyAtMeaningfulBoundaries() {
+        assertEquals("2 minutes remaining", countdownDescription(120))
+        assertEquals("2 minutes remaining", countdownDescription(61))
+        assertEquals("Less than one minute remaining", countdownDescription(59))
+        assertEquals("Time is up", countdownDescription(0))
+        assertEquals("No phase deadline", countdownDescription(null))
     }
 
     private fun state(

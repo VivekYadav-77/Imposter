@@ -137,6 +137,15 @@ Use IDs `ADR-A-###`. Status is `proposed`, `approved`, `superseded`, or `rejecte
 - **Reason:** ADR-A-007 remains unresolved, while Phase 6 explicitly specifies lock-after-acceptance as the safe fallback and the current ejection service rejects replacement. This policy neither invents ballot mutability nor exposes hidden choices.
 - **Consequences:** Android cannot replace an accepted ballot even if a future backend permits it until ADR-A-007 is approved and the client behavior is revised. Replay and account prompts remain absent under ADR-A-008 and ADR-A-009.
 
+### ADR-A-019 — Phase 7 secure-surface and untrusted-input policy
+
+- **Status:** approved by Phase 7 implementation request
+- **Date:** 2026-09-28
+- **Approver:** product owner delegated best-fit product and technical choices
+- **Decision:** Treat every gameplay destination as sensitive, applying screenshot/recent-app protection and API 31+ overlay hiding. Keep lobby sharing explicit while marking copied room codes sensitive and clearing an unchanged clip after 60 seconds. Bound API bodies, server display text, image bytes/dimensions/pixels, and signed upload behavior; redact private DTO string representations. Preserve readable authoritative content while polling reconnects and reject stale game snapshots by state version.
+- **Reason:** Role, ballot, evidence capability, and session leakage can occur outside ordinary HTTP logging, while hostile text/images and retry races can exhaust resources or mislead players. A single conservative policy is easier to audit across every gameplay phase.
+- **Consequences:** Screenshots and ordinary overlays are unavailable throughout active gameplay. Server error details are not rendered directly. Oversized or unsupported responses/images fail closed. Rooted-device compromise and OEM clipboard/task-switcher behavior remain documented platform limitations requiring device review.
+
 ## Adding a decision
 
 Copy this structure:

@@ -1,5 +1,6 @@
 package com.impostergame.android.entry
 
+import com.impostergame.android.sanitizedForDisplay
 import com.impostergame.data.model.GameSnapshot
 import com.impostergame.data.model.PublicTaskPack
 import com.impostergame.data.model.RoomCreationInput
@@ -123,7 +124,8 @@ class NetworkEntryLobbyGateway(
                     }
                     is ApiResult.Success ->
                         when (result.value.status) {
-                            RoomStatus.LOBBY -> ResumeTarget.Lobby(result.value)
+                            RoomStatus.LOBBY ->
+                                ResumeTarget.Lobby(result.value.sanitizedForDisplay())
                             RoomStatus.ACTIVE -> ResumeTarget.Game
                             RoomStatus.COMPLETED,
                             RoomStatus.ABANDONED -> ResumeTarget.Results
@@ -151,14 +153,19 @@ class NetworkEntryLobbyGateway(
         api.joinRoom(code, RoomMembershipInput(nickname, colorId), idempotencyKey)
     }
 
-    override suspend fun refreshRoom() = api.fetch().toGatewayResult()
+    override suspend fun refreshRoom() =
+        api.fetch().toGatewayResult().mapSuccess(RoomSnapshot::sanitizedForDisplay)
 
-    override suspend fun taskPacks() = api.taskPacks().toGatewayResult()
+    override suspend fun taskPacks() =
+        api.taskPacks().toGatewayResult().mapSuccess { packs ->
+            packs.map(PublicTaskPack::sanitizedForDisplay)
+        }
 
     override suspend fun updateSettings(input: RoomSettingsInput) =
-        api.updateSettings(input).toGatewayResult()
+        api.updateSettings(input).toGatewayResult().mapSuccess(RoomSnapshot::sanitizedForDisplay)
 
-    override suspend fun start() = api.startGame().toGatewayResult()
+    override suspend fun start() =
+        api.startGame().toGatewayResult().mapSuccess(GameSnapshot::sanitizedForDisplay)
 
     override suspend fun leave(): GatewayResult<Unit> =
         when (val result = api.leaveRoom()) {
@@ -194,7 +201,7 @@ class NetworkEntryLobbyGateway(
                 sessions.save(
                     ParticipantCredential(issue.sessionToken, Instant.parse(issue.sessionExpiresAt))
                 )
-                GatewayResult.Success(issue.room)
+                GatewayResult.Success(issue.room.sanitizedForDisplay())
             }
         }
 }
@@ -203,4 +210,10 @@ private fun <T> ApiResult<T>.toGatewayResult(): GatewayResult<T> =
     when (this) {
         is ApiResult.Failure -> GatewayResult.Failure(error)
         is ApiResult.Success -> GatewayResult.Success(value)
+    }
+
+private inline fun <T, R> GatewayResult<T>.mapSuccess(transform: (T) -> R): GatewayResult<R> =
+    when (this) {
+        is GatewayResult.Failure -> this
+        is GatewayResult.Success -> GatewayResult.Success(transform(value))
     }

@@ -67,6 +67,7 @@ import com.impostergame.data.model.RoomSnapshot
 import com.impostergame.designsystem.avatar.PlayerAvatar
 import com.impostergame.designsystem.avatar.PlayerColors
 import com.impostergame.designsystem.avatar.PlayerStatus
+import com.impostergame.designsystem.component.ConnectionState
 import com.impostergame.designsystem.component.GameButton
 import com.impostergame.designsystem.component.GameOutlinedButton
 import com.impostergame.designsystem.component.PlayerCard
@@ -195,7 +196,9 @@ private fun EntryScreen(state: EntryLobbyUiState, viewModel: EntryLobbyViewModel
                     Modifier.fillMaxWidth(),
                     enabled = !state.loading,
                 )
-                state.form.spotsRemaining?.let { Text("$it spot(s) remaining") }
+                state.form.spotsRemaining?.let {
+                    Text("$it ${if (it == 1) "spot" else "spots"} remaining")
+                }
             }
             OutlinedTextField(
                 value = state.form.nickname,
@@ -323,6 +326,16 @@ private fun LobbyScreen(
         val twoPane = maxWidth >= 600.dp || maxHeight < 480.dp
         Column(Modifier.fillMaxSize()) {
             LobbyHeader(room, onCopyCode, onShareCode, viewModel::requestLeave)
+            if (state.connectionState != ConnectionState.Connected) {
+                Message(
+                    if (state.connectionState == ConnectionState.Offline) {
+                        "Offline. Room details will refresh when the connection returns."
+                    } else {
+                        "Reconnecting. You can still read the latest room details."
+                    },
+                    Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                )
+            }
             Message(state.announce, Modifier.semantics { liveRegion = LiveRegionMode.Polite })
             Message(state.message)
             if (twoPane) {

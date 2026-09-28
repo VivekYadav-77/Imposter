@@ -39,6 +39,11 @@ class EvidenceProcessor(private val context: Context) {
                 require(sourceType in SUPPORTED_SOURCE_TYPES) {
                     "Choose a JPEG, PNG, or WebP image."
                 }
+                val sourceLength =
+                    resolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1L
+                require(sourceLength == -1L || sourceLength <= MAX_SOURCE_BYTES) {
+                    "The selected image file is too large."
+                }
                 val orientation =
                     resolver.openInputStream(uri)?.use {
                         runCatching {
@@ -55,6 +60,13 @@ class EvidenceProcessor(private val context: Context) {
                     ?: error("The selected image could not be opened.")
                 require(bounds.outWidth > 0 && bounds.outHeight > 0) {
                     "The selected image is corrupt."
+                }
+                require(
+                    bounds.outWidth <= MAX_SOURCE_DIMENSION &&
+                        bounds.outHeight <= MAX_SOURCE_DIMENSION &&
+                        bounds.outWidth.toLong() * bounds.outHeight <= MAX_SOURCE_PIXELS
+                ) {
+                    "The selected image dimensions are too large."
                 }
                 var sample = 1
                 while (
@@ -168,7 +180,10 @@ class EvidenceProcessor(private val context: Context) {
 
     private companion object {
         const val MAX_BYTES = 5 * 1024 * 1024
+        const val MAX_SOURCE_BYTES = 20L * 1024 * 1024
         const val MAX_DIMENSION = 2048
+        const val MAX_SOURCE_DIMENSION = 16_384
+        const val MAX_SOURCE_PIXELS = 80_000_000L
         const val PREVIEW_DIMENSION = 512
         const val CAPTURE_TTL_MILLIS = 60 * 60 * 1000L
         val SUPPORTED_SOURCE_TYPES = setOf("image/jpeg", "image/png", "image/webp")

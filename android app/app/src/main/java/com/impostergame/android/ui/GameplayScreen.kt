@@ -2,6 +2,7 @@ package com.impostergame.android.ui
 
 import android.app.Activity
 import android.graphics.BitmapFactory
+import android.os.Build
 import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -76,7 +77,6 @@ import com.impostergame.android.gameplay.winnerLabel
 import com.impostergame.data.model.Assignment
 import com.impostergame.data.model.GameSnapshot
 import com.impostergame.data.model.Submission
-import com.impostergame.designsystem.component.ConnectionState
 import com.impostergame.designsystem.component.GameButton
 import com.impostergame.designsystem.component.GameButtonStyle
 import com.impostergame.designsystem.component.GameOutlinedButton
@@ -130,7 +130,7 @@ private fun MeetingScreen(state: GameplayUiState, viewModel: GameplayViewModel) 
                         ?: "You"
                 },
             playerColorId = snapshot.self.avatarId,
-            connectionState = ConnectionState.Connected,
+            connectionState = state.connectionState,
         )
         Column(
             Modifier.weight(1f)
@@ -473,8 +473,14 @@ private fun SecureContent() {
     val view = LocalView.current
     DisposableEffect(view) {
         val window = (view.context as? Activity)?.window
+        val wasSecure =
+            ((window?.attributes?.flags ?: 0) and WindowManager.LayoutParams.FLAG_SECURE) != 0
         window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        onDispose { window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) window?.setHideOverlayWindows(true)
+        onDispose {
+            if (!wasSecure) window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) window?.setHideOverlayWindows(false)
+        }
     }
 }
 
@@ -595,7 +601,7 @@ private fun TaskPhaseScreen(state: GameplayUiState, viewModel: GameplayViewModel
                 snapshot.participants.firstOrNull { it.id == snapshot.self.participantId }?.nickname
                     ?: "You",
             playerColorId = snapshot.self.avatarId,
-            connectionState = ConnectionState.Connected,
+            connectionState = state.connectionState,
         )
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             val twoPane = maxWidth >= 700.dp || maxHeight < 480.dp
@@ -861,7 +867,7 @@ private fun EvidenceGalleryScreen(state: GameplayUiState, viewModel: GameplayVie
                 snapshot.participants.firstOrNull { it.id == snapshot.self.participantId }?.nickname
                     ?: "You",
             playerColorId = snapshot.self.avatarId,
-            connectionState = ConnectionState.Connected,
+            connectionState = state.connectionState,
         )
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(GameSpacing.md),
@@ -1004,10 +1010,18 @@ private fun UploadStage.toDesignUploadState(): UploadState =
         UploadStage.TERMINAL_FAILURE -> UploadState.TerminalFailure
     }
 
-private fun countdownText(seconds: Long?): String {
+internal fun countdownText(seconds: Long?): String {
     if (seconds == null) return "—"
     return "%02d:%02d".format(seconds / 60, seconds % 60)
 }
 
-private fun countdownDescription(seconds: Long?): String =
-    seconds?.let { "$it seconds remaining" } ?: "No phase deadline"
+internal fun countdownDescription(seconds: Long?): String =
+    when {
+        seconds == null -> "No phase deadline"
+        seconds <= 0 -> "Time is up"
+        seconds < 60 -> "Less than one minute remaining"
+        else -> {
+            val minutes = (seconds + 59) / 60
+            "$minutes ${if (minutes == 1L) "minute" else "minutes"} remaining"
+        }
+    }

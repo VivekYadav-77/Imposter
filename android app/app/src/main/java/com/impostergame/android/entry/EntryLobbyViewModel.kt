@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.impostergame.data.model.RoomSettingsInput
 import com.impostergame.data.model.RoomSnapshot
 import com.impostergame.data.network.ApiFailure
+import com.impostergame.designsystem.component.ConnectionState
 import java.util.UUID
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -21,6 +22,7 @@ class EntryLobbyViewModel(
     val state: kotlinx.coroutines.flow.StateFlow<EntryLobbyUiState> = _state
     private var lobbyRefresh: Job? = null
     private var pendingSubmission: PendingSubmission? = null
+    private var requestInFlight = false
 
     init {
         bootstrap()
@@ -38,6 +40,7 @@ class EntryLobbyViewModel(
                         it.copy(
                             destination = EntryDestination.HOME,
                             message = messageFor(target.error),
+                            connectionState = ConnectionState.Offline,
                         )
                     }
             }
@@ -260,11 +263,7 @@ class EntryLobbyViewModel(
                     setDestination(EntryDestination.GAME)
                 }
                 is GatewayResult.Failure -> {
-                    val serverReasons =
-                        (result.error as? ApiFailure.Http)?.safeDetails?.get("reasons")?.toString()
-                    update {
-                        it.copy(message = serverReasons ?: messageFor(result.error))
-                    }
+                    update { it.copy(message = messageFor(result.error)) }
                     refreshLobby()
                 }
             }
@@ -316,6 +315,7 @@ class EntryLobbyViewModel(
                 loading = false,
                 message = null,
                 announce = announcement,
+                connectionState = ConnectionState.Connected,
             )
         }
         viewModelScope.launch {
@@ -337,7 +337,14 @@ class EntryLobbyViewModel(
         viewModelScope.launch {
             when (val result = gateway.refreshRoom()) {
                 is GatewayResult.Failure ->
-                    if (!silent) update { it.copy(message = messageFor(result.error)) }
+                    update {
+                        it.copy(
+                            message = if (silent) it.message else messageFor(result.error),
+                            connectionState =
+                                if (it.room == null) ConnectionState.Offline
+                                else ConnectionState.Reconnecting,
+                        )
+                    }
                 is GatewayResult.Success -> {
                     val old = _state.value.room
                     val new = result.value
@@ -347,6 +354,7 @@ class EntryLobbyViewModel(
                             room = new,
                             settings = if (it.settings.dirty) it.settings else draftFrom(new),
                             announce = announcement,
+                            connectionState = ConnectionState.Connected,
                         )
                     }
                 }
@@ -386,12 +394,14 @@ class EntryLobbyViewModel(
     }
 
     private fun launchRequest(block: suspend () -> Unit) {
-        if (_state.value.loading) return
+        if (requestInFlight) return
+        requestInFlight = true
         viewModelScope.launch {
             update { it.copy(loading = true, message = null) }
             try {
                 block()
             } finally {
+                requestInFlight = false
                 update { it.copy(loading = false) }
             }
         }
@@ -450,8 +460,11 @@ private fun rosterAnnouncement(old: RoomSnapshot?, new: RoomSnapshot): String? {
     if (oldHost != newHost && newHost != null) return "$newHost is now the host."
     val delta = new.participants.size - old.participants.size
     return when {
-        delta > 0 -> "$delta player joined."
-        delta < 0 -> "${-delta} player left."
+        delta > 0 -> "$delta ${if (delta == 1) "player" else "players"} joined."
+        delta < 0 -> {
+            val count = -delta
+            "$count ${if (count == 1) "player" else "players"} left."
+        }
         else -> null
     }
 }

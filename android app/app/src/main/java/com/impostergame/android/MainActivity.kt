@@ -4,7 +4,9 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
+import android.os.PersistableBundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -12,6 +14,7 @@ import androidx.activity.viewModels
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.createSavedStateHandle
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.CreationExtras
 import com.impostergame.android.entry.EntryLobbyGateway
 import com.impostergame.android.entry.EntryLobbyViewModel
@@ -28,6 +31,8 @@ import com.impostergame.data.network.ParticipantApi
 import com.impostergame.data.network.SignedUploadClient
 import com.impostergame.data.session.StoredSession
 import com.impostergame.session.AndroidKeystoreSessionStore
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
 class MainActivity : ComponentActivity() {
@@ -106,7 +111,18 @@ class MainActivity : ComponentActivity() {
 
     private fun copyRoomCode(code: String) {
         val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clipboard.setPrimaryClip(ClipData.newPlainText("Room code", code))
+        val clip = ClipData.newPlainText("Room code", code)
+        clip.description.extras =
+            PersistableBundle().apply { putBoolean(CLIPBOARD_IS_SENSITIVE, true) }
+        clipboard.setPrimaryClip(clip)
+        lifecycleScope.launch {
+            delay(CLIPBOARD_TTL_MILLIS)
+            val current = clipboard.primaryClip?.getItemAt(0)?.coerceToText(this@MainActivity)
+            if (current?.toString() == code) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) clipboard.clearPrimaryClip()
+                else clipboard.setPrimaryClip(ClipData.newPlainText("", ""))
+            }
+        }
     }
 
     private fun shareRoomCode(code: String) {
@@ -119,5 +135,10 @@ class MainActivity : ComponentActivity() {
                 "Share room code",
             )
         )
+    }
+
+    private companion object {
+        const val CLIPBOARD_IS_SENSITIVE = "android.content.extra.IS_SENSITIVE"
+        const val CLIPBOARD_TTL_MILLIS = 60_000L
     }
 }

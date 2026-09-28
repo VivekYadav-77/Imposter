@@ -8,6 +8,7 @@ import com.impostergame.android.entry.messageFor
 import com.impostergame.data.model.GamePhase
 import com.impostergame.data.model.GameSnapshot
 import com.impostergame.data.network.ApiFailure
+import com.impostergame.designsystem.component.ConnectionState
 import java.time.Clock
 import java.time.Instant
 import java.util.UUID
@@ -32,6 +33,7 @@ class GameplayViewModel(
     private var pendingFlag: PendingAction? = null
     private var pendingReviewVote: PendingAction? = null
     private var pendingEjectionVote: PendingAction? = null
+    private var commandInFlight = false
     private val announcedMeetings = mutableSetOf<String>()
     private var refreshedExpiredDeadline: String? = null
 
@@ -479,16 +481,29 @@ class GameplayViewModel(
             when (val result = gateway.snapshot()) {
                 is GatewayResult.Success -> {
                     applySnapshot(result.value, forceRoleSeal)
-                    update { it.copy(loading = false) }
+                    update {
+                        it.copy(loading = false, connectionState = ConnectionState.Connected)
+                    }
                 }
                 is GatewayResult.Failure ->
-                    update { it.copy(loading = false, message = messageFor(result.error)) }
+                    update {
+                        it.copy(
+                            loading = false,
+                            message = messageFor(result.error),
+                            connectionState =
+                                if (it.snapshot == null) ConnectionState.Offline
+                                else ConnectionState.Reconnecting,
+                        )
+                    }
             }
         }
     }
 
     private fun applySnapshot(snapshot: GameSnapshot, forceRoleSeal: Boolean = false) {
         update { current ->
+            if ((current.snapshot?.stateVersion ?: Long.MIN_VALUE) > snapshot.stateVersion) {
+                return@update current
+            }
             val meetingId = snapshot.meeting?.id
             val announceMeeting = meetingId != null && announcedMeetings.add(meetingId)
             val sameReviewItem =
@@ -645,12 +660,14 @@ class GameplayViewModel(
     }
 
     private fun launchOnce(block: suspend () -> Unit) {
-        if (_state.value.loading) return
+        if (commandInFlight) return
+        commandInFlight = true
         viewModelScope.launch {
             update { it.copy(loading = true) }
             try {
                 block()
             } finally {
+                commandInFlight = false
                 update { it.copy(loading = false) }
             }
         }

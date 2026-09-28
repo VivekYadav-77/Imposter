@@ -1,6 +1,8 @@
 package com.impostergame.android.gameplay
 
+import android.graphics.BitmapFactory
 import com.impostergame.android.entry.GatewayResult
+import com.impostergame.android.sanitizedForDisplay
 import com.impostergame.data.model.ConfirmSubmissionInput
 import com.impostergame.data.model.EjectionVoteInput
 import com.impostergame.data.model.FlagSubmissionInput
@@ -120,7 +122,7 @@ class NetworkGameplayGateway(
         when (val result = api.fetch(null)) {
             is ApiResult.Failure -> GatewayResult.Failure(result.error)
             is ApiResult.Success ->
-                result.value?.let { GatewayResult.Success(it) }
+                result.value?.let { GatewayResult.Success(it.sanitizedForDisplay()) }
                     ?: GatewayResult.Failure(
                         com.impostergame.data.network.ApiFailure.Contract(
                             IllegalStateException("Game snapshot was empty")
@@ -169,7 +171,9 @@ class NetworkGameplayGateway(
     }
 
     override suspend fun submissions(): GatewayResult<List<Submission>> =
-        api.submissions().toGateway()
+        api.submissions().toGateway().mapSuccess { submissions ->
+            submissions.map(Submission::sanitizedForDisplay)
+        }
 
     override suspend fun loadImage(url: String): GatewayResult<ByteArray> =
         withContext(Dispatchers.IO) {
@@ -198,7 +202,20 @@ class NetworkGameplayGateway(
                         )
                     } else {
                         val body = response.body
-                        if (body.contentLength() > MAX_PREVIEW_BYTES) {
+                        val mediaType = body.contentType()
+                        if (
+                            mediaType == null ||
+                                mediaType.type != "image" ||
+                                mediaType.subtype !in ALLOWED_IMAGE_SUBTYPES
+                        ) {
+                            GatewayResult.Failure(
+                                com.impostergame.data.network.ApiFailure.Contract(
+                                    IllegalArgumentException(
+                                        "Evidence preview type is not supported"
+                                    )
+                                )
+                            )
+                        } else if (body.contentLength() > MAX_PREVIEW_BYTES) {
                             GatewayResult.Failure(
                                 com.impostergame.data.network.ApiFailure.Contract(
                                     IllegalArgumentException("Evidence preview is too large")
@@ -214,7 +231,27 @@ class NetworkGameplayGateway(
                                     )
                                 )
                             } else {
-                                GatewayResult.Success(bytes)
+                                val bounds =
+                                    BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+                                if (
+                                    bounds.outWidth <= 0 ||
+                                        bounds.outHeight <= 0 ||
+                                        bounds.outWidth > MAX_PREVIEW_DIMENSION ||
+                                        bounds.outHeight > MAX_PREVIEW_DIMENSION ||
+                                        bounds.outWidth.toLong() * bounds.outHeight >
+                                            MAX_PREVIEW_PIXELS
+                                ) {
+                                    GatewayResult.Failure(
+                                        com.impostergame.data.network.ApiFailure.Contract(
+                                            IllegalArgumentException(
+                                                "Evidence preview dimensions are invalid"
+                                            )
+                                        )
+                                    )
+                                } else {
+                                    GatewayResult.Success(bytes)
+                                }
                             }
                         }
                     }
@@ -246,7 +283,9 @@ class NetworkGameplayGateway(
         expectedStateVersion: Long,
         key: String,
     ): GatewayResult<GameSnapshot> =
-        api.kill(KillInput(expectedStateVersion, targetParticipantId), key).toGateway()
+        api.kill(KillInput(expectedStateVersion, targetParticipantId), key)
+            .toGateway()
+            .mapSuccess(GameSnapshot::sanitizedForDisplay)
 
     override suspend fun reviewVote(
         reviewItemId: String,
@@ -282,8 +321,17 @@ class NetworkGameplayGateway(
 
     private companion object {
         const val MAX_PREVIEW_BYTES = 5 * 1024 * 1024
+        const val MAX_PREVIEW_DIMENSION = 4_096
+        const val MAX_PREVIEW_PIXELS = 16_777_216L
+        val ALLOWED_IMAGE_SUBTYPES = setOf("jpeg", "png", "webp")
     }
 }
+
+private inline fun <T, R> GatewayResult<T>.mapSuccess(transform: (T) -> R): GatewayResult<R> =
+    when (this) {
+        is GatewayResult.Failure -> this
+        is GatewayResult.Success -> GatewayResult.Success(transform(value))
+    }
 
 private fun <T> ApiResult<T>.toGateway(): GatewayResult<T> =
     when (this) {

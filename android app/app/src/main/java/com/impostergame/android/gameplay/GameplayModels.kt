@@ -4,6 +4,7 @@ import com.impostergame.data.model.Assignment
 import com.impostergame.data.model.GameSnapshot
 import com.impostergame.data.model.Meeting
 import com.impostergame.data.model.Submission
+import com.impostergame.designsystem.component.ConnectionState
 
 enum class GameplayDestination {
     LOADING,
@@ -134,6 +135,7 @@ data class GameplayUiState(
     val loading: Boolean = false,
     val remainingSeconds: Long? = null,
     val message: String? = null,
+    val connectionState: ConnectionState = ConnectionState.Connected,
 ) {
     val isSensitive: Boolean
         get() = destination != GameplayDestination.LOADING

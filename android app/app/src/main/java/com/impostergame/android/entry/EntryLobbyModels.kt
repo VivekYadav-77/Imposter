@@ -2,6 +2,7 @@ package com.impostergame.android.entry
 
 import com.impostergame.data.model.PublicTaskPack
 import com.impostergame.data.model.RoomSnapshot
+import com.impostergame.designsystem.component.ConnectionState
 
 enum class EntryDestination {
     BOOTSTRAP,
@@ -54,15 +55,15 @@ data class EntryLobbyUiState(
     val announce: String? = null,
     val confirmLeave: Boolean = false,
     val focusColorPicker: Boolean = false,
+    val connectionState: ConnectionState = ConnectionState.Connected,
 ) {
     val startBlockingReasons: List<String>
         get() {
             val snapshot = room ?: return listOf("Room details are still loading.")
             return buildList {
                 if (snapshot.participants.size < snapshot.minPlayers) {
-                    add(
-                        "${snapshot.minPlayers - snapshot.participants.size} more player(s) required."
-                    )
+                    val missing = snapshot.minPlayers - snapshot.participants.size
+                    add("$missing more ${if (missing == 1) "player" else "players"} required.")
                 }
                 if (snapshot.participants.size > snapshot.maxPlayers) {
                     add("Too many players are in the room.")
