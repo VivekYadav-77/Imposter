@@ -14,6 +14,7 @@ data class CommandRequest(
 enum class CommandMethod {
     POST,
     PATCH,
+    PUT,
 }
 
 fun interface IdGenerator {

@@ -2,6 +2,7 @@ package com.impostergame.android.gameplay
 
 import com.impostergame.data.model.Assignment
 import com.impostergame.data.model.GameSnapshot
+import com.impostergame.data.model.Meeting
 import com.impostergame.data.model.Submission
 
 enum class GameplayDestination {
@@ -29,6 +30,54 @@ internal fun GameplayUiState.mayKill(targetId: String): Boolean {
     val self = snapshot?.self ?: return false
     return self.capabilities.contains("kill") && targetId in self.killableParticipantIds
 }
+
+internal fun GameplayUiState.mayReviewVote(): Boolean {
+    val meeting = snapshot?.meeting ?: return false
+    return remainingSeconds != 0L &&
+        snapshot.self.lifeStatus == "alive" &&
+        meeting.capabilities.contains("vote_review") &&
+        reviewVoteSubmittedItemId != meeting.reviewItem?.id &&
+        meeting.reviewItem?.ownDecision == null
+}
+
+internal fun GameplayUiState.mayEjectionVote(): Boolean {
+    val meeting = snapshot?.meeting ?: return false
+    return remainingSeconds != 0L &&
+        snapshot.self.lifeStatus == "alive" &&
+        meeting.capabilities.contains("vote_ejection") &&
+        ejectionVoteSubmittedMeetingId != meeting.id &&
+        !meeting.hasCastEjectionVote
+}
+
+internal fun GameSnapshot.meetingReason(): String =
+    when (meeting?.triggerType) {
+        "kill" -> {
+            val reported =
+                participants.firstOrNull { it.id == meeting?.reportedParticipantId }?.nickname
+                    ?: "A player"
+            "$reported was reported eliminated."
+        }
+        "task_deadline" -> "The task phase timer ended."
+        else -> "A player called this meeting."
+    }
+
+internal fun GameSnapshot.winnerLabel(): String =
+    when (winner) {
+        "crew" -> "Crewmates win"
+        "imposters",
+        "imposter" -> "Imposters win"
+        else -> "Game ended"
+    }
+
+internal fun GameSnapshot.endReasonLabel(): String =
+    when (endReason) {
+        "tasks_completed" -> "All required tasks were completed."
+        "imposters_ejected" -> "All imposters were ejected."
+        "imposter_parity" -> "Imposters reached parity with the crew."
+        "time_expired" -> "The game timer expired."
+        "abandoned" -> "The game was abandoned."
+        else -> endReason?.replace('_', ' ')?.replaceFirstChar(Char::uppercase) ?: "Final result"
+    }
 
 enum class UploadStage {
     IDLE,
@@ -72,6 +121,16 @@ data class GameplayUiState(
     val selectedKillTargetId: String? = null,
     val confirmKill: Boolean = false,
     val confirmFlag: Boolean = false,
+    val meetingAlertId: String? = null,
+    val selectedReviewDecision: String? = null,
+    val confirmReviewVote: Boolean = false,
+    val reviewVoteSubmittedItemId: String? = null,
+    val hasEjectionSelection: Boolean = false,
+    val selectedEjectionTargetId: String? = null,
+    val confirmEjectionVote: Boolean = false,
+    val ejectionVoteSubmittedMeetingId: String? = null,
+    val reviewImageBytes: ByteArray? = null,
+    val resultDetailsExpanded: Boolean = false,
     val loading: Boolean = false,
     val remainingSeconds: Long? = null,
     val message: String? = null,
@@ -88,3 +147,6 @@ data class GameplayUiState(
     val canFlagEvidence: Boolean
         get() = snapshot?.self?.capabilities?.contains("flag_evidence") == true
 }
+
+internal fun Meeting.publicBallotsAllowed(voteVisibility: String): Boolean =
+    voteVisibility == "public"

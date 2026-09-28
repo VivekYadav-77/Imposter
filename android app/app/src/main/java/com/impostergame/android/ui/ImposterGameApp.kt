@@ -91,9 +91,16 @@ fun ImposterGameApp(
                 EntryDestination.JOIN,
                 EntryDestination.CREATE -> EntryScreen(state, viewModel)
                 EntryDestination.LOBBY -> LobbyScreen(state, viewModel, onCopyCode, onShareCode)
-                EntryDestination.GAME -> GameplayScreen(gameplayViewModel)
+                EntryDestination.GAME ->
+                    GameplayScreen(gameplayViewModel) {
+                        gameplayViewModel.clearForHome()
+                        viewModel.exitResults()
+                    }
                 EntryDestination.RESULTS ->
-                    PlaceholderScreen("Game results", "Your results are ready.")
+                    GameplayScreen(gameplayViewModel) {
+                        gameplayViewModel.clearForHome()
+                        viewModel.exitResults()
+                    }
             }
         }
     }

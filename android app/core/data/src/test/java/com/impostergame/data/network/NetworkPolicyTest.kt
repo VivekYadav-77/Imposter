@@ -2,6 +2,7 @@ package com.impostergame.data.network
 
 import com.impostergame.data.model.ApiEnvelope
 import com.impostergame.data.model.EvidencePolicy
+import com.impostergame.data.model.Meeting
 import com.impostergame.data.model.ParticipantSelf
 import com.impostergame.data.model.UploadIntent
 import kotlinx.coroutines.test.runTest
@@ -15,6 +16,19 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class NetworkPolicyTest {
+    @Test
+    fun meetingContractDecodesReviewAndResolvedResult() {
+        val meeting =
+            ContractJson.instance.decodeFromString(
+                Meeting.serializer(),
+                """{"id":"meeting","sequenceNumber":2,"triggerType":"task_deadline","reportedParticipantId":null,"phase":"resolved","deadlineAt":null,"eligibleParticipants":[{"id":"p1","nickname":"Ari","avatarId":"fox"}],"reviewItem":{"id":"review","submissionId":"submission","position":1,"total":1,"uploader":{"id":"p1","nickname":"Ari"},"assignmentDescription":"Check panel","ownDecision":"valid","votesCast":1,"requiredVotes":1},"ownEjectionTargetParticipantId":null,"hasCastEjectionVote":true,"votesCast":1,"requiredVotes":1,"publicVotes":[],"result":{"ejectedParticipantId":null,"totals":[],"skipVotes":1},"capabilities":[]}""",
+            )
+
+        assertEquals("valid", meeting.reviewItem?.ownDecision)
+        assertEquals(1, meeting.result?.skipVotes)
+        assertTrue(meeting.result?.ballots?.isEmpty() == true)
+    }
+
     @Test
     fun authorizationIsPresentAndNeverIncludedInStructuredLogs() = runTest {
         val server = MockWebServer()
@@ -163,6 +177,68 @@ class NetworkPolicyTest {
             assertEquals("PATCH", request.method)
             assertEquals("same-command-key", request.headers["Idempotency-Key"])
             assertEquals("{\"taskPhaseSeconds\":600}", request.body?.utf8())
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
+    fun voteCommandUsesPutAndKeepsItsIdempotencyKey() = runTest {
+        val server = MockWebServer()
+        server.enqueue(
+            MockResponse.Builder()
+                .code(200)
+                .body(
+                    """{"data":{"stateVersion":9,"votesCast":2},"meta":{"requestId":"r","serverTime":"2026-09-28T00:00:00Z"}}"""
+                )
+                .build()
+        )
+        server.start()
+        try {
+            val api =
+                ParticipantApi(
+                    ApiClient(
+                        server.url("/").toString().toHttpUrl(),
+                        { "secret" },
+                        allowInsecureLocalDebug = true,
+                    )
+                )
+            api.ejectionVote(
+                "meeting-1",
+                com.impostergame.data.model.EjectionVoteInput(8, null),
+                "vote-key",
+            )
+
+            val request = server.takeRequest()
+            assertEquals("PUT", request.method)
+            assertEquals("vote-key", request.headers["Idempotency-Key"])
+            assertEquals("/api/v1/meetings/meeting-1/ejection-vote", request.url.encodedPath)
+            assertTrue(request.body?.utf8()?.contains("\"targetParticipantId\":null") == true)
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
+    fun endingParticipantSessionUsesAuthenticatedDeleteAndAcceptsNoContent() = runTest {
+        val server = MockWebServer()
+        server.enqueue(MockResponse.Builder().code(204).build())
+        server.start()
+        try {
+            val api =
+                ParticipantApi(
+                    ApiClient(
+                        server.url("/").toString().toHttpUrl(),
+                        { "secret" },
+                        allowInsecureLocalDebug = true,
+                    )
+                )
+            assertTrue(api.endSession() is ApiResult.Success)
+
+            val request = server.takeRequest()
+            assertEquals("DELETE", request.method)
+            assertEquals("Bearer secret", request.headers["Authorization"])
+            assertEquals("/api/v1/participant-sessions/current", request.url.encodedPath)
         } finally {
             server.close()
         }

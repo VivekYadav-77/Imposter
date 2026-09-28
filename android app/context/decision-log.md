@@ -128,6 +128,15 @@ Use IDs `ADR-A-###`. Status is `proposed`, `approved`, `superseded`, or `rejecte
 - **Reason:** The current product has no approved background-upload notification, worker policy, or durable encrypted evidence queue. Foreground-only execution avoids false success, hidden data transfer, and persistence of evidence or signed storage capabilities.
 - **Consequences:** Players must keep the app open during upload. Process death loses the prepared preview and safely returns through bootstrap/role sealing; it never marks a task complete locally. A future background worker requires a separate privacy, notification, retry, and storage decision.
 
+### ADR-A-018 — Conservative meeting ballot lock and privacy rendering
+
+- **Status:** approved by Phase 6 implementation request
+- **Date:** 2026-09-28
+- **Approver:** product owner delegated best-fit product and technical choices
+- **Decision:** Review and ejection selections remain local and reversible until explicit confirmation. After the first accepted response, Android locks the choice and follows the authoritative snapshot. A `409` closes the pending confirmation and refreshes. Private meetings show participation counts only; individual ballots render only from server-returned public fields. Countdown expiry disables commands and requests fresh state without resolving the meeting locally.
+- **Reason:** ADR-A-007 remains unresolved, while Phase 6 explicitly specifies lock-after-acceptance as the safe fallback and the current ejection service rejects replacement. This policy neither invents ballot mutability nor exposes hidden choices.
+- **Consequences:** Android cannot replace an accepted ballot even if a future backend permits it until ADR-A-007 is approved and the client behavior is revised. Replay and account prompts remain absent under ADR-A-008 and ADR-A-009.
+
 ## Adding a decision
 
 Copy this structure:

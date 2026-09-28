@@ -2,9 +2,11 @@ package com.impostergame.android.gameplay
 
 import com.impostergame.android.entry.GatewayResult
 import com.impostergame.data.model.ConfirmSubmissionInput
+import com.impostergame.data.model.EjectionVoteInput
 import com.impostergame.data.model.FlagSubmissionInput
 import com.impostergame.data.model.GameSnapshot
 import com.impostergame.data.model.KillInput
+import com.impostergame.data.model.ReviewVoteInput
 import com.impostergame.data.model.Submission
 import com.impostergame.data.model.SubmissionConfirmation
 import com.impostergame.data.model.UploadIntentInput
@@ -44,6 +46,20 @@ interface GameplayGateway {
         expectedStateVersion: Long,
         key: String,
     ): GatewayResult<GameSnapshot>
+
+    suspend fun reviewVote(
+        reviewItemId: String,
+        expectedStateVersion: Long,
+        decision: String,
+        key: String,
+    ): GatewayResult<Unit>
+
+    suspend fun ejectionVote(
+        meetingId: String,
+        expectedStateVersion: Long,
+        targetParticipantId: String?,
+        key: String,
+    ): GatewayResult<Unit>
 }
 
 class UnavailableGameplayGateway(private val reason: String) : GameplayGateway {
@@ -78,6 +94,20 @@ class UnavailableGameplayGateway(private val reason: String) : GameplayGateway {
         expectedStateVersion: Long,
         key: String,
     ): GatewayResult<GameSnapshot> = failure()
+
+    override suspend fun reviewVote(
+        reviewItemId: String,
+        expectedStateVersion: Long,
+        decision: String,
+        key: String,
+    ): GatewayResult<Unit> = failure()
+
+    override suspend fun ejectionVote(
+        meetingId: String,
+        expectedStateVersion: Long,
+        targetParticipantId: String?,
+        key: String,
+    ): GatewayResult<Unit> = failure()
 }
 
 class NetworkGameplayGateway(
@@ -217,6 +247,38 @@ class NetworkGameplayGateway(
         key: String,
     ): GatewayResult<GameSnapshot> =
         api.kill(KillInput(expectedStateVersion, targetParticipantId), key).toGateway()
+
+    override suspend fun reviewVote(
+        reviewItemId: String,
+        expectedStateVersion: Long,
+        decision: String,
+        key: String,
+    ): GatewayResult<Unit> =
+        when (
+            val result =
+                api.reviewVote(reviewItemId, ReviewVoteInput(expectedStateVersion, decision), key)
+        ) {
+            is ApiResult.Failure -> GatewayResult.Failure(result.error)
+            is ApiResult.Success -> GatewayResult.Success(Unit)
+        }
+
+    override suspend fun ejectionVote(
+        meetingId: String,
+        expectedStateVersion: Long,
+        targetParticipantId: String?,
+        key: String,
+    ): GatewayResult<Unit> =
+        when (
+            val result =
+                api.ejectionVote(
+                    meetingId,
+                    EjectionVoteInput(expectedStateVersion, targetParticipantId),
+                    key,
+                )
+        ) {
+            is ApiResult.Failure -> GatewayResult.Failure(result.error)
+            is ApiResult.Success -> GatewayResult.Success(Unit)
+        }
 
     private companion object {
         const val MAX_PREVIEW_BYTES = 5 * 1024 * 1024

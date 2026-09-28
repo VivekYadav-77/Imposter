@@ -2,11 +2,13 @@ package com.impostergame.data.network
 
 import com.impostergame.data.model.ApiEnvelope
 import com.impostergame.data.model.ConfirmSubmissionInput
+import com.impostergame.data.model.EjectionVoteInput
 import com.impostergame.data.model.FlagAcknowledgement
 import com.impostergame.data.model.FlagSubmissionInput
 import com.impostergame.data.model.GameSnapshot
 import com.impostergame.data.model.KillInput
 import com.impostergame.data.model.PublicTaskPack
+import com.impostergame.data.model.ReviewVoteInput
 import com.impostergame.data.model.RoomCreationInput
 import com.impostergame.data.model.RoomJoinOptions
 import com.impostergame.data.model.RoomMembershipInput
@@ -18,6 +20,7 @@ import com.impostergame.data.model.Submission
 import com.impostergame.data.model.SubmissionConfirmation
 import com.impostergame.data.model.UploadIntent
 import com.impostergame.data.model.UploadIntentInput
+import com.impostergame.data.model.VoteAcknowledgement
 import com.impostergame.data.repository.GameSnapshotSource
 import com.impostergame.data.repository.RoomSnapshotSource
 import kotlinx.serialization.builtins.ListSerializer
@@ -198,6 +201,48 @@ class ParticipantApi(
                 ApiEnvelope.serializer(GameSnapshot.serializer()),
             )
             .map { it.data }
+
+    suspend fun reviewVote(
+        reviewItemId: String,
+        input: ReviewVoteInput,
+        idempotencyKey: String,
+    ): ApiResult<VoteAcknowledgement> =
+        client
+            .command(
+                CommandRequest(
+                    routeTemplate = "/api/v1/evidence-review-items/{reviewItemId}/vote",
+                    encodedPath = "/api/v1/evidence-review-items/$reviewItemId/vote",
+                    body = json.encodeToString(input).encodeToByteArray(),
+                    idempotencyKey = idempotencyKey,
+                    method = CommandMethod.PUT,
+                ),
+                ApiEnvelope.serializer(VoteAcknowledgement.serializer()),
+            )
+            .map { it.data }
+
+    suspend fun ejectionVote(
+        meetingId: String,
+        input: EjectionVoteInput,
+        idempotencyKey: String,
+    ): ApiResult<VoteAcknowledgement> =
+        client
+            .command(
+                CommandRequest(
+                    routeTemplate = "/api/v1/meetings/{meetingId}/ejection-vote",
+                    encodedPath = "/api/v1/meetings/$meetingId/ejection-vote",
+                    body = json.encodeToString(input).encodeToByteArray(),
+                    idempotencyKey = idempotencyKey,
+                    method = CommandMethod.PUT,
+                ),
+                ApiEnvelope.serializer(VoteAcknowledgement.serializer()),
+            )
+            .map { it.data }
+
+    suspend fun endSession(): ApiResult<Unit> =
+        client.delete(
+            routeTemplate = "/api/v1/participant-sessions/current",
+            encodedPath = "/api/v1/participant-sessions/current",
+        )
 
     suspend fun rotateSession(): ApiResult<SessionCredential> =
         client

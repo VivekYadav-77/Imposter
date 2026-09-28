@@ -61,6 +61,8 @@ interface EntryLobbyGateway {
     suspend fun start(): GatewayResult<GameSnapshot>
 
     suspend fun leave(): GatewayResult<Unit>
+
+    suspend fun endSession(): GatewayResult<Unit>
 }
 
 class UnavailableEntryLobbyGateway(private val reason: String) : EntryLobbyGateway {
@@ -94,6 +96,8 @@ class UnavailableEntryLobbyGateway(private val reason: String) : EntryLobbyGatew
     override suspend fun start(): GatewayResult<GameSnapshot> = failure()
 
     override suspend fun leave(): GatewayResult<Unit> = failure()
+
+    override suspend fun endSession(): GatewayResult<Unit> = failure()
 }
 
 class NetworkEntryLobbyGateway(
@@ -159,6 +163,21 @@ class NetworkEntryLobbyGateway(
     override suspend fun leave(): GatewayResult<Unit> =
         when (val result = api.leaveRoom()) {
             is ApiResult.Failure -> GatewayResult.Failure(result.error)
+            is ApiResult.Success -> {
+                sessions.clear()
+                GatewayResult.Success(Unit)
+            }
+        }
+
+    override suspend fun endSession(): GatewayResult<Unit> =
+        when (val result = api.endSession()) {
+            is ApiResult.Failure ->
+                if (result.error is ApiFailure.Http && result.error.status in listOf(401, 404)) {
+                    sessions.clear()
+                    GatewayResult.Success(Unit)
+                } else {
+                    GatewayResult.Failure(result.error)
+                }
             is ApiResult.Success -> {
                 sessions.clear()
                 GatewayResult.Success(Unit)

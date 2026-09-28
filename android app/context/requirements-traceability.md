@@ -21,9 +21,9 @@ Update status only with a link to implemented code and passing tests. Status val
 | AND-015 | Evidence gallery and authorized flagging | 5 | Visibility/authorization tests | in progress |
 | AND-016 | Authorized imposter elimination | 5 | Role/cooldown/race tests | in progress |
 | AND-017 | Player-called meeting | 0, 5 | Product decision and E2E | blocked |
-| AND-018 | Discussion and evidence review | 6 | Multi-device phase E2E | planned |
-| AND-019 | Private/public ejection voting | 0, 6 | Contract/privacy/race tests | blocked |
-| AND-020 | Meeting and terminal result | 6 | End-reason/reconnect tests | planned |
+| AND-018 | Discussion and evidence review | 6 | Multi-device phase E2E | in progress |
+| AND-019 | Private/public ejection voting | 0, 6 | Contract/privacy/race tests | in progress |
+| AND-020 | Meeting and terminal result | 6 | End-reason/reconnect tests | in progress |
 | AND-021 | Server-authoritative snapshot/resync | 3 | Version-gap integration tests | in progress |
 | AND-022 | Idempotent mutation retry | 3 | Request-policy tests | in progress |
 | AND-023 | TalkBack and non-color semantics | 2, 7 | Manual + automated accessibility checks | in progress |

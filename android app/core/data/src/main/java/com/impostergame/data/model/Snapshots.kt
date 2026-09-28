@@ -2,7 +2,6 @@ package com.impostergame.data.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.JsonObject
 
 @Serializable
 enum class RoomStatus {
@@ -163,14 +162,39 @@ data class Meeting(
     val phase: String,
     val deadlineAt: String?,
     val eligibleParticipants: List<MeetingParticipant>,
-    val reviewItem: JsonObject?,
+    val reviewItem: ReviewItem?,
     val ownEjectionTargetParticipantId: String?,
     val hasCastEjectionVote: Boolean,
     val votesCast: Int,
     val requiredVotes: Int,
     val publicVotes: List<PublicVote>,
-    val result: JsonObject?,
+    val result: MeetingResult?,
     val capabilities: List<String>,
+)
+
+@Serializable data class MeetingUploader(val id: String, val nickname: String)
+
+@Serializable
+data class ReviewItem(
+    val id: String,
+    val submissionId: String,
+    val position: Int,
+    val total: Int,
+    val uploader: MeetingUploader,
+    val assignmentDescription: String,
+    val ownDecision: String?,
+    val votesCast: Int,
+    val requiredVotes: Int,
+)
+
+@Serializable data class MeetingVoteTotal(val participantId: String, val votes: Int)
+
+@Serializable
+data class MeetingResult(
+    val ejectedParticipantId: String?,
+    val totals: List<MeetingVoteTotal>,
+    val skipVotes: Int,
+    val ballots: List<PublicVote> = emptyList(),
 )
 
 @Serializable
@@ -192,7 +216,45 @@ data class GameSnapshot(
     val cooldowns: Cooldowns,
     val meetingRules: MeetingRules,
     val meeting: Meeting?,
-    val resultSummary: JsonObject?,
+    val resultSummary: GameResultSummary?,
+)
+
+@Serializable
+data class GameResultPlayer(
+    val id: String,
+    val nickname: String,
+    val avatarId: String,
+    val role: String,
+    val crewRole: MapRole?,
+    val lifeStatus: String,
+    val completedTasks: Int,
+    val totalTasks: Int,
+)
+
+@Serializable
+data class GameResultSummary(
+    val durationSeconds: Int,
+    val completedTasks: Int,
+    val totalTasks: Int,
+    val players: List<GameResultPlayer>,
+)
+
+@Serializable data class ReviewVoteInput(val expectedStateVersion: Long, val decision: String)
+
+@Serializable
+data class EjectionVoteInput(
+    val expectedStateVersion: Long,
+    val targetParticipantId: String?,
+)
+
+@Serializable
+data class VoteAcknowledgement(
+    val stateVersion: Long,
+    val votesCast: Int,
+    val meetingId: String? = null,
+    val targetParticipantId: String? = null,
+    val resolved: Boolean? = null,
+    val winner: String? = null,
 )
 
 @Serializable data class GameTaskPack(val name: String)

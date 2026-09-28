@@ -45,10 +45,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -61,8 +65,14 @@ import com.impostergame.android.gameplay.GameplayDestination
 import com.impostergame.android.gameplay.GameplayUiState
 import com.impostergame.android.gameplay.GameplayViewModel
 import com.impostergame.android.gameplay.UploadStage
+import com.impostergame.android.gameplay.endReasonLabel
 import com.impostergame.android.gameplay.incompleteFirst
+import com.impostergame.android.gameplay.mayEjectionVote
 import com.impostergame.android.gameplay.mayFlag
+import com.impostergame.android.gameplay.mayReviewVote
+import com.impostergame.android.gameplay.meetingReason
+import com.impostergame.android.gameplay.publicBallotsAllowed
+import com.impostergame.android.gameplay.winnerLabel
 import com.impostergame.data.model.Assignment
 import com.impostergame.data.model.GameSnapshot
 import com.impostergame.data.model.Submission
@@ -77,7 +87,7 @@ import com.impostergame.designsystem.component.UploadState
 import com.impostergame.designsystem.theme.GameSpacing
 
 @Composable
-fun GameplayScreen(viewModel: GameplayViewModel) {
+fun GameplayScreen(viewModel: GameplayViewModel, onReturnHome: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     SecureContent()
     LaunchedEffect(Unit) { viewModel.load() }
@@ -86,12 +96,375 @@ fun GameplayScreen(viewModel: GameplayViewModel) {
         GameplayDestination.SEALED_ROLE -> RoleRevealScreen(state, viewModel)
         GameplayDestination.TASKS -> TaskPhaseScreen(state, viewModel)
         GameplayDestination.EVIDENCE -> EvidenceGalleryScreen(state, viewModel)
-        GameplayDestination.MEETING ->
-            PlaceholderScreen(
-                "Meeting in progress",
-                "The current meeting view is handled in Phase 6.",
+        GameplayDestination.MEETING -> MeetingScreen(state, viewModel)
+        GameplayDestination.RESULTS -> FinalResultScreen(state, viewModel, onReturnHome)
+    }
+}
+
+@Composable
+private fun MeetingScreen(state: GameplayUiState, viewModel: GameplayViewModel) {
+    val snapshot = state.snapshot ?: return LoadingScreen("Loading meeting…")
+    val meeting = snapshot.meeting ?: return LoadingScreen("Waiting for meeting details…")
+    val haptics = LocalHapticFeedback.current
+    state.meetingAlertId?.let {
+        LaunchedEffect(it) { haptics.performHapticFeedback(HapticFeedbackType.LongPress) }
+        AlertDialog(
+            onDismissRequest = viewModel::dismissMeetingAlert,
+            title = { Text("Meeting started") },
+            text = { Text(snapshot.meetingReason()) },
+            confirmButton = {
+                TextButton(onClick = viewModel::dismissMeetingAlert) { Text("View meeting") }
+            },
+        )
+    }
+    if (state.confirmReviewVote) ReviewVoteConfirmation(state, viewModel)
+    if (state.confirmEjectionVote) EjectionVoteConfirmation(state, viewModel)
+    Column(Modifier.fillMaxSize().safeDrawingPadding()) {
+        GameTopBar(
+            phase = "Meeting ${meeting.sequenceNumber}",
+            timerText = countdownText(state.remainingSeconds),
+            timerDescription = countdownDescription(state.remainingSeconds),
+            nickname =
+                snapshot.self.let { self ->
+                    snapshot.participants.firstOrNull { it.id == self.participantId }?.nickname
+                        ?: "You"
+                },
+            playerColorId = snapshot.self.avatarId,
+            connectionState = ConnectionState.Connected,
+        )
+        Column(
+            Modifier.weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(GameSpacing.md),
+            verticalArrangement = Arrangement.spacedBy(GameSpacing.md),
+        ) {
+            Text(
+                snapshot.meetingReason(),
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
             )
-        GameplayDestination.RESULTS -> PlaceholderScreen("Game complete", "Results are ready.")
+            Message(state.message)
+            if (snapshot.self.lifeStatus != "alive") {
+                Message(
+                    "You are ${snapshot.self.lifeStatus}. You can observe this meeting but cannot vote."
+                )
+            }
+            when (meeting.phase) {
+                "discussion" -> DiscussionPanel(state)
+                "review" -> ReviewPanel(state, viewModel)
+                "voting" -> EjectionVotingPanel(state, viewModel)
+                "resolved" -> MeetingResultPanel(state)
+                else -> Text("Waiting for the server to advance the meeting…")
+            }
+        }
+    }
+}
+
+@Composable
+private fun DiscussionPanel(state: GameplayUiState) {
+    val meeting = state.snapshot?.meeting ?: return
+    Card(Modifier.fillMaxWidth()) {
+        Column(
+            Modifier.padding(GameSpacing.md),
+            verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
+        ) {
+            Text(
+                "Discussion",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                "Discuss what happened. Voting choices will appear only when the server opens them."
+            )
+            Text("${meeting.votesCast} of ${meeting.requiredVotes} required responses received")
+            if (state.remainingSeconds == 0L) Text("Time is up. Waiting for the server…")
+        }
+    }
+}
+
+@Composable
+private fun ReviewPanel(state: GameplayUiState, viewModel: GameplayViewModel) {
+    val item =
+        state.snapshot?.meeting?.reviewItem ?: return Text("Waiting for the next evidence item…")
+    Card(Modifier.fillMaxWidth()) {
+        Column(
+            Modifier.padding(GameSpacing.md),
+            verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
+        ) {
+            Text(
+                "Evidence ${item.position} of ${item.total}",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(item.assignmentDescription)
+            Text("Submitted by ${item.uploader.nickname}")
+            state.reviewImageBytes?.let { EvidenceBitmap(it) }
+                ?: GameOutlinedButton(
+                    "Refresh evidence image",
+                    viewModel::refreshReviewEvidence,
+                    Modifier.fillMaxWidth(),
+                )
+            Text("${item.votesCast} of ${item.requiredVotes} review votes received")
+            if (item.ownDecision != null || state.reviewVoteSubmittedItemId == item.id) {
+                val decision = item.ownDecision ?: state.selectedReviewDecision ?: "submitted"
+                Text("Your vote: ${decision.replaceFirstChar(Char::uppercase)} — locked")
+            } else if (state.mayReviewVote()) {
+                VoteChoice("✓ Valid evidence", state.selectedReviewDecision == "valid") {
+                    viewModel.selectReviewDecision("valid")
+                }
+                VoteChoice("✕ Invalid evidence", state.selectedReviewDecision == "invalid") {
+                    viewModel.selectReviewDecision("invalid")
+                }
+                GameButton(
+                    "Review vote",
+                    viewModel::requestReviewVoteConfirmation,
+                    Modifier.fillMaxWidth(),
+                    enabled = state.selectedReviewDecision != null && !state.loading,
+                )
+            } else {
+                Text(
+                    if (state.remainingSeconds == 0L) "Time is up. Waiting for the server…"
+                    else "Observing review votes."
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun EjectionVotingPanel(state: GameplayUiState, viewModel: GameplayViewModel) {
+    val snapshot = state.snapshot ?: return
+    val meeting = snapshot.meeting ?: return
+    Card(Modifier.fillMaxWidth()) {
+        Column(
+            Modifier.padding(GameSpacing.md),
+            verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
+        ) {
+            Text(
+                "Vote to eject",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            Text("${meeting.votesCast} of ${meeting.requiredVotes} votes cast")
+            if (meeting.hasCastEjectionVote || state.ejectionVoteSubmittedMeetingId == meeting.id) {
+                val name =
+                    meeting.ownEjectionTargetParticipantId?.let { id ->
+                        meeting.eligibleParticipants.firstOrNull { it.id == id }?.nickname
+                    } ?: "Skip"
+                Text("Your vote: $name — locked")
+            } else if (state.mayEjectionVote()) {
+                meeting.eligibleParticipants.forEach { participant ->
+                    PlayerCard(
+                        nickname = participant.nickname,
+                        playerColorId = participant.avatarId,
+                        selected =
+                            state.hasEjectionSelection &&
+                                state.selectedEjectionTargetId == participant.id,
+                        onSelected = { viewModel.selectEjectionTarget(participant.id) },
+                    )
+                }
+                VoteChoice(
+                    "Skip — eject no one",
+                    state.hasEjectionSelection && state.selectedEjectionTargetId == null,
+                ) {
+                    viewModel.selectEjectionTarget(null)
+                }
+                GameButton(
+                    "Review vote",
+                    viewModel::requestEjectionVoteConfirmation,
+                    Modifier.fillMaxWidth(),
+                    enabled = state.hasEjectionSelection && !state.loading,
+                )
+            } else {
+                Text(
+                    if (state.remainingSeconds == 0L) "Time is up. Waiting for the server…"
+                    else "Observing the vote."
+                )
+            }
+            if (meeting.publicBallotsAllowed(snapshot.meetingRules.voteVisibility)) {
+                PublicBallots(meeting.publicVotes)
+            } else {
+                Text("Ballots are private. Only the aggregate count is shown.")
+            }
+        }
+    }
+}
+
+@Composable
+private fun VoteChoice(label: String, selected: Boolean, onClick: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        RadioButton(selected = selected, onClick = onClick)
+        Text(label)
+    }
+}
+
+@Composable
+private fun ReviewVoteConfirmation(state: GameplayUiState, viewModel: GameplayViewModel) {
+    val decision = state.selectedReviewDecision ?: return
+    AlertDialog(
+        onDismissRequest = viewModel::dismissReviewVote,
+        title = { Text("Confirm review vote") },
+        text = {
+            Text(
+                "Mark this evidence ${decision.uppercase()}? Your accepted vote cannot be changed."
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = viewModel::confirmReviewVote) { Text("Submit vote") }
+        },
+        dismissButton = { TextButton(onClick = viewModel::dismissReviewVote) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun EjectionVoteConfirmation(state: GameplayUiState, viewModel: GameplayViewModel) {
+    val meeting = state.snapshot?.meeting ?: return
+    val target =
+        state.selectedEjectionTargetId?.let { id ->
+            meeting.eligibleParticipants.firstOrNull { it.id == id }
+        }
+    AlertDialog(
+        onDismissRequest = viewModel::dismissEjectionVote,
+        title = { Text("Confirm ejection vote") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(GameSpacing.sm)) {
+                if (target != null) PlayerCard(target.nickname, target.avatarId)
+                else Text("Skip — eject no one", fontWeight = FontWeight.Bold)
+                Text("Your accepted vote cannot be changed.")
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = viewModel::confirmEjectionVote) { Text("Submit vote") }
+        },
+        dismissButton = { TextButton(onClick = viewModel::dismissEjectionVote) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun MeetingResultPanel(state: GameplayUiState) {
+    val snapshot = state.snapshot ?: return
+    val meeting = snapshot.meeting ?: return
+    val result = meeting.result ?: return Text("Counting votes…")
+    val ejected =
+        result.ejectedParticipantId?.let { id ->
+            snapshot.participants.firstOrNull { it.id == id }?.nickname
+        }
+    Card(Modifier.fillMaxWidth()) {
+        Column(
+            Modifier.padding(GameSpacing.md).semantics { liveRegion = LiveRegionMode.Assertive },
+            verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
+        ) {
+            Text(
+                ejected?.let { "$it was ejected" } ?: "No one was ejected",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            result.totals.forEach { total ->
+                val name =
+                    snapshot.participants.firstOrNull { it.id == total.participantId }?.nickname
+                        ?: "Player"
+                Text("$name: ${total.votes}")
+            }
+            Text("Skip: ${result.skipVotes}")
+            if (meeting.publicBallotsAllowed(snapshot.meetingRules.voteVisibility))
+                PublicBallots(result.ballots)
+            else Text("Individual ballots are private.")
+            Text("Waiting for the server to continue…")
+        }
+    }
+}
+
+@Composable
+private fun PublicBallots(ballots: List<com.impostergame.data.model.PublicVote>) {
+    if (ballots.isEmpty()) return
+    Text("Public ballots", fontWeight = FontWeight.Bold)
+    ballots.forEach { ballot ->
+        Text("${ballot.voterNickname} → ${ballot.targetNickname ?: "Skip"}")
+    }
+}
+
+@Composable
+private fun FinalResultScreen(
+    state: GameplayUiState,
+    viewModel: GameplayViewModel,
+    onReturnHome: () -> Unit,
+) {
+    val snapshot = state.snapshot ?: return LoadingScreen("Loading final result…")
+    val summary = snapshot.resultSummary
+    Column(
+        Modifier.fillMaxSize()
+            .safeDrawingPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(GameSpacing.xl),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(GameSpacing.md),
+    ) {
+        Text(
+            snapshot.winnerLabel(),
+            modifier = Modifier.semantics { heading() },
+            style = MaterialTheme.typography.displaySmall,
+            fontWeight = FontWeight.Black,
+            textAlign = TextAlign.Center,
+        )
+        Text(snapshot.endReasonLabel(), textAlign = TextAlign.Center)
+        Text(
+            "You finished as ${snapshot.self.role.replaceFirstChar(Char::uppercase)} • ${snapshot.self.lifeStatus}"
+        )
+        Message(state.message)
+        GameButton(
+            "Return home",
+            onReturnHome,
+            Modifier.fillMaxWidth().widthIn(max = 520.dp),
+            loading = state.loading,
+        )
+        GameOutlinedButton(
+            if (state.resultDetailsExpanded) "Hide game details" else "Show game details",
+            viewModel::toggleResultDetails,
+            Modifier.fillMaxWidth().widthIn(max = 520.dp),
+        )
+        if (state.resultDetailsExpanded && summary != null) {
+            Card(Modifier.fillMaxWidth().widthIn(max = 720.dp)) {
+                Column(
+                    Modifier.padding(GameSpacing.md),
+                    verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
+                ) {
+                    Text(
+                        "Game summary",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        "Duration: ${summary.durationSeconds / 60}m ${summary.durationSeconds % 60}s"
+                    )
+                    Text("Tasks: ${summary.completedTasks}/${summary.totalTasks}")
+                    Text("Task pack: ${snapshot.taskPack.name}")
+                    summary.players.forEach { player ->
+                        PlayerCard(
+                            nickname = player.nickname,
+                            playerColorId = player.avatarId,
+                            status = null,
+                        )
+                        Text(
+                            "${player.role.replaceFirstChar(Char::uppercase)} • ${player.crewRole?.name ?: "No crew specialization"} • ${player.lifeStatus} • tasks ${player.completedTasks}/${player.totalTasks}"
+                        )
+                    }
+                    val accepted = state.submissions.filter { it.processingStatus == "accepted" }
+                    Text("Accepted evidence: ${accepted.size}", fontWeight = FontWeight.Bold)
+                    accepted.forEach { Text("Evidence ${it.id.take(8)} • ${it.reviewStatus}") }
+                    val meeting = snapshot.meeting
+                    if (
+                        meeting != null &&
+                            meeting.publicBallotsAllowed(snapshot.meetingRules.voteVisibility)
+                    )
+                        PublicBallots(meeting.result?.ballots.orEmpty())
+                }
+            }
+        }
+    }
+    LaunchedEffect(summary?.players?.size) {
+        if (state.submissions.isEmpty()) viewModel.refreshReviewEvidence()
     }
 }
 

@@ -1,11 +1,11 @@
 # Current Android implementation state
 
 **Last updated:** 2026-09-28
-**Overall status:** Phase 5 role/task/evidence/elimination vertical slice implemented in source; Android compilation and device/E2E verification blocked on local Android SDK license acceptance and a staging API URL
-**Active phase:** Phase 5 — private role, tasks, evidence, kills, and meeting calls
-**Active plan:** [`../plan/phase-05-role-tasks-evidence.md`](../plan/phase-05-role-tasks-evidence.md)
+**Overall status:** Phase 6 meeting/review/voting/result vertical slice implemented in source; Android compilation and device/E2E verification blocked on local Android SDK license acceptance and a staging API URL
+**Active phase:** Phase 6 — meetings, evidence review, voting, outcomes, and final results
+**Active plan:** [`../plan/phase-06-meetings-voting-results.md`](../plan/phase-06-meetings-voting-results.md)
 **Last verified commit:** not recorded
-**Android build status:** Platform-neutral compilation, formatting, and 20 host tests pass; Android compilation has not run
+**Android build status:** Platform-neutral compilation, formatting, and 23 core host tests pass; Android compilation has not run
 
 ## Implemented
 
@@ -30,10 +30,16 @@
 - [x] Server-filtered evidence gallery with processing/empty/expired states, short-lived in-memory image loading, full-screen zoom, and capability/ownership/status-gated flag confirmation.
 - [x] Capability and server-target-list-driven elimination selection, review, confirmation, current-version command, and stale-conflict closure/refresh.
 - [x] Phase 5 API DTOs and operations for upload intents, confirmations, submissions, flags, kills, and redacted signed URL representations.
+- [x] Exactly-once-per-process meeting interruption with visual alert and haptic, authoritative phase routing, safe trigger wording, countdown expiry refresh, and observer-only states for eliminated participants.
+- [x] Sequential authoritative evidence review with short-lived image refresh, assignment/uploader/progress context, accessible Valid/Invalid choices, explicit confirmation, current-version PUT, conflict refresh, and accepted-vote locking.
+- [x] Eligible-player and distinct Skip ejection selection, reversible pre-confirmation state, accepted-vote locking, aggregate-only private mode, and server-returned-ballot-only public mode.
+- [x] Meeting result rendering for ejection/no-ejection, safe totals, privacy-aware ballots, concise accessibility announcement, and automatic authoritative transition back to tasks or terminal results.
+- [x] Restorable terminal result screen with winner/end reason/own status, expandable authorized roster/role/task/evidence/duration details, and an authenticated session-ending Return home action; replay/account prompts remain withheld pending approval.
+- [x] Phase 6 typed meeting/result DTOs and PUT vote/DELETE participant-session operations with stable command identities.
 
 ## Verification
 
-- `./gradlew spotlessApply spotlessCheck :core:data:test` — passed; 20 host tests.
+- `./gradlew spotlessApply spotlessCheck :core:data:test` — passed; 23 core host tests.
 - Phase 4 request-policy tests verify PATCH semantics/idempotency and join-options code normalization/decoding.
 - Phase 5 request-policy tests verify exact signed PUT headers/body, absence of participant authorization on storage requests, signed URL/header redaction, and rejection of unsupported upload methods.
 - Android app/design-system/session compilation and tests remain blocked because Android SDK Platform 36 and Build Tools 36.0.0 licenses are not accepted/installed.
@@ -47,10 +53,12 @@
 - Phase 4 app unit tests, Compose tests, screenshots, TalkBack traversal, and two-device create/join/lobby E2E remain unexecuted because the Android toolchain is blocked.
 - The existing realtime core is not yet wired into the activity-scoped Phase 4 gateway; the lobby currently performs a five-second authoritative snapshot refresh while visible.
 - Phase 5 uses five-second authoritative snapshot/submission refreshes; activity-scoped realtime delivery remains unwired.
+- Phase 6 also follows the existing five-second authoritative snapshot refresh; meeting interruption is exact once across recomposition/reconnect in the live ViewModel, but full realtime wiring and process-death interruption deduplication remain unverified.
+- Meeting screenshot, TalkBack, large-font, orientation, reconnect-subphase, race, and multi-device scripted tests remain blocked on the Android toolchain and staging backend.
 - The evidence list contract returns no continuation cursor in response metadata, so Android can safely fetch only the contract maximum of 50 visible submissions; true pagination is blocked on a backend contract addition.
 - `FLAG_SECURE`, lifecycle resealing, camera/photo picker, foreground cancellation, image memory bounds, full-screen zoom, screenshots, accessibility, and physical-device upload behavior are source-implemented but unverified without Android compilation/device execution.
 - Player-called meetings remain intentionally absent because ADR-A-006 is unresolved; Phase 5 does not infer approval from the existing endpoint or capability.
-- Phase 0 gameplay decisions ADR-A-005 through ADR-A-009 and ADR-A-011 remain unresolved.
+- Phase 0 gameplay decisions ADR-A-005 through ADR-A-009 and ADR-A-011 remain unresolved; ADR-A-018 records the Phase 6 conservative lock fallback without resolving general replaceability.
 
 ## Next action
 
@@ -60,26 +68,26 @@ Accept the Android SDK licenses in Android Studio SDK Manager or with `sdkmanage
 
 **Date/time:** 2026-09-28 Asia/Calcutta
 **Agent/session:** Codex
-**Active phase:** Phase 5 — private role, tasks, evidence, kills, and meeting calls
-**Milestone:** Source implementation of approved role/task/evidence/flag/elimination behavior against the frozen HTTP contract
+**Active phase:** Phase 6 — meetings, evidence review, voting, outcomes, and final results
+**Milestone:** Source implementation of authoritative meeting interruption, review, ejection voting, meeting outcome, and terminal results
 **Status:** partial; Android and integration verification blocked
 
 ### Changed
 
-- `app/src/main/java/com/impostergame/android/gameplay`: privacy state, gateway, foreground media preparation, and gameplay coordination.
-- `app/src/main/java/com/impostergame/android/ui/GameplayScreen.kt`: sealed role, adaptive tasks, evidence gallery/preview, and elimination UI.
-- `core/data`: evidence/kill DTOs, HTTP operations, and isolated signed-storage PUT client.
-- `app/src/test` and `core/data/src/test`: capability rules, ordering, sensitive destinations, and storage request coverage.
+- `app/src/main/java/com/impostergame/android/gameplay`: meeting ballot state, privacy rules, conflict/deadline refresh, review media, and terminal coordination.
+- `app/src/main/java/com/impostergame/android/ui/GameplayScreen.kt`: discussion, evidence review, ejection vote, meeting result, and expandable final result UI.
+- `core/data`: typed meeting/result DTOs, PUT ballot commands, and DELETE participant-session support.
+- `app/src/test` and `core/data/src/test`: meeting trigger/privacy/observer/result rules and vote/session request-policy coverage.
 
 ### Verified
 
-- `./gradlew spotlessApply spotlessCheck :core:data:test` — passed; 20 host tests.
+- `./gradlew spotlessApply spotlessCheck :core:data:test` — passed; 23 core host tests.
 - `ANDROID_HOME=... ./gradlew :app:compileDebugKotlin` — blocked before compilation by unaccepted Platform 36 and Build Tools 36.0.0 licenses.
 - Manual/device check — not run; no installed licensed Android platform or configured staging backend.
 
 ### Decisions added
 
-- ADR-A-016 — Lobby settings commit behavior.
+- ADR-A-018 — Conservative meeting ballot lock and privacy rendering.
 
 ### Remaining issues
 

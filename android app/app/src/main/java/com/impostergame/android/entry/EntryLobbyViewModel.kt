@@ -293,6 +293,18 @@ class EntryLobbyViewModel(
         }
     }
 
+    fun exitResults() {
+        launchRequest {
+            when (val result = gateway.endSession()) {
+                is GatewayResult.Success -> {
+                    lobbyRefresh?.cancel()
+                    _state.value = EntryLobbyUiState(destination = EntryDestination.HOME)
+                }
+                is GatewayResult.Failure -> update { it.copy(message = messageFor(result.error)) }
+            }
+        }
+    }
+
     fun clearAnnouncement() = update { it.copy(announce = null) }
 
     private fun enterLobby(room: RoomSnapshot, announcement: String?) {

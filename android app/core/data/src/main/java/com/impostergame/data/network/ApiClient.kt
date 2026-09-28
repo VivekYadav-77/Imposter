@@ -9,6 +9,7 @@ import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.builtins.nullable
+import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
 import okhttp3.Call
 import okhttp3.Callback
@@ -66,6 +67,16 @@ class ApiClient(
             Request.Builder().url(url).get(),
             deserializer.nullable,
             onNoContent = { null },
+        )
+    }
+
+    suspend fun delete(routeTemplate: String, encodedPath: String): ApiResult<Unit> {
+        val url = baseUrl.newBuilder().addEncodedPathSegments(encodedPath.trimStart('/')).build()
+        return execute(
+            routeTemplate,
+            Request.Builder().url(url).delete(),
+            Unit.serializer(),
+            onNoContent = {},
         )
     }
 

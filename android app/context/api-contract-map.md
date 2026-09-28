@@ -40,7 +40,7 @@ This is a navigation aid, not a replacement for `../../openapi/openapi.json` or 
 | Capability | Contract area | Client rule |
 |---|---|---|
 | Current meeting | `GET /api/v1/meetings/current` | Participant-specific source for subphase/actions. |
-| Review vote | Evidence review item vote endpoint in OpenAPI | Follow approved replace/lock semantics. |
+| Review vote | `PUT /api/v1/evidence-review-items/{id}/vote` | Current-version/idempotency controlled; Android locks after the first accepted response. |
 | Ejection vote | `PUT /api/v1/meetings/{id}/ejection-vote` | Null target means Skip; never calculate result locally. |
 | Result | Game snapshot/result summary | Reveal only returned terminal fields. |
 

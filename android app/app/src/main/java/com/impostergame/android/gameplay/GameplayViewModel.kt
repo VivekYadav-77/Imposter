@@ -30,6 +30,10 @@ class GameplayViewModel(
     private var pendingUpload: PendingUpload? = null
     private var pendingKill: PendingAction? = null
     private var pendingFlag: PendingAction? = null
+    private var pendingReviewVote: PendingAction? = null
+    private var pendingEjectionVote: PendingAction? = null
+    private val announcedMeetings = mutableSetOf<String>()
+    private var refreshedExpiredDeadline: String? = null
 
     init {
         viewModelScope.launch {
@@ -295,6 +299,130 @@ class GameplayViewModel(
 
     fun dismissKill() = update { it.copy(confirmKill = false) }
 
+    fun dismissMeetingAlert() = update { it.copy(meetingAlertId = null) }
+
+    fun selectReviewDecision(decision: String) {
+        if (decision !in setOf("valid", "invalid") || !_state.value.mayReviewVote()) return
+        update {
+            it.copy(selectedReviewDecision = decision, confirmReviewVote = false, message = null)
+        }
+    }
+
+    fun requestReviewVoteConfirmation() {
+        if (_state.value.mayReviewVote() && _state.value.selectedReviewDecision != null) {
+            update { it.copy(confirmReviewVote = true) }
+        }
+    }
+
+    fun dismissReviewVote() = update { it.copy(confirmReviewVote = false) }
+
+    fun confirmReviewVote() {
+        val current = _state.value
+        val snapshot = current.snapshot ?: return
+        val item = snapshot.meeting?.reviewItem ?: return
+        val decision = current.selectedReviewDecision ?: return
+        if (!current.mayReviewVote()) return
+        val fingerprint = "${item.id}|${snapshot.stateVersion}|$decision"
+        val command =
+            pendingReviewVote?.takeIf { it.fingerprint == fingerprint }
+                ?: PendingAction(fingerprint, newKey()).also { pendingReviewVote = it }
+        launchOnce {
+            when (
+                val result =
+                    gateway.reviewVote(item.id, snapshot.stateVersion, decision, command.key)
+            ) {
+                is GatewayResult.Success -> {
+                    pendingReviewVote = null
+                    update {
+                        it.copy(
+                            confirmReviewVote = false,
+                            reviewVoteSubmittedItemId = item.id,
+                            message = "Review vote accepted and locked.",
+                        )
+                    }
+                    refresh()
+                }
+                is GatewayResult.Failure -> handleMeetingConflict(result.error, review = true)
+            }
+        }
+    }
+
+    fun selectEjectionTarget(targetId: String?) {
+        val current = _state.value
+        val eligible =
+            current.snapshot?.meeting?.eligibleParticipants.orEmpty().any { it.id == targetId }
+        if (!current.mayEjectionVote() || (targetId != null && !eligible)) return
+        update {
+            it.copy(
+                hasEjectionSelection = true,
+                selectedEjectionTargetId = targetId,
+                confirmEjectionVote = false,
+                message = null,
+            )
+        }
+    }
+
+    fun requestEjectionVoteConfirmation() {
+        if (_state.value.mayEjectionVote() && _state.value.hasEjectionSelection) {
+            update { it.copy(confirmEjectionVote = true) }
+        }
+    }
+
+    fun dismissEjectionVote() = update { it.copy(confirmEjectionVote = false) }
+
+    fun confirmEjectionVote() {
+        val current = _state.value
+        val snapshot = current.snapshot ?: return
+        val meeting = snapshot.meeting ?: return
+        if (!current.mayEjectionVote() || !current.hasEjectionSelection) return
+        val target = current.selectedEjectionTargetId
+        val fingerprint = "${meeting.id}|${snapshot.stateVersion}|${target ?: "skip"}"
+        val command =
+            pendingEjectionVote?.takeIf { it.fingerprint == fingerprint }
+                ?: PendingAction(fingerprint, newKey()).also { pendingEjectionVote = it }
+        launchOnce {
+            when (
+                val result =
+                    gateway.ejectionVote(meeting.id, snapshot.stateVersion, target, command.key)
+            ) {
+                is GatewayResult.Success -> {
+                    pendingEjectionVote = null
+                    update {
+                        it.copy(
+                            confirmEjectionVote = false,
+                            ejectionVoteSubmittedMeetingId = meeting.id,
+                            message = "Vote accepted and locked.",
+                        )
+                    }
+                    refresh()
+                }
+                is GatewayResult.Failure -> handleMeetingConflict(result.error, review = false)
+            }
+        }
+    }
+
+    fun toggleResultDetails() = update {
+        it.copy(resultDetailsExpanded = !it.resultDetailsExpanded)
+    }
+
+    fun refreshReviewEvidence() {
+        refreshSubmissions(loadMeetingEvidence = true)
+    }
+
+    fun clearForHome() {
+        refreshJob?.cancel()
+        uploadJob?.cancel()
+        pendingUpload = null
+        pendingKill = null
+        pendingFlag = null
+        pendingReviewVote = null
+        pendingEjectionVote = null
+        announcedMeetings.clear()
+        refreshedExpiredDeadline = null
+        update { GameplayUiState() }
+        loaded = false
+    }
+
     fun confirmKill() {
         val current = _state.value
         val snapshot = current.snapshot ?: return
@@ -342,7 +470,7 @@ class GameplayViewModel(
                 )
             }
         }
-        update { it.copy(previewImageBytes = null) }
+        update { it.copy(previewImageBytes = null, reviewImageBytes = null) }
     }
 
     private fun refresh(showLoading: Boolean = false, forceRoleSeal: Boolean = false) {
@@ -361,6 +489,11 @@ class GameplayViewModel(
 
     private fun applySnapshot(snapshot: GameSnapshot, forceRoleSeal: Boolean = false) {
         update { current ->
+            val meetingId = snapshot.meeting?.id
+            val announceMeeting = meetingId != null && announcedMeetings.add(meetingId)
+            val sameReviewItem =
+                current.snapshot?.meeting?.reviewItem?.id == snapshot.meeting?.reviewItem?.id
+            val sameMeeting = current.snapshot?.meeting?.id == meetingId
             val destination =
                 when (snapshot.phase) {
                     GamePhase.TASK ->
@@ -387,12 +520,43 @@ class GameplayViewModel(
                     current.selectedKillTargetId?.takeIf {
                         it in snapshot.self.killableParticipantIds
                     },
+                meetingAlertId = if (announceMeeting) meetingId else current.meetingAlertId,
+                selectedReviewDecision =
+                    if (sameReviewItem && snapshot.meeting?.reviewItem?.ownDecision == null) {
+                        current.selectedReviewDecision
+                    } else null,
+                confirmReviewVote =
+                    current.confirmReviewVote &&
+                        sameReviewItem &&
+                        snapshot.meeting?.reviewItem?.ownDecision == null,
+                reviewVoteSubmittedItemId =
+                    current.reviewVoteSubmittedItemId?.takeIf {
+                        it == snapshot.meeting?.reviewItem?.id
+                    },
+                hasEjectionSelection =
+                    current.hasEjectionSelection &&
+                        sameMeeting &&
+                        snapshot.meeting?.hasCastEjectionVote == false,
+                selectedEjectionTargetId =
+                    current.selectedEjectionTargetId?.takeIf { target ->
+                        snapshot.meeting?.eligibleParticipants?.any { it.id == target } == true
+                    },
+                confirmEjectionVote =
+                    current.confirmEjectionVote &&
+                        sameMeeting &&
+                        snapshot.meeting?.hasCastEjectionVote == false,
+                ejectionVoteSubmittedMeetingId =
+                    current.ejectionVoteSubmittedMeetingId?.takeIf { it == meetingId },
+                reviewImageBytes = if (sameReviewItem) current.reviewImageBytes else null,
             )
         }
         updateCountdown()
+        if (snapshot.phase == GamePhase.REVIEW && _state.value.reviewImageBytes == null) {
+            refreshSubmissions(loadMeetingEvidence = true)
+        }
     }
 
-    private fun refreshSubmissions() {
+    private fun refreshSubmissions(loadMeetingEvidence: Boolean = false) {
         viewModelScope.launch {
             when (val result = gateway.submissions()) {
                 is GatewayResult.Success -> {
@@ -411,6 +575,9 @@ class GameplayViewModel(
                                 },
                         )
                     }
+                    if (loadMeetingEvidence) {
+                        loadReviewImage(result.value)
+                    }
                 }
                 is GatewayResult.Failure -> update { it.copy(message = messageFor(result.error)) }
             }
@@ -428,6 +595,53 @@ class GameplayViewModel(
                     }
             )
         }
+        val deadlineText = _state.value.snapshot?.phaseDeadlineAt
+        if (
+            _state.value.remainingSeconds == 0L &&
+                deadlineText != null &&
+                refreshedExpiredDeadline != deadlineText
+        ) {
+            refreshedExpiredDeadline = deadlineText
+            refresh()
+        }
+    }
+
+    private suspend fun loadReviewImage(submissions: List<com.impostergame.data.model.Submission>) {
+        val submissionId = _state.value.snapshot?.meeting?.reviewItem?.submissionId ?: return
+        val url = submissions.firstOrNull { it.id == submissionId }?.image?.url
+        if (url == null) {
+            update {
+                it.copy(
+                    reviewImageBytes = null,
+                    message =
+                        "Evidence image is processing or its link expired. Refresh to try again.",
+                )
+            }
+            return
+        }
+        when (val image = gateway.loadImage(url)) {
+            is GatewayResult.Success -> update { it.copy(reviewImageBytes = image.value) }
+            is GatewayResult.Failure ->
+                update { it.copy(reviewImageBytes = null, message = messageFor(image.error)) }
+        }
+    }
+
+    private fun handleMeetingConflict(error: ApiFailure, review: Boolean) {
+        val changed = error is ApiFailure.Http && error.status == 409
+        update {
+            it.copy(
+                selectedReviewDecision = if (review) null else it.selectedReviewDecision,
+                confirmReviewVote = false,
+                hasEjectionSelection = if (review) it.hasEjectionSelection else false,
+                selectedEjectionTargetId = if (review) it.selectedEjectionTargetId else null,
+                confirmEjectionVote = false,
+                message =
+                    if (changed)
+                        "The meeting advanced before that vote was accepted. Refreshing the authoritative state."
+                    else messageFor(error),
+            )
+        }
+        refresh()
     }
 
     private fun launchOnce(block: suspend () -> Unit) {
