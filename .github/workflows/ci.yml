@@ -31,3 +31,85 @@ jobs:
       - run: npm run test:integration
       - run: npm run build
       - run: npm audit --omit=dev --audit-level=high
+
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      ANDROID_VERSION_CODE: "1"
+      ANDROID_VERSION_NAME: "0.1.0"
+      PRODUCTION_API_BASE_URL: https://release-ci.invalid
+      ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/android-ci-release.jks
+      ANDROID_KEYSTORE_PASSWORD: ci-only-password
+      ANDROID_KEY_ALIAS: ci-release
+      ANDROID_KEY_PASSWORD: ci-only-password
+    defaults:
+      run:
+        working-directory: android app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install pinned Android SDK
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+      - name: Create disposable CI signing key
+        run: >-
+          keytool -genkeypair -v -keystore "$ANDROID_KEYSTORE_PATH"
+          -storepass "$ANDROID_KEYSTORE_PASSWORD" -keypass "$ANDROID_KEY_PASSWORD"
+          -alias "$ANDROID_KEY_ALIAS" -keyalg RSA -keysize 3072 -validity 2
+          -dname "CN=CI release verification, OU=Engineering, O=Imposter Game, C=US"
+      - name: Verify Android quality gate
+        run: ./gradlew --no-daemon --stacktrace quality
+      - name: Verify shrunk signed release bundle
+        run: ./gradlew --no-daemon --stacktrace bundleRelease
+      - name: Upload release verification reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-verification-reports
+          path: |
+            android app/**/build/reports/**
+            android app/app/build/outputs/mapping/release/**
+          retention-days: 7
+          if-no-files-found: ignore
+
+  android-device:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: android app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Run Android connected-device quality gate
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          script: cd "android app" && ./gradlew --no-daemon --stacktrace connectedQuality
+      - name: Upload connected-device reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-connected-device-reports
+          path: android app/**/build/reports/androidTests/**
+          retention-days: 7
+          if-no-files-found: ignore

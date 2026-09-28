@@ -601,7 +601,9 @@ class GameplayViewModel(
 
     private fun updateCountdown() {
         val deadline =
-            _state.value.snapshot?.phaseDeadlineAt?.let { runCatching(Instant::parse).getOrNull() }
+            _state.value.snapshot?.phaseDeadlineAt?.let { value ->
+                runCatching { Instant.parse(value) }.getOrNull()
+            }
         update {
             it.copy(
                 remainingSeconds =

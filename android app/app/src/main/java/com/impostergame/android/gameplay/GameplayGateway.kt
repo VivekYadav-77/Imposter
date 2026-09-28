@@ -15,6 +15,8 @@ import com.impostergame.data.model.UploadIntentInput
 import com.impostergame.data.network.ApiResult
 import com.impostergame.data.network.ParticipantApi
 import com.impostergame.data.network.SignedUploadClient
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
 import java.net.URI
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -223,7 +225,7 @@ class NetworkGameplayGateway(
                             )
                         } else {
                             val bytes =
-                                body.byteStream().use { it.readNBytes(MAX_PREVIEW_BYTES + 1) }
+                                body.byteStream().use { it.readAtMost(MAX_PREVIEW_BYTES + 1) }
                             if (bytes.size > MAX_PREVIEW_BYTES) {
                                 GatewayResult.Failure(
                                     com.impostergame.data.network.ApiFailure.Contract(
@@ -325,6 +327,20 @@ class NetworkGameplayGateway(
         const val MAX_PREVIEW_PIXELS = 16_777_216L
         val ALLOWED_IMAGE_SUBTYPES = setOf("jpeg", "png", "webp")
     }
+}
+
+private fun InputStream.readAtMost(maxBytes: Int): ByteArray {
+    require(maxBytes > 0)
+    val output = ByteArrayOutputStream(minOf(maxBytes, DEFAULT_BUFFER_SIZE))
+    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+    var remaining = maxBytes
+    while (remaining > 0) {
+        val count = read(buffer, 0, minOf(buffer.size, remaining))
+        if (count < 0) break
+        output.write(buffer, 0, count)
+        remaining -= count
+    }
+    return output.toByteArray()
 }
 
 private inline fun <T, R> GatewayResult<T>.mapSuccess(transform: (T) -> R): GatewayResult<R> =

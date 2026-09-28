@@ -1,78 +1,92 @@
 # Current Android implementation state
 
 **Last updated:** 2026-09-28
-**Overall status:** Phase 7 automated resilience/privacy/security hardening implemented in source; core host tests pass, while Android compilation, device matrices, performance profiling, security review, and moderated usability remain blocked or unperformed
-**Active phase:** Phase 7 — resilience, accessibility, privacy, and security hardening
-**Active plan:** [`../plan/phase-07-resilience-accessibility-security.md`](../plan/phase-07-resilience-accessibility-security.md)
-**Last verified commit:** not recorded
-**Android build status:** Platform-neutral formatting and 26 core host tests pass; Android compilation stops before source compilation because SDK Platform 36 and Build Tools 36.0.0 licenses are not accepted
+**Overall status:** Phase 8 controls plus the 2026-09-28 physical-device QA repairs are implemented; production acceptance remains blocked on the full multi-client matrix, staging, and owner/vendor/store approvals
+**Active phase:** Phase 8 — end-to-end quality, release, and operations
+**Active plan:** [`../plan/phase-08-quality-release.md`](../plan/phase-08-quality-release.md)
+**Last verified commit:** not recorded; current worktree contains the Phase 8 implementation
+**Android build status:** Full `quality` and `connectedQuality` gates pass with JDK 17; the latest physical run is 6/6 app plus 4/4 design-system tests on Acer/API 33
 
-## Implemented through Phase 6
+## Implemented through Phase 7
 
-- Guest create/join, adaptive lobby and host setup, secure session resume, authoritative snapshots/retry/reconnect core, private role reveal, task/evidence flow, authorized flag/elimination, meetings/review/voting, and terminal results are source-implemented.
-- Credentials use Android Keystore AES-256-GCM and non-backed-up private preferences. Gameplay is server authoritative; idempotency keys stay stable across a command retry and `409` conflicts refresh rather than replay.
-- Evidence uses foreground-only preparation/upload, scoped capture files, orientation normalization, metadata-free JPEG re-encoding, signed PUT without participant authorization, and short-lived in-memory previews.
+- Guest create/join, adaptive lobby/host setup, secure resume, authoritative snapshots/retry/reconnect core, private role reveal, tasks/evidence, authorized flag/elimination, meetings/review/voting, and terminal results are source-implemented.
+- Credentials use Android Keystore AES-256-GCM and non-backed-up private preferences. Gameplay remains server authoritative; command retries preserve idempotency identity and conflicts refresh.
+- Phase 7 hardening covers secure windows/overlays, clipboard expiry, bounded/sanitized responses and images, private DTO redaction, signed-upload restrictions, stale snapshot rejection, reconnect status, and countdown accessibility cadence.
 
-## Phase 7 source hardening implemented
+## Phase 8 repository controls
 
-- [x] Production manifest/network policy prohibits cleartext, disables backup/device transfer, and protects all gameplay windows from screenshots/recent previews; API 31+ gameplay also hides non-system overlays.
-- [x] Copied room codes are marked clipboard-sensitive and an unchanged clip is cleared after 60 seconds.
-- [x] API JSON bodies are bounded to 2 MiB (64 KiB for errors); server error text/request IDs/codes are normalized and bounded, raw error details are not rendered, and display DTO text is sanitized for controls/bidirectional overrides.
-- [x] Token, role, ballot, evidence checksum/bytes, signed URL/header, and room/session DTO string representations are redacted where private values could otherwise be dumped.
-- [x] Signed upload redirects are disabled; payloads remain JPEG-only and bounded to 5 MiB while server-authorized storage headers are preserved exactly.
-- [x] Selected evidence is bounded by source bytes, source dimensions/pixels, decoded dimensions, re-encoded bytes, preview bytes, MIME type, and preview dimensions/pixels.
-- [x] Command launch guards close the pre-coroutine double-tap race; older game snapshots cannot replace a newer `stateVersion`.
-- [x] Lobby/game refresh failure exposes Offline/Reconnecting state without removing already-readable authoritative content.
-- [x] Countdown accessibility text changes at minute, under-one-minute, and expiry boundaries rather than describing every second; English quantity wording no longer uses “(s)”.
-- [x] [`phase-07-hardening.md`](phase-07-hardening.md) records the threat model, cleanup behavior, budgets, lifecycle/network matrix, accessibility matrix, and unperformed external validation.
+- [x] Version name/code, per-environment endpoints, external release signing, HTTPS validation, release R8/resource shrinking, and fail-closed release configuration tasks are defined.
+- [x] Main CI has an Android quality job and a disposable-key signed/shrunk release build. A protected manual workflow runs the clean release gate twice and retains the AAB/R8 mapping.
+- [x] Privacy-safe operational events cover bootstrap, join, reconnect, resync, upload transfer, conflict, and revocation without arbitrary labels/payloads.
+- [x] Consent-gated in-memory support diagnostics expose only sanitized version/environment/network/request-ID fields through an explicit share confirmation.
+- [x] [`phase-08-release.md`](phase-08-release.md) documents compatibility/forced-update policy, verification pyramid, alert proposals, store/privacy package, acceptance ledger, rollout gates, and stop criteria.
+- [x] [`operations-runbook.md`](operations-runbook.md) covers bad releases, backend incompatibility, upload/storage outage, websocket outage, session incidents, rollout halt, and recovery exercise.
+
+## Physical-device QA remediation
+
+- [x] Fixed bounds-only evidence decoding and added connected coverage for JPEG, PNG, WebP, corrupt, unsupported, oversized, and revoked sources.
+- [x] Failed cold resume now retains an explicit recovery state, exposes manual Retry, and retries automatically with bounded backoff without clearing the credential on transport failure.
+- [x] Dirty lobby settings are explained beside Start with the Apply action; validation scrolls/focuses the first invalid field and announces the error.
+- [x] Removed duplicated host status and dead-link styling; consolidated color, consent, and task-pack accessibility nodes.
+- [x] Enabled predictive back and added publish-time rejection of duplicate/obvious placeholder task descriptions.
+- [x] Added `connectedQuality` and a CI API 35 emulator job; app and design-system connected suites pass on the Acer/API 33 device.
 
 ## Verification
 
-- `./gradlew.bat --no-daemon --no-configuration-cache --no-parallel '-Pkotlin.compiler.execution.strategy=in-process' spotlessApply spotlessCheck :core:data:test` — passed; 26 tests, 0 failures.
-- `git diff --check` — passed.
-- `ANDROID_HOME=C:\Users\Hp\AppData\Local\Android\Sdk ./gradlew ... :app:compileDebugKotlin :app:testDebugUnitTest` — blocked before source compilation: licenses for `build-tools;36.0.0` and `platforms;android-36` are not accepted.
+- Android Studio, SDK Platform 36, Build Tools 36.0.0, platform tools, emulator, and API 36 Google APIs x86_64 images are installed; licenses are accepted.
+- `gradlew quality --no-parallel --max-workers=1` with pinned JDK 17 — passed after the live-test fix; 142 tasks, no lint or unit-test failures.
+- `gradlew :core:data:test :app:assembleDebug` — passed; the debug APK installs successfully.
+- Local backend migration and `/health/live` plus `/health/ready` checks — passed.
+- API 36 phone (`1080x2400`) — app launched, create-room request completed, host lobby rendered, process remained alive, and post-fix logcat contained no app fatal exception.
+- API 36 tablet (`2560x1600`) — app installed/launched and the expanded landing layout rendered; post-launch logcat contained no app fatal exception.
+- Live testing found and fixed `NetworkOnMainThreadException` in `ApiClient`: response parsing and close now remain on `Dispatchers.IO`.
+- `validateStagingConfiguration`, `validateReleaseConfiguration` with non-production validation inputs, and `git diff --check` — passed.
+- `gradlew quality --no-parallel --max-workers=1` — passed after QA remediation.
+- `gradlew connectedQuality --no-parallel --max-workers=1` — app 6/6 and design-system 4/4 passed on Acer One 8 T4-82L, Android 13/API 33.
+- `npm run check` — formatting, lint, typecheck, 21 files/120 unit tests, OpenAPI, and realtime fixtures passed; the database-backed `tests/integration/task-packs.test.ts` also passed (3 tests).
 
-## Remaining issues
+## Remaining release blockers
 
-- The product owner/developer must accept Android SDK legal terms; Codex cannot accept them on the user's behalf. App/design-system/session compilation, lint, Compose tests, screenshots, and device tests remain unverified.
-- A staging HTTPS `IMPOSTER_API_BASE_URL` is required for authenticate → snapshot → reconnect → resync → revoke and multi-device command-race tests.
-- The activity-scoped realtime session is not yet wired to feature gateways; visible lobby/game screens use a five-second authoritative polling fallback.
-- Manual Phase 7 lifecycle/network, TalkBack, Switch Access/keyboard, 200% font/display-size, theme/contrast, reduced-motion/sound/haptic, overlay/task-switcher, TLS interception, backup, malicious-image corpus, low-memory, and API-level/form-factor matrices have not run.
-- Startup/frame/memory/upload/reconnect budgets are defined but not measured. Per-second countdown still updates the gameplay `UiState`; profiling must prove Compose skips unrelated work or the timer must be split into isolated state before Phase 7 exit.
-- No dependency vulnerability/license scan, independent security review, or moderated group usability study has been performed.
-- Evidence pagination, player-called meetings, replay/account scope, and other unresolved Phase 0 decisions remain as previously recorded.
+- Approved staging/production HTTPS origins, staging accounts, production signing secrets/recovery, Play Console protected environment, and final application ID are not supplied.
+- The ten production-like E2E scenarios, API 26/31/36 lifecycle matrix, multi-client gameplay acceptance, feature goldens, full TalkBack/privacy reviews, performance measurements, dependency/license review, and moderated usability are not complete.
+- The 6 GB development host can run one 2 GB emulator reliably, but the API 36 system image can briefly show a System UI ANR during first boot; run phone and tablet AVDs one at a time. This is an emulator/host-capacity condition, not an app crash.
+- Crash/ANR vendor, retention/residency, dashboards, alert owners, and synthetic routing need explicit approval. The code provides privacy-safe seams, not a configured monitoring service.
+- Privacy-policy URL, data-safety form, permission declaration, content rating, store listing/screenshots, countries/locales, support contact, and owner acceptance are external sign-offs.
+- ADR-A-005 through ADR-A-009 remain unresolved. Player-called meetings, same-room replay, and account history cannot be accepted as implemented.
 
 ## Next action
 
-Accept/install Android SDK Platform 36 and Build Tools 36.0.0, set `IMPOSTER_API_BASE_URL` to an HTTPS staging origin, run `./gradlew quality`, and fix any Android compile/lint/test defects before starting the API 26/31/36 device matrix in [`phase-07-hardening.md`](phase-07-hardening.md).
+Configure the protected CI environment and approved staging origin, then execute the required independently controlled three-client gameplay matrix and produce the first signed internal candidate.
 
 ## Session handoff
 
 **Date/time:** 2026-09-28 Asia/Calcutta
 **Agent/session:** Codex
-**Active phase:** Phase 7 — resilience, accessibility, privacy, and security hardening
-**Milestone:** Automated hardening foundation and auditable manual-validation matrix
-**Status:** partial; source implementation and host verification complete, Android/device/external validation blocked or pending
+**Active phase:** Phase 8 — end-to-end quality, release, and operations
+**Milestone:** implementation and regression verification of `improvementApp1.md` code-level findings
+**Status:** partial; APP-001 through APP-003 and APP-005 through APP-011 are implemented and locally verified, while APP-004 is an outstanding production-like acceptance run
 
 ### Changed
 
-- `core/data`: bounded responses, untrusted-text normalization, diagnostic/log hardening, private DTO redaction, and stricter signed-upload behavior.
-- `app`: display sanitization, clipboard expiry, overlay protection, stale-snapshot rejection, single-flight commands, reconnect status, image bounds, and timer accessibility cadence.
-- `context/phase-07-hardening.md`: threat model, performance budgets, cleanup rules, and required device/accessibility/usability matrices.
+- `app`: evidence decoding, bootstrap recovery, validation focus/scroll, lobby dirty-state action, host labeling, accessibility semantics, explanatory footer, and predictive back.
+- `app`/`core:designsystem` tests: stable launch/layout assertions, lock-screen-safe test host, evidence source matrix, and resume/backoff unit coverage.
+- Gradle/CI: `connectedQuality` plus a required API 35 emulator job and retained reports.
+- Backend task packs: publish-time duplicate/placeholder validation with unit and integration coverage.
+- `context`: QA implementation status, ADR-A-022, and updated traceability.
 
 ### Verified
 
-- Host formatting and 26 core tests pass.
-- Android task dependency resolution confirms the remaining blocker is unaccepted SDK 36 licenses; Android source compilation did not run.
+- Android `quality` and physical Acer/API 33 `connectedQuality` pass; the full backend/web `npm run check` and task-pack integration tests pass.
 
 ### Decisions added
 
-- ADR-A-019 — Phase 7 secure-surface and untrusted-input policy.
+- ADR-A-022 — Recoverable bootstrap and connected-device release gate.
 
 ### Remaining issues
 
-- See the explicit unverified matrices and external reviews above; Phase 7 exit criteria are not yet met.
+- APP-004 remains: run the independently controlled three-client gameplay/meeting/results/replay/reconnect matrix on an approved production-like backend.
+- Current published placeholder data must be archived or replaced administratively; the new validator prevents equivalent drafts from being published but intentionally does not mutate live data.
 
 ### Next action
 
-Unblock Android SDK 36, run `./gradlew quality`, then execute the lifecycle/accessibility/privacy matrix on API 26, 31, and 36 devices.
+Run APP-004 on approved staging with three independently controlled clients, then record the result in the Phase 8 acceptance ledger before producing the signed candidate.

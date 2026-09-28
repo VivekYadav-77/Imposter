@@ -14,6 +14,13 @@ enum class EntryDestination {
     RESULTS,
 }
 
+enum class EntryValidationTarget {
+    ROOM_CODE,
+    NICKNAME,
+    COLOR,
+    CONSENTS,
+}
+
 data class EntryForm(
     val roomCode: String = "",
     val nickname: String = "",
@@ -56,11 +63,16 @@ data class EntryLobbyUiState(
     val confirmLeave: Boolean = false,
     val focusColorPicker: Boolean = false,
     val connectionState: ConnectionState = ConnectionState.Connected,
+    val resumeFailed: Boolean = false,
+    val validationTarget: EntryValidationTarget? = null,
 ) {
     val startBlockingReasons: List<String>
         get() {
             val snapshot = room ?: return listOf("Room details are still loading.")
             return buildList {
+                if (settings.dirty) {
+                    add("Apply pending settings.")
+                }
                 if (snapshot.participants.size < snapshot.minPlayers) {
                     val missing = snapshot.minPlayers - snapshot.participants.size
                     add("$missing more ${if (missing == 1) "player" else "players"} required.")
@@ -68,7 +80,7 @@ data class EntryLobbyUiState(
                 if (snapshot.participants.size > snapshot.maxPlayers) {
                     add("Too many players are in the room.")
                 }
-                if (snapshot.settings.selectedTaskPack == null) {
+                if (!settings.dirty && snapshot.settings.selectedTaskPack == null) {
                     add("Select a published task pack.")
                 }
             }

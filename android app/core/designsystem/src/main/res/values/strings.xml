@@ -26,7 +26,6 @@
     <string name="player_status_ejected">Ejected</string>
     <string name="player_status_host">Host</string>
     <string name="player_status_self">You</string>
-    <string name="player_badge_selected">✓</string>
     <string name="player_badge_disconnected">!</string>
     <string name="player_badge_dead">×</string>
     <string name="player_badge_ejected">↗</string>
@@ -38,9 +37,6 @@
     <string name="connection_reconnecting">Reconnecting</string>
     <string name="connection_offline">Offline</string>
     <string name="loading">Loading</string>
-    <string name="retry">Try again</string>
-    <string name="cancel">Cancel</string>
-    <string name="confirm">Confirm</string>
     <string name="state_not_selected">Not selected</string>
     <string name="upload_idle">Ready for evidence</string>
     <string name="upload_preparing">Preparing photo</string>

@@ -1,5 +1,6 @@
 package com.impostergame.session
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
@@ -130,6 +131,8 @@ class AndroidKeystoreSessionStore(
         }
     }
 
+    // Token removal must complete before callers continue or report the session as cleared.
+    @SuppressLint("ApplySharedPref")
     private fun clearLocked(deleteKey: Boolean) {
         preferences.edit().clear().commit()
         if (deleteKey) {

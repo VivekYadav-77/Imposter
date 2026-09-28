@@ -6,9 +6,11 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Matrix
-import android.media.ExifInterface
 import android.net.Uri
 import androidx.core.content.FileProvider
+import androidx.core.graphics.createBitmap
+import androidx.core.graphics.scale
+import androidx.exifinterface.media.ExifInterface
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.security.MessageDigest
@@ -56,8 +58,10 @@ class EvidenceProcessor(private val context: Context) {
                             .getOrDefault(ExifInterface.ORIENTATION_NORMAL)
                     } ?: ExifInterface.ORIENTATION_NORMAL
                 val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
-                    ?: error("The selected image could not be opened.")
+                resolver.openInputStream(uri)?.use { input ->
+                    BitmapFactory.decodeStream(input, null, bounds)
+                    Unit
+                } ?: error("The selected image could not be opened.")
                 require(bounds.outWidth > 0 && bounds.outHeight > 0) {
                     "The selected image is corrupt."
                 }
@@ -92,14 +96,11 @@ class EvidenceProcessor(private val context: Context) {
                 val height = (decoded.height * scale).toInt().coerceAtLeast(1)
                 val scaled =
                     if (width == decoded.width && height == decoded.height) decoded
-                    else
-                        Bitmap.createScaledBitmap(decoded, width, height, true).also {
-                            decoded.recycle()
-                        }
+                    else decoded.scale(width, height).also { decoded.recycle() }
                 val oriented = applyOrientation(scaled, orientation)
                 if (oriented !== scaled) scaled.recycle()
                 val flattened =
-                    Bitmap.createBitmap(oriented.width, oriented.height, Bitmap.Config.ARGB_8888)
+                    createBitmap(oriented.width, oriented.height, Bitmap.Config.ARGB_8888)
                 Canvas(flattened).apply {
                     drawColor(Color.WHITE)
                     drawBitmap(oriented, 0f, 0f, null)

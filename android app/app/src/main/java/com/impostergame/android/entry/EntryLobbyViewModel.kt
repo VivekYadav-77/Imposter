@@ -21,43 +21,63 @@ class EntryLobbyViewModel(
     private val _state = kotlinx.coroutines.flow.MutableStateFlow(restoredState())
     val state: kotlinx.coroutines.flow.StateFlow<EntryLobbyUiState> = _state
     private var lobbyRefresh: Job? = null
+    private var bootstrapRetry: Job? = null
     private var pendingSubmission: PendingSubmission? = null
     private var requestInFlight = false
 
     init {
-        bootstrap()
+        bootstrap(manual = false)
     }
 
-    fun bootstrap() {
+    fun bootstrap(manual: Boolean = true) {
+        if (manual) bootstrapRetry?.cancel()
         launchRequest {
             when (val target = gateway.resume()) {
-                ResumeTarget.Entry -> setDestination(EntryDestination.HOME)
+                ResumeTarget.Entry -> {
+                    cancelBootstrapRetry()
+                    setDestination(EntryDestination.HOME)
+                }
                 is ResumeTarget.Lobby -> enterLobby(target.room, "Returned to lobby.")
-                ResumeTarget.Game -> setDestination(EntryDestination.GAME)
-                ResumeTarget.Results -> setDestination(EntryDestination.RESULTS)
-                is ResumeTarget.Failed ->
+                ResumeTarget.Game -> {
+                    cancelBootstrapRetry()
+                    setDestination(EntryDestination.GAME)
+                }
+                ResumeTarget.Results -> {
+                    cancelBootstrapRetry()
+                    setDestination(EntryDestination.RESULTS)
+                }
+                is ResumeTarget.Failed -> {
                     update {
                         it.copy(
                             destination = EntryDestination.HOME,
                             message = messageFor(target.error),
                             connectionState = ConnectionState.Offline,
+                            resumeFailed = true,
                         )
                     }
+                    scheduleBootstrapRetry()
+                }
             }
         }
     }
 
     fun showHome() {
         lobbyRefresh?.cancel()
+        cancelBootstrapRetry()
         setDestination(EntryDestination.HOME)
     }
 
-    fun showJoin() = setDestination(EntryDestination.JOIN)
+    fun showJoin() {
+        cancelBootstrapRetry()
+        setDestination(EntryDestination.JOIN)
+    }
 
     fun showCreate() {
+        cancelBootstrapRetry()
         update {
             it.copy(
                 destination = EntryDestination.CREATE,
+                resumeFailed = false,
                 form =
                     it.form.copy(
                         availableColorIds =
@@ -83,6 +103,7 @@ class EntryLobbyViewModel(
                         selectedColorId = null,
                     ),
                 message = null,
+                validationTarget = null,
             )
         }
     }
@@ -90,7 +111,12 @@ class EntryLobbyViewModel(
     fun setNickname(value: String) {
         pendingSubmission = null
         savedState[KEY_NICKNAME] = value
-        update { it.copy(form = it.form.copy(nickname = value, nicknameError = null)) }
+        update {
+            it.copy(
+                form = it.form.copy(nickname = value, nicknameError = null),
+                validationTarget = null,
+            )
+        }
     }
 
     fun setColor(id: String) {
@@ -101,6 +127,7 @@ class EntryLobbyViewModel(
                 form = it.form.copy(selectedColorId = id),
                 message = null,
                 focusColorPicker = false,
+                validationTarget = null,
             )
         }
     }
@@ -113,7 +140,7 @@ class EntryLobbyViewModel(
                     ConsentKind.PHOTO -> it.form.copy(photoAccepted = accepted)
                     ConsentKind.PRIVACY -> it.form.copy(privacyAccepted = accepted)
                 }
-            it.copy(form = form)
+            it.copy(form = form, validationTarget = null, message = null)
         }
     }
 
@@ -156,7 +183,13 @@ class EntryLobbyViewModel(
             else null
         if (nicknameError != null || codeError != null) {
             update {
-                it.copy(form = it.form.copy(nicknameError = nicknameError, codeError = codeError))
+                it.copy(
+                    form = it.form.copy(nicknameError = nicknameError, codeError = codeError),
+                    message = "Check the highlighted field and try again.",
+                    validationTarget =
+                        if (codeError != null) EntryValidationTarget.ROOM_CODE
+                        else EntryValidationTarget.NICKNAME,
+                )
             }
             return
         }
@@ -166,7 +199,10 @@ class EntryLobbyViewModel(
                 it.copy(
                     message =
                         if (color == null) "Choose an available player color."
-                        else "Accept all three agreements to continue."
+                        else "Accept all three agreements to continue.",
+                    validationTarget =
+                        if (color == null) EntryValidationTarget.COLOR
+                        else EntryValidationTarget.CONSENTS,
                 )
             }
             return
@@ -307,6 +343,7 @@ class EntryLobbyViewModel(
     fun clearAnnouncement() = update { it.copy(announce = null) }
 
     private fun enterLobby(room: RoomSnapshot, announcement: String?) {
+        cancelBootstrapRetry()
         update {
             it.copy(
                 destination = EntryDestination.LOBBY,
@@ -316,6 +353,7 @@ class EntryLobbyViewModel(
                 message = null,
                 announce = announcement,
                 connectionState = ConnectionState.Connected,
+                resumeFailed = false,
             )
         }
         viewModelScope.launch {
@@ -407,8 +445,30 @@ class EntryLobbyViewModel(
         }
     }
 
+    private fun scheduleBootstrapRetry() {
+        if (bootstrapRetry?.isActive == true) return
+        bootstrapRetry = viewModelScope.launch {
+            for (delayMillis in listOf(2_000L, 4_000L, 8_000L, 15_000L, 30_000L)) {
+                delay(delayMillis)
+                if (!_state.value.resumeFailed) break
+                bootstrap(manual = false)
+            }
+        }
+    }
+
+    private fun cancelBootstrapRetry() {
+        bootstrapRetry?.cancel()
+        bootstrapRetry = null
+    }
+
     private fun setDestination(destination: EntryDestination) = update {
-        it.copy(destination = destination, loading = false, message = null)
+        it.copy(
+            destination = destination,
+            loading = false,
+            message = null,
+            resumeFailed = false,
+            validationTarget = null,
+        )
     }
 
     private fun update(transform: (EntryLobbyUiState) -> EntryLobbyUiState) {

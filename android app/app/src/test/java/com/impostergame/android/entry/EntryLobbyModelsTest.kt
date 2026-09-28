@@ -39,6 +39,14 @@ class EntryLobbyModelsTest {
         val ready = EntryLobbyUiState(room = room(participantCount = 3, hasPack = true))
         assertTrue(ready.startBlockingReasons.isEmpty())
         assertTrue(ready.canStart)
+
+        val pendingSettings =
+            EntryLobbyUiState(
+                room = room(participantCount = 3, hasPack = true),
+                settings = LobbySettingsDraft(dirty = true),
+            )
+        assertEquals(listOf("Apply pending settings."), pendingSettings.startBlockingReasons)
+        assertFalse(pendingSettings.canStart)
     }
 
     private fun room(participantCount: Int, hasPack: Boolean): RoomSnapshot {

@@ -146,6 +146,34 @@ Use IDs `ADR-A-###`. Status is `proposed`, `approved`, `superseded`, or `rejecte
 - **Reason:** Role, ballot, evidence capability, and session leakage can occur outside ordinary HTTP logging, while hostile text/images and retry races can exhaust resources or mislead players. A single conservative policy is easier to audit across every gameplay phase.
 - **Consequences:** Screenshots and ordinary overlays are unavailable throughout active gameplay. Server error details are not rendered directly. Oversized or unsupported responses/images fail closed. Rooted-device compromise and OEM clipboard/task-switcher behavior remain documented platform limitations requiring device review.
 
+### ADR-A-020 — External signing, environment separation, and privacy-safe operations
+
+- **Status:** approved by Phase 8 implementation request
+- **Date:** 2026-09-28
+- **Approver:** product owner delegated best-fit technical choices; final app identity, service vendors, and store policy remain owner decisions
+- **Decision:** Inject debug, staging, and production origins separately; require HTTPS for staging/release; inject semantic version/version code; and sign release candidates only with credentials outside the repository. CI verifies a shrunk signed bundle with a disposable key, while the protected manual workflow uses production secrets and retains the AAB/R8 mapping. Operational events and crash breadcrumbs use fixed metric/outcome enums only; consent-gated support diagnostics expose only version, environment, coarse network state, and bounded request IDs.
+- **Reason:** The release pipeline must be reproducible without committing keys, and observability must diagnose availability without creating a new path for role, ballot, evidence, participant, or credential leakage.
+- **Consequences:** Release tasks fail closed when endpoint/signing/version inputs are invalid. Vendor SDK selection, data residency/retention, dashboards, Play Console approvals, final application ID, and signing-key recovery require explicit owner approval before production rollout.
+
+### ADR-A-021 — Compose BOM compatible with the API 36 compile baseline
+
+- **Status:** approved by local-device verification
+- **Date:** 2026-09-28
+- **Approver:** product owner delegated local Android environment setup and testing
+- **Decision:** While the approved compile/target baseline remains API 36, pin the stable Compose BOM to `2026.06.01` (Compose UI/Foundation 1.11.4), AndroidX Core to `1.17.0`, and Lifecycle to `2.10.0`. Do not consume Compose 1.12.x, Core 1.19.x, or Lifecycle 2.11.x until the application deliberately adopts compile SDK 37 or later.
+- **Reason:** The newer dependency set requires compile SDK 37 in published AAR metadata. The mismatch prevents Android compilation before application Kotlin sources are evaluated; Core 1.18 also requires API 36.1 rather than the approved API 36 baseline.
+- **Consequences:** API 36 builds remain reproducible and compatible with ADR-A-012. A future compile SDK upgrade must reevaluate and explicitly update the BOM.
+- **Supersedes:** The Compose BOM version only in ADR-A-013; all other Phase 1 toolchain pins remain unchanged.
+
+### ADR-A-022 — Recoverable bootstrap and connected-device release gate
+
+- **Status:** approved by QA remediation implementation
+- **Date:** 2026-09-28
+- **Approver:** product owner requested full implementation of `improvementApp1.md`
+- **Decision:** Preserve failed bootstrap as an explicit recoverable UI state with a guarded manual retry and bounded automatic backoff. Keep connected instrumentation outside the host-only `quality` task but expose it as `connectedQuality` and require it in a dedicated CI emulator job. Device tests use stable behavior/semantics rather than presentation pixels and a lock-screen-safe test activity.
+- **Reason:** Transport loss must not strand a resumable credential, and a passing host-only quality task must not hide broken app/device integration. Pixel sampling was not a meaningful visual assertion and physical devices can pause ordinary test activities while locked.
+- **Consequences:** CI now provisions an API 35 emulator for connected tests; local physical-device runs should keep the device awake. Full API 26/31/36 and multi-client acceptance remain separate Phase 8 gates.
+
 ## Adding a decision
 
 Copy this structure:

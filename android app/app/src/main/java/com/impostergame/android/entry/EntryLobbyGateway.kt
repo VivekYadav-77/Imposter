@@ -112,14 +112,12 @@ class NetworkEntryLobbyGateway(
             is StoredSession.Available ->
                 when (val result = api.fetch()) {
                     is ApiResult.Failure -> {
-                        if (
-                            result.error is ApiFailure.Http &&
-                                result.error.status in listOf(401, 404)
-                        ) {
+                        val error = result.error
+                        if (error is ApiFailure.Http && error.status in listOf(401, 404)) {
                             sessions.clear()
                             ResumeTarget.Entry
                         } else {
-                            ResumeTarget.Failed(result.error)
+                            ResumeTarget.Failed(error)
                         }
                     }
                     is ApiResult.Success ->
@@ -178,13 +176,15 @@ class NetworkEntryLobbyGateway(
 
     override suspend fun endSession(): GatewayResult<Unit> =
         when (val result = api.endSession()) {
-            is ApiResult.Failure ->
-                if (result.error is ApiFailure.Http && result.error.status in listOf(401, 404)) {
+            is ApiResult.Failure -> {
+                val error = result.error
+                if (error is ApiFailure.Http && error.status in listOf(401, 404)) {
                     sessions.clear()
                     GatewayResult.Success(Unit)
                 } else {
-                    GatewayResult.Failure(result.error)
+                    GatewayResult.Failure(error)
                 }
+            }
             is ApiResult.Success -> {
                 sessions.clear()
                 GatewayResult.Success(Unit)

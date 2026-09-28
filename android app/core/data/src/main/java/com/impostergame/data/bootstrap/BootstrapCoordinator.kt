@@ -4,6 +4,9 @@ import com.impostergame.data.model.GamePhase
 import com.impostergame.data.model.RoomStatus
 import com.impostergame.data.network.ApiFailure
 import com.impostergame.data.network.ApiResult
+import com.impostergame.data.operations.OperationalMetric
+import com.impostergame.data.operations.OperationalOutcome
+import com.impostergame.data.operations.PrivacySafeOperations
 import com.impostergame.data.repository.GameRepository
 import com.impostergame.data.repository.RoomRepository
 import com.impostergame.data.session.SessionStore
@@ -32,12 +35,14 @@ class BootstrapCoordinator(
     private val sessions: SessionStore,
     private val rooms: RoomRepository,
     private val games: GameRepository,
+    private val operations: PrivacySafeOperations = PrivacySafeOperations(),
 ) {
     private val mutableDestination =
         MutableStateFlow<BootstrapDestination>(BootstrapDestination.Starting)
     val destination: StateFlow<BootstrapDestination> = mutableDestination.asStateFlow()
 
     suspend fun bootstrap() {
+        operations.record(OperationalMetric.BOOTSTRAP, OperationalOutcome.STARTED)
         mutableDestination.value = BootstrapDestination.Starting
         when (val stored = sessions.restore()) {
             StoredSession.None -> mutableDestination.value = BootstrapDestination.Entry
@@ -46,6 +51,17 @@ class BootstrapCoordinator(
                     BootstrapDestination.SecureStorageUnavailable(stored.reason)
             is StoredSession.Available -> bootstrapAuthenticated()
         }
+        operations.record(
+            OperationalMetric.BOOTSTRAP,
+            if (
+                mutableDestination.value is BootstrapDestination.RecoverableOffline ||
+                    mutableDestination.value is BootstrapDestination.SecureStorageUnavailable
+            ) {
+                OperationalOutcome.FAILED
+            } else {
+                OperationalOutcome.SUCCEEDED
+            },
+        )
     }
 
     private suspend fun bootstrapAuthenticated() {

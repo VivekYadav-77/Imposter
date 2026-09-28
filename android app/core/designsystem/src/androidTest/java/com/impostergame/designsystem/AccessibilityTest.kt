@@ -3,7 +3,7 @@ package com.impostergame.designsystem
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.dp
@@ -14,7 +14,7 @@ import org.junit.Rule
 import org.junit.Test
 
 class AccessibilityTest {
-    @get:Rule val composeRule = createComposeRule()
+    @get:Rule val composeRule = createAndroidComposeRule<DesignSystemTestActivity>()
 
     @Test
     fun buttonMeetsMinimumTouchTarget() {

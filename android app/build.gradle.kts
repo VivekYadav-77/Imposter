@@ -52,3 +52,12 @@ tasks.register("quality") {
         ":core:session:testDebugUnitTest",
     )
 }
+
+tasks.register("connectedQuality") {
+    group = "verification"
+    description = "Runs Android instrumentation tests on every connected device."
+    dependsOn(
+        ":app:connectedDebugAndroidTest",
+        ":core:designsystem:connectedDebugAndroidTest",
+    )
+}

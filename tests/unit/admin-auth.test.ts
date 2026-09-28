@@ -126,12 +126,13 @@ describe("administrator authentication", () => {
     const google = {
       authorizationUrl: ({ state }: { state: string }) =>
         `https://accounts.example/?state=${state}`,
-      exchange: async () => ({
-        subject: "google-owner",
-        email: "owner@example.com",
-        emailVerified: true,
-        name: "Owner",
-      }),
+      exchange: () =>
+        Promise.resolve({
+          subject: "google-owner",
+          email: "owner@example.com",
+          emailVerified: true,
+          name: "Owner",
+        }),
     };
     const service = new AdminAuthService(
       repository,

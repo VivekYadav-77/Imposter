@@ -1,7 +1,12 @@
 .gradle/
 .kotlin/
 **/build/
+/core/data/bin/
 local.properties
 captures/
 *.apk
 *.aab
+*.jks
+*.keystore
+/hs_err_pid*.log
+/replay_pid*.log

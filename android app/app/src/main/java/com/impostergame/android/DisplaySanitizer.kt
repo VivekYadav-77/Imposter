@@ -51,9 +51,7 @@ internal fun GameSnapshot.sanitizedForDisplay(): GameSnapshot =
         meeting = meeting?.sanitizedForDisplay(),
         resultSummary =
             resultSummary?.let { summary ->
-                summary.copy(
-                    players = summary.players.map(GameResultPlayer::sanitizedForDisplay)
-                )
+                summary.copy(players = summary.players.map(GameResultPlayer::sanitizedForDisplay))
             },
     )
 
@@ -85,7 +83,12 @@ private fun Meeting.sanitizedForDisplay(): Meeting =
                 )
             },
         publicVotes = publicVotes.map(PublicVote::sanitizedForDisplay),
-        result = result?.copy(ballots = result.ballots.map(PublicVote::sanitizedForDisplay)),
+        result =
+            result?.let { meetingResult ->
+                meetingResult.copy(
+                    ballots = meetingResult.ballots.map(PublicVote::sanitizedForDisplay)
+                )
+            },
     )
 
 private fun PublicVote.sanitizedForDisplay(): PublicVote =

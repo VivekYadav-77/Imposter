@@ -1,7 +1,6 @@
 package com.impostergame.android.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -39,6 +39,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
@@ -46,6 +49,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -60,6 +66,7 @@ import com.impostergame.android.entry.ConsentKind
 import com.impostergame.android.entry.EntryDestination
 import com.impostergame.android.entry.EntryLobbyUiState
 import com.impostergame.android.entry.EntryLobbyViewModel
+import com.impostergame.android.entry.EntryValidationTarget
 import com.impostergame.android.entry.LobbySettingsDraft
 import com.impostergame.android.gameplay.GameplayViewModel
 import com.impostergame.data.model.RoomParticipant
@@ -81,6 +88,7 @@ fun ImposterGameApp(
     gameplayViewModel: GameplayViewModel,
     onCopyCode: (String) -> Unit,
     onShareCode: (String) -> Unit,
+    onShareDiagnostics: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     ImposterGameTheme {
@@ -88,7 +96,15 @@ fun ImposterGameApp(
             when (state.destination) {
                 EntryDestination.BOOTSTRAP -> LoadingScreen("Checking for an existing room…")
                 EntryDestination.HOME ->
-                    HomeScreen(state.message, viewModel::showJoin, viewModel::showCreate)
+                    HomeScreen(
+                        state.message,
+                        state.resumeFailed,
+                        state.loading,
+                        viewModel::showJoin,
+                        viewModel::showCreate,
+                        viewModel::bootstrap,
+                        onShareDiagnostics,
+                    )
                 EntryDestination.JOIN,
                 EntryDestination.CREATE -> EntryScreen(state, viewModel)
                 EntryDestination.LOBBY -> LobbyScreen(state, viewModel, onCopyCode, onShareCode)
@@ -108,7 +124,41 @@ fun ImposterGameApp(
 }
 
 @Composable
-private fun HomeScreen(message: String?, onJoin: () -> Unit, onCreate: () -> Unit) {
+private fun HomeScreen(
+    message: String?,
+    resumeFailed: Boolean,
+    loading: Boolean,
+    onJoin: () -> Unit,
+    onCreate: () -> Unit,
+    onRetry: () -> Unit,
+    onShareDiagnostics: () -> Unit,
+) {
+    var confirmDiagnostics by remember { mutableStateOf(false) }
+    if (confirmDiagnostics) {
+        AlertDialog(
+            onDismissRequest = { confirmDiagnostics = false },
+            title = { Text("Share support diagnostics?") },
+            text = {
+                Text(
+                    "This shares the app version, environment, network status, and recent " +
+                        "request IDs. It does not include your room, role, votes, photos, or token."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmDiagnostics = false
+                        onShareDiagnostics()
+                    }
+                ) {
+                    Text("Continue")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDiagnostics = false }) { Text("Cancel") }
+            },
+        )
+    }
     CenteredScrollableColumn {
         PlayerAvatar("wolf", 112.dp, "Imposter Game")
         Text(
@@ -124,10 +174,23 @@ private fun HomeScreen(message: String?, onJoin: () -> Unit, onCreate: () -> Uni
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Message(message)
+        if (resumeFailed) {
+            GameButton(
+                "Retry secure resume",
+                onRetry,
+                Modifier.fillMaxWidth(),
+                loading = loading,
+            )
+        }
         GameButton("Join room", onJoin, Modifier.fillMaxWidth())
         GameOutlinedButton("Create room", onCreate, Modifier.fillMaxWidth())
         HorizontalDivider(Modifier.padding(vertical = GameSpacing.sm))
-        Text("How to play  •  Privacy  •  Accessibility  •  Settings")
+        Text(
+            "Privacy and accessibility protections are applied automatically during play.",
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        TextButton(onClick = { confirmDiagnostics = true }) { Text("Share support diagnostics") }
     }
 }
 
@@ -135,9 +198,30 @@ private fun HomeScreen(message: String?, onJoin: () -> Unit, onCreate: () -> Uni
 private fun EntryScreen(state: EntryLobbyUiState, viewModel: EntryLobbyViewModel) {
     val joining = state.destination == EntryDestination.JOIN
     val focusManager = LocalFocusManager.current
-    val colorFocus = FocusRequester()
+    val scrollState = rememberScrollState()
+    val codeFocus = remember { FocusRequester() }
+    val nicknameFocus = remember { FocusRequester() }
+    val colorFocus = remember { FocusRequester() }
     LaunchedEffect(state.focusColorPicker) {
         if (state.focusColorPicker) colorFocus.requestFocus()
+    }
+    LaunchedEffect(state.validationTarget) {
+        when (state.validationTarget) {
+            EntryValidationTarget.ROOM_CODE -> {
+                scrollState.animateScrollTo(0)
+                codeFocus.requestFocus()
+            }
+            EntryValidationTarget.NICKNAME -> {
+                scrollState.animateScrollTo(0)
+                nicknameFocus.requestFocus()
+            }
+            EntryValidationTarget.COLOR -> {
+                scrollState.animateScrollTo(scrollState.maxValue / 2)
+                colorFocus.requestFocus()
+            }
+            EntryValidationTarget.CONSENTS -> scrollState.animateScrollTo(scrollState.maxValue)
+            null -> Unit
+        }
     }
     Scaffold(
         modifier = Modifier.safeDrawingPadding().imePadding(),
@@ -168,7 +252,7 @@ private fun EntryScreen(state: EntryLobbyUiState, viewModel: EntryLobbyViewModel
         Column(
             modifier =
                 Modifier.padding(padding)
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(scrollState)
                     .padding(GameSpacing.lg)
                     .widthIn(max = 680.dp)
                     .fillMaxWidth(),
@@ -178,7 +262,7 @@ private fun EntryScreen(state: EntryLobbyUiState, viewModel: EntryLobbyViewModel
                 OutlinedTextField(
                     value = state.form.roomCode,
                     onValueChange = viewModel::setCode,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().focusRequester(codeFocus),
                     label = { Text("Room code") },
                     supportingText = { Text(state.form.codeError ?: "Six letters or numbers") },
                     isError = state.form.codeError != null,
@@ -203,7 +287,7 @@ private fun EntryScreen(state: EntryLobbyUiState, viewModel: EntryLobbyViewModel
             OutlinedTextField(
                 value = state.form.nickname,
                 onValueChange = viewModel::setNickname,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().focusRequester(nicknameFocus),
                 label = { Text("Nickname") },
                 supportingText = { Text(state.form.nicknameError ?: "1–24 characters") },
                 isError = state.form.nicknameError != null,
@@ -230,7 +314,10 @@ private fun EntryScreen(state: EntryLobbyUiState, viewModel: EntryLobbyViewModel
             ConsentRow("I accept the privacy notice.", state.form.privacyAccepted) {
                 viewModel.setConsent(ConsentKind.PRIVACY, it)
             }
-            Message(state.message)
+            Message(
+                state.message,
+                Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
+            )
             Spacer(Modifier.height(GameSpacing.xl))
         }
     }
@@ -265,11 +352,21 @@ private fun ColorPicker(
                             modifier =
                                 Modifier.selectable(
                                         selected = id == selectedId,
+                                        role = Role.RadioButton,
                                         onClick = { onSelect(id) },
                                     )
+                                    .semantics(mergeDescendants = true) {
+                                        contentDescription = label
+                                    }
                                     .padding(GameSpacing.xs)
                         ) {
-                            PlayerAvatar(id, 58.dp, label, selected = id == selectedId)
+                            PlayerAvatar(
+                                id,
+                                58.dp,
+                                label,
+                                modifier = Modifier.clearAndSetSemantics {},
+                                selected = id == selectedId,
+                            )
                         }
                     }
                 }
@@ -281,11 +378,25 @@ private fun ColorPicker(
 @Composable
 private fun ConsentRow(label: String, checked: Boolean, onChecked: (Boolean) -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().clickable { onChecked(!checked) },
+        modifier =
+            Modifier.fillMaxWidth()
+                .toggleable(
+                    value = checked,
+                    role = Role.Checkbox,
+                    onValueChange = onChecked,
+                )
+                .semantics(mergeDescendants = true) { contentDescription = label },
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Checkbox(checked = checked, onCheckedChange = onChecked)
-        Text(label, modifier = Modifier.padding(start = GameSpacing.xs))
+        Checkbox(
+            checked = checked,
+            onCheckedChange = null,
+            modifier = Modifier.clearAndSetSemantics {},
+        )
+        Text(
+            label,
+            modifier = Modifier.padding(start = GameSpacing.xs).clearAndSetSemantics {},
+        )
     }
 }
 
@@ -410,10 +521,7 @@ private fun ParticipantRow(participant: RoomParticipant, room: RoomSnapshot) {
         playerColorId = participant.avatarId,
         isHost = participant.isHost,
         isSelf = participant.id == room.self.participantId,
-        status =
-            if (participant.presence == "away") PlayerStatus.Disconnected
-            else if (participant.isHost) PlayerStatus.Host
-            else if (participant.id == room.self.participantId) PlayerStatus.Self else null,
+        status = if (participant.presence == "away") PlayerStatus.Disconnected else null,
     )
 }
 
@@ -461,12 +569,6 @@ private fun LobbySettings(
                 )
             }
             if (state.settings.advancedExpanded) AdvancedSettingsSummary(state.settings)
-            GameOutlinedButton(
-                "Apply settings",
-                viewModel::applySettings,
-                Modifier.fillMaxWidth(),
-                enabled = state.settings.dirty && !state.loading,
-            )
         } else {
             Text("The host controls settings and starts the game.")
         }
@@ -476,6 +578,7 @@ private fun LobbySettings(
 @Composable
 private fun SetupChecklist(state: EntryLobbyUiState) {
     val room = state.room ?: return
+    val selectedTaskPack = room.settings.selectedTaskPack
     Card(Modifier.fillMaxWidth()) {
         Column(
             Modifier.padding(GameSpacing.md),
@@ -487,9 +590,12 @@ private fun SetupChecklist(state: EntryLobbyUiState) {
                 "At least ${room.minPlayers} players (${room.participants.size} joined)",
             )
             ChecklistItem(
-                room.settings.selectedTaskPack != null,
-                room.settings.selectedTaskPack?.let { "Task pack: ${it.name}" }
-                    ?: "Choose a published task pack",
+                !state.settings.dirty && selectedTaskPack != null,
+                when {
+                    state.settings.dirty -> "Apply pending settings"
+                    selectedTaskPack != null -> "Task pack: ${selectedTaskPack.name}"
+                    else -> "Choose a published task pack"
+                },
             )
             ChecklistItem(true, "Task phase: ${room.settings.taskPhaseSeconds / 60} minutes")
             ChecklistItem(
@@ -524,12 +630,14 @@ private fun TaskPackPicker(state: EntryLobbyUiState, viewModel: EntryLobbyViewMo
                     .selectable(
                         selected = state.settings.selectedTaskPackId == pack.id,
                         onClick = { viewModel.selectTaskPack(pack.id) },
+                        role = Role.RadioButton,
                     ),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 RadioButton(
                     selected = state.settings.selectedTaskPackId == pack.id,
-                    onClick = { viewModel.selectTaskPack(pack.id) },
+                    onClick = null,
+                    modifier = Modifier.clearAndSetSemantics {},
                 )
                 Column {
                     Text(pack.name)
@@ -586,6 +694,19 @@ private fun LobbyAction(state: EntryLobbyUiState, viewModel: EntryLobbyViewModel
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             if (host) {
+                if (state.settings.dirty) {
+                    Text(
+                        "Settings changed. Apply them before starting.",
+                        color = MaterialTheme.colorScheme.primary,
+                        textAlign = TextAlign.Center,
+                    )
+                    GameOutlinedButton(
+                        "Apply settings",
+                        viewModel::applySettings,
+                        Modifier.fillMaxWidth().widthIn(max = 680.dp),
+                        enabled = !state.loading,
+                    )
+                }
                 if (state.startBlockingReasons.isNotEmpty()) {
                     Text(
                         state.startBlockingReasons.joinToString(" "),

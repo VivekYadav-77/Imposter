@@ -29,6 +29,8 @@ import com.impostergame.android.ui.ImposterGameApp
 import com.impostergame.data.network.ApiClient
 import com.impostergame.data.network.ParticipantApi
 import com.impostergame.data.network.SignedUploadClient
+import com.impostergame.data.operations.SafeNetworkState
+import com.impostergame.data.operations.SupportDiagnosticsBuffer
 import com.impostergame.data.session.StoredSession
 import com.impostergame.session.AndroidKeystoreSessionStore
 import kotlinx.coroutines.delay
@@ -37,6 +39,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 
 class MainActivity : ComponentActivity() {
     private val sessionStore by lazy { AndroidKeystoreSessionStore(applicationContext) }
+    private val supportDiagnostics = SupportDiagnosticsBuffer()
     private val participantApi: ParticipantApi? by lazy {
         if (BuildConfig.API_BASE_URL.isBlank()) {
             null
@@ -47,6 +50,7 @@ class MainActivity : ComponentActivity() {
                     credentialProvider = {
                         (sessionStore.session.value as? StoredSession.Available)?.credential?.token
                     },
+                    logger = supportDiagnostics,
                     allowInsecureLocalDebug = BuildConfig.DEBUG,
                 )
             )
@@ -95,6 +99,7 @@ class MainActivity : ComponentActivity() {
                 gameplayViewModel = gameplayViewModel,
                 onCopyCode = ::copyRoomCode,
                 onShareCode = ::shareRoomCode,
+                onShareDiagnostics = ::shareSupportDiagnostics,
             )
         }
     }
@@ -133,6 +138,27 @@ class MainActivity : ComponentActivity() {
                     putExtra(Intent.EXTRA_TEXT, "Join my Imposter Game room with code $code")
                 },
                 "Share room code",
+            )
+        )
+    }
+
+    private fun shareSupportDiagnostics() {
+        val text =
+            supportDiagnostics
+                .snapshot(
+                    versionName = BuildConfig.VERSION_NAME,
+                    versionCode = BuildConfig.VERSION_CODE,
+                    environment = BuildConfig.ENVIRONMENT,
+                    networkState = SafeNetworkState.UNKNOWN,
+                )
+                .asConsentGatedText(userConsented = true) ?: return
+        startActivity(
+            Intent.createChooser(
+                Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, text)
+                },
+                "Share support diagnostics",
             )
         )
     }

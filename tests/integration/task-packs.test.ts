@@ -158,4 +158,31 @@ describeWithDatabase("task-pack lifecycle persistence", () => {
     ).resolves.toEqual({ deleted: true, id: created.id });
     await expect(repository.getAdmin(created.id)).resolves.toBeNull();
   });
+
+  it("rejects duplicate and obvious placeholder task content before publishing", async () => {
+    const suffix = randomUUID();
+    const created = await repository.create(
+      {
+        name: `Needs review ${suffix}`,
+        items: ["sdfsdfds", "dsfsdfsdf", "sdfsdfds"],
+      },
+      adminId,
+      `req-review-${suffix}`,
+      `create-review-${suffix}`,
+    );
+
+    await expect(
+      repository.transition(
+        created.id,
+        created.revision,
+        "published",
+        adminId,
+        `req-publish-review-${suffix}`,
+        `publish-review-${suffix}`,
+      ),
+    ).rejects.toMatchObject({
+      code: "PACK_NOT_PUBLISHABLE",
+      details: { duplicateItemPositions: [3], placeholderItemPositions: [1, 2, 3] },
+    });
+  });
 });

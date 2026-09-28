@@ -5,6 +5,7 @@ import type { Database, DatabaseSchema } from "../../infrastructure/database/dat
 import { inTransaction } from "../../infrastructure/database/transaction.js";
 import { ApplicationError } from "../../shared/errors/application-error.js";
 import { MAX_TASKS_PER_MAP, MIN_ACTIVE_TASKS_PER_PUBLISHED_MAP } from "../../shared/task-packs.js";
+import { findTaskContentIssues } from "./publish-validation.js";
 import type { CreatePackInput, UpdatePackInput } from "./schemas.js";
 import type {
   AdminPackDto,
@@ -356,18 +357,31 @@ export class TaskPackRepository {
             "PACK_NOT_PUBLISHABLE",
             "Only draft task packs can be published.",
           );
-        const count = await trx
+        const activeItems = await trx
           .selectFrom("app.task_pack_items")
-          .select(sql<number>`count(*)::int`.as("count"))
+          .select(["position", "description"])
           .where("task_pack_id", "=", id)
           .where("is_active", "=", true)
-          .executeTakeFirstOrThrow();
-        if (count.count < MIN_ACTIVE_TASKS_PER_PUBLISHED_MAP || count.count > MAX_TASKS_PER_MAP)
+          .orderBy("position")
+          .execute();
+        if (
+          activeItems.length < MIN_ACTIVE_TASKS_PER_PUBLISHED_MAP ||
+          activeItems.length > MAX_TASKS_PER_MAP
+        )
           throw new ApplicationError(
             422,
             "PACK_NOT_PUBLISHABLE",
             `A published map must contain ${MIN_ACTIVE_TASKS_PER_PUBLISHED_MAP} to ${MAX_TASKS_PER_MAP} active tasks.`,
-            { activeItemCount: count.count },
+            { activeItemCount: activeItems.length },
+          );
+        const { duplicateItemPositions, placeholderItemPositions } =
+          findTaskContentIssues(activeItems);
+        if (duplicateItemPositions.length > 0 || placeholderItemPositions.length > 0)
+          throw new ApplicationError(
+            422,
+            "PACK_NOT_PUBLISHABLE",
+            "Active tasks must be unique and contain review-ready instructions before publishing.",
+            { duplicateItemPositions, placeholderItemPositions },
           );
       } else if (current.status !== "published") {
         throw new ApplicationError(
