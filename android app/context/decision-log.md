@@ -183,6 +183,15 @@ Use IDs `ADR-A-###`. Status is `proposed`, `approved`, `superseded`, or `rejecte
 - **Reason:** API v1 describes the field as a URI and the local object-storage implementation returns a same-origin relative path. The web client resolves that path through the browser origin, while Android previously rejected it before transfer and could never complete a task.
 - **Consequences:** Android supports both same-origin relative capabilities and approved absolute HTTPS upload instructions without attaching participant authorization. Network-policy tests cover relative resolution and fail-closed protocol-relative input; the physical Acer run completed upload and confirmation.
 
+### ADR-A-024 — Website-equivalent native brand, preferences, and feedback
+
+- **Status:** approved by UI/UX parity implementation request
+- **Date:** 2026-09-29
+- **Approver:** product owner requested complete implementation of `implementationAppui/ux.md`
+- **Decision:** Adapt the website's charcoal/amber visual language into semantic Compose tokens rather than copying DOM measurements. Persist only non-sensitive System/Light/Dark, sound, haptic, reduced-motion, and high-contrast preferences in private app storage. Drive phase colors and one-shot audio/haptic feedback from typed authoritative state transitions; use lifecycle-safe native tones and platform haptics until separately licensed audio assets are supplied.
+- **Reason:** A shared semantic language provides recognizable parity across adaptive native layouts while retaining Android accessibility, privacy, and server authority. Typed events and stable identities prevent recomposition or reconnect from replaying feedback.
+- **Consequences:** New UI must consume the design-system roles instead of hard-coded brand colors. Preferences never contain participant/session/game data. Sound and haptics remain optional and are never the only state signal. Replay, player-called meetings, and account/dashboard UI remain absent until ADR-A-008, ADR-A-006, and ADR-A-009 are approved.
+
 ## Adding a decision
 
 Copy this structure:

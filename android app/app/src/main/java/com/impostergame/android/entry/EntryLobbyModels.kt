@@ -7,6 +7,7 @@ import com.impostergame.designsystem.component.ConnectionState
 enum class EntryDestination {
     BOOTSTRAP,
     HOME,
+    SETTINGS,
     JOIN,
     CREATE,
     LOBBY,
@@ -45,8 +46,12 @@ data class LobbySettingsDraft(
     val meetingVotingMode: String = "timed",
     val voteVisibility: String = "private",
     val evidenceVisibility: String = "private",
+    val imposterMeetingTaskRequirement: String = "none",
     val meetingCooldownSeconds: Int = 60,
     val imposterCooldownSeconds: Int = 60,
+    val imposterCount: Int = 1,
+    val taskCounts: Map<String, Int> = mapOf("easy" to 1, "medium" to 1, "hard" to 1),
+    val roleCounts: Map<String, Int> = emptyMap(),
     val advancedExpanded: Boolean = false,
     val dirty: Boolean = false,
 )
@@ -66,6 +71,40 @@ data class EntryLobbyUiState(
     val resumeFailed: Boolean = false,
     val validationTarget: EntryValidationTarget? = null,
 ) {
+    val settingsValidationErrors: List<String>
+        get() {
+            val snapshot = room ?: return emptyList()
+            val selectedPack = taskPacks.firstOrNull { it.id == settings.selectedTaskPackId }
+            val totalTasks = settings.taskCounts.values.sum()
+            val maximumCrew = (snapshot.participants.size - settings.imposterCount).coerceAtLeast(0)
+            return buildList {
+                if (settings.imposterCount !in snapshot.settings.allowedImposterCounts) {
+                    add("Choose an allowed imposter count.")
+                }
+                if (totalTasks !in 1..15) add("Choose between 1 and 15 tasks per player.")
+                if (selectedPack != null) {
+                    val available =
+                        mapOf(
+                            "easy" to selectedPack.difficultyTaskCounts.easy,
+                            "medium" to selectedPack.difficultyTaskCounts.medium,
+                            "hard" to selectedPack.difficultyTaskCounts.hard,
+                        )
+                    settings.taskCounts.forEach { (difficulty, count) ->
+                        if (count > (available[difficulty] ?: 0)) {
+                            add("The selected map does not have enough $difficulty tasks.")
+                        }
+                    }
+                    val roleNames = selectedPack.roles.map { it.name }.toSet()
+                    if (settings.roleCounts.keys.any { it !in roleNames }) {
+                        add("A selected crew role is not available on this map.")
+                    }
+                }
+                if (settings.roleCounts.values.sum() > maximumCrew) {
+                    add("Assigned crew roles exceed the available crewmates.")
+                }
+            }
+        }
+
     val startBlockingReasons: List<String>
         get() {
             val snapshot = room ?: return listOf("Room details are still loading.")
@@ -73,6 +112,7 @@ data class EntryLobbyUiState(
                 if (settings.dirty) {
                     add("Apply pending settings.")
                 }
+                addAll(settingsValidationErrors)
                 if (snapshot.participants.size < snapshot.minPlayers) {
                     val missing = snapshot.minPlayers - snapshot.participants.size
                     add("$missing more ${if (missing == 1) "player" else "players"} required.")

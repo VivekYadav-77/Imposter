@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.impostergame.android.entry.GatewayResult
 import com.impostergame.android.entry.messageFor
+import com.impostergame.android.feedback.GameFeedbackEvent
+import com.impostergame.android.feedback.GameFeedbackKind
 import com.impostergame.data.model.GamePhase
 import com.impostergame.data.model.GameSnapshot
 import com.impostergame.data.network.ApiFailure
@@ -14,6 +16,8 @@ import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -25,6 +29,8 @@ class GameplayViewModel(
 ) : ViewModel() {
     private val _state = kotlinx.coroutines.flow.MutableStateFlow(GameplayUiState())
     val state: kotlinx.coroutines.flow.StateFlow<GameplayUiState> = _state
+    private val _feedback = MutableSharedFlow<GameFeedbackEvent>(extraBufferCapacity = 32)
+    val feedback = _feedback.asSharedFlow()
     private var loaded = false
     private var refreshJob: Job? = null
     private var uploadJob: Job? = null
@@ -63,7 +69,17 @@ class GameplayViewModel(
         }
     }
 
-    fun revealRole() = update { it.copy(roleRevealed = true, roleViewed = true) }
+    fun revealRole() {
+        val snapshot = _state.value.snapshot
+        if (!_state.value.roleRevealed && snapshot != null) {
+            emitFeedback(
+                if (snapshot.self.role == "imposter") GameFeedbackKind.RoleImposter
+                else GameFeedbackKind.RoleCrew,
+                "${snapshot.id}:${snapshot.stateVersion}",
+            )
+        }
+        update { it.copy(roleRevealed = true, roleViewed = true) }
+    }
 
     fun resealRole() = update { it.copy(roleRevealed = false) }
 
@@ -99,6 +115,7 @@ class GameplayViewModel(
                 message = null,
             )
         }
+        emitFeedback(GameFeedbackKind.Ui)
     }
 
     fun dismissTaskDetail() {
@@ -173,6 +190,7 @@ class GameplayViewModel(
         val command =
             pendingUpload?.takeIf { it.fingerprint == fingerprint }
                 ?: PendingUpload(fingerprint, newKey(), newKey()).also { pendingUpload = it }
+        emitFeedback(GameFeedbackKind.UploadStart, "$assignmentId:${snapshot.stateVersion}")
         uploadJob = viewModelScope.launch {
             val result =
                 gateway.submitEvidence(
@@ -195,6 +213,7 @@ class GameplayViewModel(
                             message = "Evidence received and processing.",
                         )
                     }
+                    emitFeedback(GameFeedbackKind.Upload, result.value.submission.id)
                     refresh()
                     refreshSubmissions()
                 }
@@ -210,6 +229,7 @@ class GameplayViewModel(
                             message = messageFor(result.error),
                         )
                     }
+                    emitFeedback(GameFeedbackKind.UploadFailure)
                     if (result.error is ApiFailure.Http && result.error.status == 409) refresh()
                 }
             }
@@ -292,6 +312,7 @@ class GameplayViewModel(
     fun selectKillTarget(id: String) {
         if (_state.value.mayKill(id)) {
             update { it.copy(selectedKillTargetId = id, confirmKill = false, message = null) }
+            emitFeedback(GameFeedbackKind.Ui)
         }
     }
 
@@ -308,6 +329,7 @@ class GameplayViewModel(
         update {
             it.copy(selectedReviewDecision = decision, confirmReviewVote = false, message = null)
         }
+        emitFeedback(GameFeedbackKind.VoteSelect)
     }
 
     fun requestReviewVoteConfirmation() {
@@ -342,6 +364,7 @@ class GameplayViewModel(
                             message = "Review vote accepted and locked.",
                         )
                     }
+                    emitFeedback(GameFeedbackKind.VoteLock, item.id)
                     refresh()
                 }
                 is GatewayResult.Failure -> handleMeetingConflict(result.error, review = true)
@@ -362,6 +385,7 @@ class GameplayViewModel(
                 message = null,
             )
         }
+        emitFeedback(GameFeedbackKind.VoteSelect)
     }
 
     fun requestEjectionVoteConfirmation() {
@@ -396,6 +420,7 @@ class GameplayViewModel(
                             message = "Vote accepted and locked.",
                         )
                     }
+                    emitFeedback(GameFeedbackKind.VoteLock, meeting.id)
                     refresh()
                 }
                 is GatewayResult.Failure -> handleMeetingConflict(result.error, review = false)
@@ -446,6 +471,7 @@ class GameplayViewModel(
                             message = "Action accepted.",
                         )
                     }
+                    emitFeedback(GameFeedbackKind.Kill, "$target:${result.value.stateVersion}")
                 }
                 is GatewayResult.Failure -> {
                     update {
@@ -500,12 +526,13 @@ class GameplayViewModel(
     }
 
     private fun applySnapshot(snapshot: GameSnapshot, forceRoleSeal: Boolean = false) {
+        val previous = _state.value.snapshot
+        val meetingId = snapshot.meeting?.id
+        val announceMeeting = meetingId != null && announcedMeetings.add(meetingId)
         update { current ->
             if ((current.snapshot?.stateVersion ?: Long.MIN_VALUE) > snapshot.stateVersion) {
                 return@update current
             }
-            val meetingId = snapshot.meeting?.id
-            val announceMeeting = meetingId != null && announcedMeetings.add(meetingId)
             val sameReviewItem =
                 current.snapshot?.meeting?.reviewItem?.id == snapshot.meeting?.reviewItem?.id
             val sameMeeting = current.snapshot?.meeting?.id == meetingId
@@ -565,6 +592,44 @@ class GameplayViewModel(
                 reviewImageBytes = if (sameReviewItem) current.reviewImageBytes else null,
             )
         }
+        if (announceMeeting) {
+            emitFeedback(GameFeedbackKind.Meeting, requireNotNull(meetingId))
+        }
+        if (snapshot.meeting?.phase == "voting" && previous?.meeting?.phase != "voting") {
+            emitFeedback(GameFeedbackKind.Vote, requireNotNull(meetingId))
+        }
+        if (
+            previous != null &&
+                "kill" !in previous.self.capabilities &&
+                "kill" in snapshot.self.capabilities
+        ) {
+            emitFeedback(
+                GameFeedbackKind.CooldownReady,
+                "${snapshot.id}:${snapshot.cooldowns.killAvailableAt ?: snapshot.stateVersion}",
+            )
+        }
+        if (previous?.self?.lifeStatus == "alive" && snapshot.self.lifeStatus != "alive") {
+            emitFeedback(GameFeedbackKind.Eliminated, "${snapshot.id}:${snapshot.stateVersion}")
+        }
+        val terminal =
+            snapshot.phase == GamePhase.GAME_OVER || snapshot.phase == GamePhase.ABANDONED
+        val previouslyTerminal =
+            previous?.phase == GamePhase.GAME_OVER || previous?.phase == GamePhase.ABANDONED
+        if (terminal && !previouslyTerminal) {
+            val won =
+                when (snapshot.self.role) {
+                    "imposter" -> snapshot.winner in setOf("imposter", "imposters")
+                    else -> snapshot.winner == "crew"
+                }
+            emitFeedback(
+                when {
+                    snapshot.winner == null -> GameFeedbackKind.Result
+                    won -> GameFeedbackKind.Victory
+                    else -> GameFeedbackKind.Defeat
+                },
+                "${snapshot.id}:${snapshot.stateVersion}",
+            )
+        }
         updateCountdown()
         if (snapshot.phase == GamePhase.REVIEW && _state.value.reviewImageBytes == null) {
             refreshSubmissions(loadMeetingEvidence = true)
@@ -577,6 +642,9 @@ class GameplayViewModel(
                 is GatewayResult.Success -> {
                     val activeId = _state.value.activeSubmissionId
                     val active = result.value.firstOrNull { it.id == activeId }
+                    val completedNow =
+                        active?.processingStatus == "accepted" &&
+                            _state.value.uploadStage != UploadStage.COMPLETE
                     update {
                         it.copy(
                             submissions = result.value,
@@ -589,6 +657,9 @@ class GameplayViewModel(
                                     else -> it.uploadStage
                                 },
                         )
+                    }
+                    if (completedNow && activeId != null) {
+                        emitFeedback(GameFeedbackKind.TaskComplete, activeId)
                     }
                     if (loadMeetingEvidence) {
                         loadReviewImage(result.value)
@@ -677,6 +748,10 @@ class GameplayViewModel(
 
     private fun update(transform: (GameplayUiState) -> GameplayUiState) {
         _state.value = transform(_state.value)
+    }
+
+    private fun emitFeedback(kind: GameFeedbackKind, stableId: String? = null) {
+        _feedback.tryEmit(GameFeedbackEvent(kind, stableId))
     }
 
     private data class PendingUpload(

@@ -7,6 +7,14 @@ import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
@@ -46,9 +54,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
@@ -84,7 +90,10 @@ import com.impostergame.designsystem.component.GameTopBar
 import com.impostergame.designsystem.component.PlayerCard
 import com.impostergame.designsystem.component.TaskCard
 import com.impostergame.designsystem.component.UploadState
+import com.impostergame.designsystem.theme.GameMotion
 import com.impostergame.designsystem.theme.GameSpacing
+import com.impostergame.designsystem.theme.LocalGameAccessibilityPreferences
+import com.impostergame.designsystem.theme.gameColors
 
 @Composable
 fun GameplayScreen(viewModel: GameplayViewModel, onReturnHome: () -> Unit) {
@@ -105,9 +114,7 @@ fun GameplayScreen(viewModel: GameplayViewModel, onReturnHome: () -> Unit) {
 private fun MeetingScreen(state: GameplayUiState, viewModel: GameplayViewModel) {
     val snapshot = state.snapshot ?: return LoadingScreen("Loading meeting…")
     val meeting = snapshot.meeting ?: return LoadingScreen("Waiting for meeting details…")
-    val haptics = LocalHapticFeedback.current
     state.meetingAlertId?.let {
-        LaunchedEffect(it) { haptics.performHapticFeedback(HapticFeedbackType.LongPress) }
         AlertDialog(
             onDismissRequest = viewModel::dismissMeetingAlert,
             title = { Text("Meeting started") },
@@ -121,7 +128,12 @@ private fun MeetingScreen(state: GameplayUiState, viewModel: GameplayViewModel) 
     if (state.confirmEjectionVote) EjectionVoteConfirmation(state, viewModel)
     Column(Modifier.fillMaxSize().safeDrawingPadding()) {
         GameTopBar(
-            phase = "Meeting ${meeting.sequenceNumber}",
+            phase =
+                when (meeting.phase) {
+                    "voting" -> "Voting • Meeting ${meeting.sequenceNumber}"
+                    "resolved" -> "Result • Meeting ${meeting.sequenceNumber}"
+                    else -> "Meeting ${meeting.sequenceNumber}"
+                },
             timerText = countdownText(state.remainingSeconds),
             timerDescription = countdownDescription(state.remainingSeconds),
             nickname =
@@ -402,6 +414,12 @@ private fun FinalResultScreen(
         verticalArrangement = Arrangement.spacedBy(GameSpacing.md),
     ) {
         Text(
+            "CASE CLOSED",
+            color = MaterialTheme.gameColors.results,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Black,
+        )
+        Text(
             snapshot.winnerLabel(),
             modifier = Modifier.semantics { heading() },
             style = MaterialTheme.typography.displaySmall,
@@ -412,6 +430,39 @@ private fun FinalResultScreen(
         Text(
             "You finished as ${snapshot.self.role.replaceFirstChar(Char::uppercase)} • ${snapshot.self.lifeStatus}"
         )
+        if (summary != null) {
+            BoxWithConstraints(Modifier.fillMaxWidth().widthIn(max = 720.dp)) {
+                val compact = maxWidth < 520.dp
+                if (compact) {
+                    Column(verticalArrangement = Arrangement.spacedBy(GameSpacing.sm)) {
+                        ResultMetric("Players", summary.players.size.toString())
+                        ResultMetric(
+                            "Crew tasks",
+                            "${summary.completedTasks}/${summary.totalTasks}",
+                        )
+                        ResultMetric("Duration", formatDuration(summary.durationSeconds))
+                    }
+                } else {
+                    Row(horizontalArrangement = Arrangement.spacedBy(GameSpacing.sm)) {
+                        ResultMetric(
+                            "Players",
+                            summary.players.size.toString(),
+                            Modifier.weight(1f),
+                        )
+                        ResultMetric(
+                            "Crew tasks",
+                            "${summary.completedTasks}/${summary.totalTasks}",
+                            Modifier.weight(1f),
+                        )
+                        ResultMetric(
+                            "Duration",
+                            formatDuration(summary.durationSeconds),
+                            Modifier.weight(1f),
+                        )
+                    }
+                }
+            }
+        }
         Message(state.message)
         GameButton(
             "Return home",
@@ -424,49 +475,90 @@ private fun FinalResultScreen(
             viewModel::toggleResultDetails,
             Modifier.fillMaxWidth().widthIn(max = 520.dp),
         )
-        if (state.resultDetailsExpanded && summary != null) {
-            Card(Modifier.fillMaxWidth().widthIn(max = 720.dp)) {
-                Column(
-                    Modifier.padding(GameSpacing.md),
-                    verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
-                ) {
-                    Text(
-                        "Game summary",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        "Duration: ${summary.durationSeconds / 60}m ${summary.durationSeconds % 60}s"
-                    )
-                    Text("Tasks: ${summary.completedTasks}/${summary.totalTasks}")
-                    Text("Task pack: ${snapshot.taskPack.name}")
-                    summary.players.forEach { player ->
-                        PlayerCard(
-                            nickname = player.nickname,
-                            playerColorId = player.avatarId,
-                            status = null,
-                        )
+        val reduceMotion = LocalGameAccessibilityPreferences.current.reduceMotion
+        AnimatedVisibility(
+            visible = state.resultDetailsExpanded && summary != null,
+            enter =
+                if (reduceMotion) EnterTransition.None
+                else
+                    fadeIn(tween(GameMotion.StandardMillis)) +
+                        expandVertically(
+                            animationSpec =
+                                tween(GameMotion.EmphasisMillis, easing = GameMotion.EmphasisEasing)
+                        ),
+            exit =
+                if (reduceMotion) ExitTransition.None
+                else
+                    fadeOut(tween(GameMotion.QuickMillis)) +
+                        shrinkVertically(tween(GameMotion.StandardMillis)),
+        ) {
+            if (summary != null)
+                Card(Modifier.fillMaxWidth().widthIn(max = 720.dp)) {
+                    Column(
+                        Modifier.padding(GameSpacing.md),
+                        verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
+                    ) {
                         Text(
-                            "${player.role.replaceFirstChar(Char::uppercase)} • ${player.crewRole?.name ?: "No crew specialization"} • ${player.lifeStatus} • tasks ${player.completedTasks}/${player.totalTasks}"
+                            "Game summary",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
                         )
+                        Text("Duration: ${formatDuration(summary.durationSeconds)}")
+                        Text("Tasks: ${summary.completedTasks}/${summary.totalTasks}")
+                        Text("Task pack: ${snapshot.taskPack.name}")
+                        summary.players.forEach { player ->
+                            PlayerCard(
+                                nickname = player.nickname,
+                                playerColorId = player.avatarId,
+                                status = null,
+                            )
+                            Text(
+                                "${player.role.replaceFirstChar(Char::uppercase)} • ${player.crewRole?.name ?: "No crew specialization"} • ${player.lifeStatus} • tasks ${player.completedTasks}/${player.totalTasks}"
+                            )
+                        }
+                        val accepted =
+                            state.submissions.filter { it.processingStatus == "accepted" }
+                        Text("Accepted evidence: ${accepted.size}", fontWeight = FontWeight.Bold)
+                        accepted.forEach { Text("Evidence ${it.id.take(8)} • ${it.reviewStatus}") }
+                        val meeting = snapshot.meeting
+                        if (
+                            meeting != null &&
+                                meeting.publicBallotsAllowed(snapshot.meetingRules.voteVisibility)
+                        )
+                            PublicBallots(meeting.result?.ballots.orEmpty())
                     }
-                    val accepted = state.submissions.filter { it.processingStatus == "accepted" }
-                    Text("Accepted evidence: ${accepted.size}", fontWeight = FontWeight.Bold)
-                    accepted.forEach { Text("Evidence ${it.id.take(8)} • ${it.reviewStatus}") }
-                    val meeting = snapshot.meeting
-                    if (
-                        meeting != null &&
-                            meeting.publicBallotsAllowed(snapshot.meetingRules.voteVisibility)
-                    )
-                        PublicBallots(meeting.result?.ballots.orEmpty())
                 }
-            }
         }
     }
     LaunchedEffect(summary?.players?.size) {
         if (state.submissions.isEmpty()) viewModel.refreshReviewEvidence()
     }
 }
+
+@Composable
+private fun ResultMetric(label: String, value: String, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.gameColors.results.copy(alpha = 0.14f),
+        contentColor = MaterialTheme.colorScheme.onSurface,
+    ) {
+        Column(
+            Modifier.padding(GameSpacing.md),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                value,
+                color = MaterialTheme.gameColors.results,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Black,
+            )
+            Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+private fun formatDuration(seconds: Int): String = "${seconds / 60}m ${seconds % 60}s"
 
 @Composable
 private fun SecureContent() {
@@ -489,7 +581,8 @@ private fun RoleRevealScreen(state: GameplayUiState, viewModel: GameplayViewMode
     val snapshot = state.snapshot ?: return LoadingScreen("Sealing your private role…")
     Surface(
         modifier = Modifier.fillMaxSize().safeDrawingPadding(),
-        color = MaterialTheme.colorScheme.surface,
+        color = MaterialTheme.gameColors.privateCanvas,
+        contentColor = MaterialTheme.gameColors.privateText,
     ) {
         Column(
             modifier =
@@ -527,7 +620,8 @@ private fun RoleRevealScreen(state: GameplayUiState, viewModel: GameplayViewMode
                                 )
                             },
                     shape = RoundedCornerShape(110.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer,
+                    color = MaterialTheme.gameColors.privateSurface,
+                    contentColor = MaterialTheme.gameColors.privateText,
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Text(
@@ -556,7 +650,7 @@ private fun RoleRevealScreen(state: GameplayUiState, viewModel: GameplayViewMode
                     modifier = Modifier.semantics { heading() },
                     style = MaterialTheme.typography.displayMedium,
                     fontWeight = FontWeight.Black,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = MaterialTheme.gameColors.accentStrong,
                 )
                 snapshot.self.crewRole?.let { role ->
                     Text(role.name, style = MaterialTheme.typography.headlineSmall)
@@ -963,7 +1057,7 @@ private fun ZoomableEvidenceBitmap(bytes: ByteArray) {
     val bitmap =
         remember(bytes) { BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap() }
     var scale by remember { mutableFloatStateOf(1f) }
-    val transform = rememberTransformableState { zoom, _, _ ->
+    val transform = rememberTransformableState { _, zoom, _, _ ->
         scale = (scale * zoom).coerceIn(1f, 5f)
     }
     bitmap?.let {

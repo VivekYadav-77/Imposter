@@ -11,8 +11,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.runtime.getValue
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.CreationExtras
@@ -20,11 +23,14 @@ import com.impostergame.android.entry.EntryLobbyGateway
 import com.impostergame.android.entry.EntryLobbyViewModel
 import com.impostergame.android.entry.NetworkEntryLobbyGateway
 import com.impostergame.android.entry.UnavailableEntryLobbyGateway
+import com.impostergame.android.feedback.GameFeedbackController
+import com.impostergame.android.feedback.GameFeedbackEvent
 import com.impostergame.android.gameplay.EvidenceProcessor
 import com.impostergame.android.gameplay.GameplayGateway
 import com.impostergame.android.gameplay.GameplayViewModel
 import com.impostergame.android.gameplay.NetworkGameplayGateway
 import com.impostergame.android.gameplay.UnavailableGameplayGateway
+import com.impostergame.android.preferences.AppPreferencesStore
 import com.impostergame.android.ui.ImposterGameApp
 import com.impostergame.data.network.ApiClient
 import com.impostergame.data.network.ParticipantApi
@@ -39,6 +45,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 
 class MainActivity : ComponentActivity() {
     private val sessionStore by lazy { AndroidKeystoreSessionStore(applicationContext) }
+    private val appPreferences by lazy { AppPreferencesStore(applicationContext) }
+    private val feedbackController by lazy { GameFeedbackController(applicationContext) }
     private val supportDiagnostics = SupportDiagnosticsBuffer()
     private val participantApi: ParticipantApi? by lazy {
         if (BuildConfig.API_BASE_URL.isBlank()) {
@@ -98,19 +106,50 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
+            val preferences by appPreferences.state.collectAsStateWithLifecycle()
             ImposterGameApp(
                 viewModel = entryLobbyViewModel,
                 gameplayViewModel = gameplayViewModel,
                 onCopyCode = ::copyRoomCode,
                 onShareCode = ::shareRoomCode,
                 onShareDiagnostics = ::shareSupportDiagnostics,
+                preferences = preferences,
+                onThemeModeChanged = appPreferences::setThemeMode,
+                onSoundChanged = appPreferences::setSoundEnabled,
+                onHapticsChanged = appPreferences::setHapticsEnabled,
+                onReduceMotionChanged = appPreferences::setReduceMotion,
+                onHighContrastChanged = appPreferences::setHighContrast,
+                onResolvedDarkTheme = ::updateSystemBars,
+                onFeedback = ::handleFeedback,
             )
         }
     }
 
+    private fun updateSystemBars(darkTheme: Boolean) {
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = !darkTheme
+            isAppearanceLightNavigationBars = !darkTheme
+        }
+    }
+
+    private fun handleFeedback(event: GameFeedbackEvent) {
+        feedbackController.emit(event, appPreferences.state.value, window.decorView)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        feedbackController.setForeground(true)
+    }
+
     override fun onPause() {
+        feedbackController.setForeground(false)
         gameplayViewModel.onAppBackgrounded()
         super.onPause()
+    }
+
+    override fun onDestroy() {
+        if (isFinishing) feedbackController.close()
+        super.onDestroy()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

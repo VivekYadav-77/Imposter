@@ -13,6 +13,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -24,6 +25,7 @@ import com.impostergame.designsystem.avatar.PlayerAvatar
 import com.impostergame.designsystem.theme.GameShapes
 import com.impostergame.designsystem.theme.GameSpacing
 import com.impostergame.designsystem.theme.LocalGameSemanticColors
+import com.impostergame.designsystem.theme.gameColors
 
 enum class ConnectionState {
     Connected,
@@ -41,7 +43,22 @@ fun GameTopBar(
     connectionState: ConnectionState,
     modifier: Modifier = Modifier,
 ) {
-    Surface(modifier = modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surface) {
+    val phaseColor =
+        with(MaterialTheme.gameColors) {
+            when {
+                phase.contains("lobby", ignoreCase = true) -> lobby
+                phase.contains("task", ignoreCase = true) -> tasks
+                phase.contains("evidence", ignoreCase = true) -> tasks
+                phase.contains("vote", ignoreCase = true) -> voting
+                phase.contains("result", ignoreCase = true) -> results
+                phase.contains("meeting", ignoreCase = true) -> meeting
+                else -> MaterialTheme.colorScheme.primary
+            }
+        }
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = phaseColor.copy(alpha = 0.14f).compositeOver(MaterialTheme.colorScheme.surface),
+    ) {
         BoxWithConstraints {
             val compact = maxWidth < 600.dp
             Row(
@@ -55,6 +72,7 @@ fun GameTopBar(
                     Text(
                         text = phase,
                         style = MaterialTheme.typography.titleLarge,
+                        color = phaseColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )

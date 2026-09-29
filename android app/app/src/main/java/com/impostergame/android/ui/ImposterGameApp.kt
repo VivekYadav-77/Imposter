@@ -1,7 +1,16 @@
 package com.impostergame.android.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -29,15 +38,18 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -67,8 +79,10 @@ import com.impostergame.android.entry.EntryDestination
 import com.impostergame.android.entry.EntryLobbyUiState
 import com.impostergame.android.entry.EntryLobbyViewModel
 import com.impostergame.android.entry.EntryValidationTarget
-import com.impostergame.android.entry.LobbySettingsDraft
+import com.impostergame.android.feedback.GameFeedbackEvent
 import com.impostergame.android.gameplay.GameplayViewModel
+import com.impostergame.android.preferences.AppPreferences
+import com.impostergame.android.preferences.ThemeMode
 import com.impostergame.data.model.RoomParticipant
 import com.impostergame.data.model.RoomSnapshot
 import com.impostergame.designsystem.avatar.PlayerAvatar
@@ -78,9 +92,13 @@ import com.impostergame.designsystem.component.ConnectionState
 import com.impostergame.designsystem.component.GameButton
 import com.impostergame.designsystem.component.GameOutlinedButton
 import com.impostergame.designsystem.component.PlayerCard
+import com.impostergame.designsystem.theme.GameAccessibilityPreferences
+import com.impostergame.designsystem.theme.GameMotion
 import com.impostergame.designsystem.theme.GameShapes
 import com.impostergame.designsystem.theme.GameSpacing
 import com.impostergame.designsystem.theme.ImposterGameTheme
+import com.impostergame.designsystem.theme.LocalGameAccessibilityPreferences
+import com.impostergame.designsystem.theme.gameColors
 
 @Composable
 fun ImposterGameApp(
@@ -89,9 +107,36 @@ fun ImposterGameApp(
     onCopyCode: (String) -> Unit,
     onShareCode: (String) -> Unit,
     onShareDiagnostics: () -> Unit,
+    preferences: AppPreferences,
+    onThemeModeChanged: (ThemeMode) -> Unit,
+    onSoundChanged: (Boolean) -> Unit,
+    onHapticsChanged: (Boolean) -> Unit,
+    onReduceMotionChanged: (Boolean) -> Unit,
+    onHighContrastChanged: (Boolean) -> Unit,
+    onResolvedDarkTheme: (Boolean) -> Unit,
+    onFeedback: (GameFeedbackEvent) -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    ImposterGameTheme {
+    LaunchedEffect(viewModel) { viewModel.feedback.collect(onFeedback) }
+    LaunchedEffect(gameplayViewModel) { gameplayViewModel.feedback.collect(onFeedback) }
+    val systemDark = isSystemInDarkTheme()
+    val darkTheme =
+        when (preferences.themeMode) {
+            ThemeMode.System -> systemDark
+            ThemeMode.Light -> false
+            ThemeMode.Dark -> true
+        }
+    SideEffect { onResolvedDarkTheme(darkTheme) }
+    ImposterGameTheme(
+        darkTheme = darkTheme,
+        accessibilityPreferences =
+            GameAccessibilityPreferences(
+                reduceMotion = preferences.reduceMotion,
+                soundEnabled = preferences.soundEnabled,
+                hapticsEnabled = preferences.hapticsEnabled,
+                highContrast = preferences.highContrast,
+            ),
+    ) {
         Surface(modifier = Modifier.fillMaxSize()) {
             when (state.destination) {
                 EntryDestination.BOOTSTRAP -> LoadingScreen("Checking for an existing room…")
@@ -102,8 +147,19 @@ fun ImposterGameApp(
                         state.loading,
                         viewModel::showJoin,
                         viewModel::showCreate,
+                        viewModel::showSettings,
                         viewModel::bootstrap,
                         onShareDiagnostics,
+                    )
+                EntryDestination.SETTINGS ->
+                    SettingsScreen(
+                        preferences = preferences,
+                        onBack = viewModel::showHome,
+                        onThemeModeChanged = onThemeModeChanged,
+                        onSoundChanged = onSoundChanged,
+                        onHapticsChanged = onHapticsChanged,
+                        onReduceMotionChanged = onReduceMotionChanged,
+                        onHighContrastChanged = onHighContrastChanged,
                     )
                 EntryDestination.JOIN,
                 EntryDestination.CREATE -> EntryScreen(state, viewModel)
@@ -130,6 +186,7 @@ private fun HomeScreen(
     loading: Boolean,
     onJoin: () -> Unit,
     onCreate: () -> Unit,
+    onSettings: () -> Unit,
     onRetry: () -> Unit,
     onShareDiagnostics: () -> Unit,
 ) {
@@ -184,6 +241,7 @@ private fun HomeScreen(
         }
         GameButton("Join room", onJoin, Modifier.fillMaxWidth())
         GameOutlinedButton("Create room", onCreate, Modifier.fillMaxWidth())
+        GameOutlinedButton("App settings", onSettings, Modifier.fillMaxWidth())
         HorizontalDivider(Modifier.padding(vertical = GameSpacing.sm))
         Text(
             "Privacy and accessibility protections are applied automatically during play.",
@@ -191,6 +249,140 @@ private fun HomeScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         TextButton(onClick = { confirmDiagnostics = true }) { Text("Share support diagnostics") }
+    }
+}
+
+@Composable
+private fun SettingsScreen(
+    preferences: AppPreferences,
+    onBack: () -> Unit,
+    onThemeModeChanged: (ThemeMode) -> Unit,
+    onSoundChanged: (Boolean) -> Unit,
+    onHapticsChanged: (Boolean) -> Unit,
+    onReduceMotionChanged: (Boolean) -> Unit,
+    onHighContrastChanged: (Boolean) -> Unit,
+) {
+    Scaffold(
+        modifier = Modifier.safeDrawingPadding(),
+        topBar = {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(GameSpacing.md),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(GameSpacing.sm),
+            ) {
+                TextButton(onClick = onBack) { Text("Back") }
+                Text(
+                    "App settings",
+                    modifier = Modifier.semantics { heading() },
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+        },
+    ) { padding ->
+        Column(
+            modifier =
+                Modifier.padding(padding)
+                    .verticalScroll(rememberScrollState())
+                    .padding(GameSpacing.lg)
+                    .widthIn(max = 680.dp)
+                    .fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(GameSpacing.md),
+        ) {
+            Text("Appearance", style = MaterialTheme.typography.headlineLarge)
+            Text(
+                "Choose how the game looks on this device.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            ThemeMode.entries.forEach { mode ->
+                val label =
+                    when (mode) {
+                        ThemeMode.System -> "Follow device"
+                        ThemeMode.Light -> "Light"
+                        ThemeMode.Dark -> "Dark"
+                    }
+                Row(
+                    modifier =
+                        Modifier.fillMaxWidth()
+                            .selectable(
+                                selected = preferences.themeMode == mode,
+                                role = Role.RadioButton,
+                                onClick = { onThemeModeChanged(mode) },
+                            )
+                            .padding(vertical = GameSpacing.sm),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(GameSpacing.sm),
+                ) {
+                    RadioButton(
+                        selected = preferences.themeMode == mode,
+                        onClick = null,
+                    )
+                    Text(label, style = MaterialTheme.typography.bodyLarge)
+                }
+            }
+            HorizontalDivider(Modifier.padding(vertical = GameSpacing.sm))
+            Text("Feedback and accessibility", style = MaterialTheme.typography.headlineLarge)
+            PreferenceSwitchRow(
+                title = "Game sounds",
+                description =
+                    "Play short cues for game events. Important states still appear on screen.",
+                checked = preferences.soundEnabled,
+                onChecked = onSoundChanged,
+            )
+            PreferenceSwitchRow(
+                title = "Haptic feedback",
+                description = "Use optional touch feedback for confirmations and alerts.",
+                checked = preferences.hapticsEnabled,
+                onChecked = onHapticsChanged,
+            )
+            PreferenceSwitchRow(
+                title = "Reduce motion",
+                description = "Remove nonessential movement and animated emphasis.",
+                checked = preferences.reduceMotion,
+                onChecked = onReduceMotionChanged,
+            )
+            PreferenceSwitchRow(
+                title = "High contrast",
+                description = "Increase text and boundary contrast in the selected theme.",
+                checked = preferences.highContrast,
+                onChecked = onHighContrastChanged,
+            )
+            Text(
+                "These preferences stay on this device and never contain room, role, vote, or photo data.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun PreferenceSwitchRow(
+    title: String,
+    description: String,
+    checked: Boolean,
+    onChecked: (Boolean) -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier.fillMaxWidth()
+                .toggleable(
+                    value = checked,
+                    role = Role.Switch,
+                    onValueChange = onChecked,
+                )
+                .padding(vertical = GameSpacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(GameSpacing.md),
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleLarge)
+            Text(
+                description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = checked, onCheckedChange = null)
     }
 }
 
@@ -472,22 +664,39 @@ private fun LobbyHeader(
     onShare: (String) -> Unit,
     onLeave: () -> Unit,
 ) {
-    Column(
+    Surface(
         modifier = Modifier.fillMaxWidth().padding(GameSpacing.md),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+        color = MaterialTheme.gameColors.lobby.copy(alpha = 0.12f),
+        shape = GameShapes.large,
     ) {
-        Text("Room code", style = MaterialTheme.typography.labelLarge)
-        Text(
-            room.code,
-            modifier = Modifier.semantics { heading() },
-            style = MaterialTheme.typography.displaySmall,
-            fontWeight = FontWeight.Black,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(GameSpacing.sm)) {
-            GameOutlinedButton("Copy", { onCopy(room.code) })
-            GameOutlinedButton("Share", { onShare(room.code) })
-            TextButton(onClick = onLeave) { Text("Leave") }
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(GameSpacing.md),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+        ) {
+            Text(
+                "LOBBY INVITE",
+                color = MaterialTheme.gameColors.lobby,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Text("Room code", style = MaterialTheme.typography.labelLarge)
+            Text(
+                room.code,
+                modifier = Modifier.semantics { heading() },
+                style = MaterialTheme.typography.displaySmall,
+                fontWeight = FontWeight.Black,
+            )
+            Text(
+                "Share this code only with people you want in the game.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(GameSpacing.sm)) {
+                GameOutlinedButton("Copy", { onCopy(room.code) })
+                GameOutlinedButton("Share", { onShare(room.code) })
+                TextButton(onClick = onLeave) { Text("Leave") }
+            }
         }
     }
 }
@@ -504,11 +713,29 @@ private fun Roster(
         modifier = contentModifier.padding(GameSpacing.md),
         verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
     ) {
+        val joined = room.participants.size
+        val startProgress = (joined.toFloat() / room.minPlayers).coerceIn(0f, 1f)
         Text(
-            "Players (${room.participants.size}/${room.maxPlayers})",
+            "Players ($joined/${room.maxPlayers})",
             modifier = Modifier.semantics { heading() },
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
+        )
+        Text(
+            if (joined >= room.minPlayers) {
+                "Enough players have joined. The host can start when settings are valid."
+            } else {
+                "${room.minPlayers - joined} more ${if (room.minPlayers - joined == 1) "player" else "players"} needed to start."
+            },
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        LinearProgressIndicator(
+            progress = { startProgress },
+            modifier =
+                Modifier.fillMaxWidth().semantics {
+                    contentDescription = "$joined of ${room.minPlayers} players needed to start"
+                },
+            color = MaterialTheme.gameColors.lobby,
         )
         room.participants.forEach { participant -> ParticipantRow(participant, room) }
     }
@@ -555,20 +782,34 @@ private fun LobbySettings(
                 240,
                 viewModel::updateTaskMinutes,
             )
-            NumberSetting(
-                "Meeting duration (seconds)",
-                state.settings.meetingDurationSeconds,
-                30,
-                1800,
-                viewModel::updateMeetingSeconds,
-            )
             TextButton(onClick = viewModel::toggleAdvanced) {
                 Text(
                     if (state.settings.advancedExpanded) "Hide advanced settings"
                     else "Show advanced settings"
                 )
             }
-            if (state.settings.advancedExpanded) AdvancedSettingsSummary(state.settings)
+            val reduceMotion = LocalGameAccessibilityPreferences.current.reduceMotion
+            AnimatedVisibility(
+                visible = state.settings.advancedExpanded,
+                enter =
+                    if (reduceMotion) EnterTransition.None
+                    else
+                        fadeIn(tween(GameMotion.StandardMillis)) +
+                            expandVertically(
+                                animationSpec =
+                                    tween(
+                                        GameMotion.EmphasisMillis,
+                                        easing = GameMotion.EmphasisEasing,
+                                    )
+                            ),
+                exit =
+                    if (reduceMotion) ExitTransition.None
+                    else
+                        fadeOut(tween(GameMotion.QuickMillis)) +
+                            shrinkVertically(tween(GameMotion.StandardMillis)),
+            ) {
+                AdvancedSettings(state, viewModel)
+            }
         } else {
             Text("The host controls settings and starts the game.")
         }
@@ -659,28 +900,213 @@ private fun NumberSetting(
     maximum: Int,
     onChange: (Int) -> Unit,
 ) {
-    OutlinedTextField(
-        value = value.toString(),
-        onValueChange = { text ->
-            text.toIntOrNull()?.let { onChange(it.coerceIn(minimum, maximum)) }
-        },
-        modifier = Modifier.fillMaxWidth(),
-        label = { Text(label) },
-        supportingText = { Text("$minimum–$maximum") },
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-        singleLine = true,
-    )
+    Column(verticalArrangement = Arrangement.spacedBy(GameSpacing.xs)) {
+        Text(label, fontWeight = FontWeight.Bold)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+        ) {
+            GameOutlinedButton(
+                "−",
+                { onChange((value - 1).coerceAtLeast(minimum)) },
+                Modifier.size(52.dp),
+                enabled = value > minimum,
+            )
+            OutlinedTextField(
+                value = value.toString(),
+                onValueChange = { text ->
+                    text.toIntOrNull()?.let { onChange(it.coerceIn(minimum, maximum)) }
+                },
+                modifier = Modifier.weight(1f),
+                supportingText = { Text("$minimum–$maximum") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+            )
+            GameOutlinedButton(
+                "+",
+                { onChange((value + 1).coerceAtMost(maximum)) },
+                Modifier.size(52.dp),
+                enabled = value < maximum,
+            )
+        }
+    }
 }
 
 @Composable
-private fun AdvancedSettingsSummary(settings: LobbySettingsDraft) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(GameSpacing.md)) {
-            Text("Meeting mode: ${settings.meetingVotingMode.replace('_', ' ')}")
-            Text("Vote visibility: ${settings.voteVisibility}")
-            Text("Evidence visibility: ${settings.evidenceVisibility}")
-            Text("Meeting cooldown: ${settings.meetingCooldownSeconds} seconds")
-            Text("Imposter cooldown: ${settings.imposterCooldownSeconds} seconds")
+private fun AdvancedSettings(state: EntryLobbyUiState, viewModel: EntryLobbyViewModel) {
+    val settings = state.settings
+    val room = state.room ?: return
+    val selectedPack = state.taskPacks.firstOrNull { it.id == settings.selectedTaskPackId }
+    Column(verticalArrangement = Arrangement.spacedBy(GameSpacing.lg)) {
+        Text("Meeting voting", style = MaterialTheme.typography.titleLarge)
+        ChoiceSetting(
+            label = "Voting rule",
+            value = settings.meetingVotingMode,
+            choices =
+                listOf(
+                    "timed" to "Timed — voting ends when the timer expires",
+                    "all_voted" to "All voted — end after every eligible ballot",
+                ),
+            onChange = viewModel::updateMeetingVotingMode,
+        )
+        if (settings.meetingVotingMode == "timed") {
+            NumberSetting(
+                "Meeting duration (seconds)",
+                settings.meetingDurationSeconds,
+                30,
+                1800,
+                viewModel::updateMeetingSeconds,
+            )
+        }
+        ChoiceSetting(
+            label = "Ballot visibility",
+            value = settings.voteVisibility,
+            choices =
+                listOf(
+                    "private" to "Private — show totals without individual choices",
+                    "public" to "Public — show who voted for whom",
+                ),
+            onChange = viewModel::updateVoteVisibility,
+        )
+        ChoiceSetting(
+            label = "Evidence visibility",
+            value = settings.evidenceVisibility,
+            choices =
+                listOf(
+                    "private" to "Private — players see only authorized photos",
+                    "public" to "Shared — everyone can view accepted task photos",
+                ),
+            onChange = viewModel::updateEvidenceVisibility,
+        )
+
+        HorizontalDivider()
+        Text("Game balance", style = MaterialTheme.typography.titleLarge)
+        NumberSetting(
+            "Meetings per player",
+            settings.meetingsPerPlayer,
+            0,
+            10,
+            viewModel::updateMeetingsPerPlayer,
+        )
+        NumberSetting(
+            "Meeting cooldown (seconds)",
+            settings.meetingCooldownSeconds,
+            10,
+            1800,
+            viewModel::updateMeetingCooldown,
+        )
+        NumberSetting(
+            "Imposter cooldown base (seconds)",
+            settings.imposterCooldownSeconds,
+            10,
+            300,
+            viewModel::updateImposterCooldown,
+        )
+        ChoiceSetting(
+            label = "Imposter task needed to call a meeting",
+            value = settings.imposterMeetingTaskRequirement,
+            choices =
+                listOf(
+                    "one" to "One task — complete a task before calling",
+                    "none" to "No task — cooldown and capability still apply",
+                ),
+            onChange = viewModel::updateImposterMeetingTaskRequirement,
+        )
+        val allowedImposters = room.settings.allowedImposterCounts
+        NumberSetting(
+            "Imposters",
+            settings.imposterCount,
+            allowedImposters.minOrNull() ?: 1,
+            allowedImposters.maxOrNull() ?: 1,
+            viewModel::updateImposterCount,
+        )
+
+        HorizontalDivider()
+        Text("Tasks per player", style = MaterialTheme.typography.titleLarge)
+        if (selectedPack == null) {
+            Text("Choose a task pack before configuring task quantities.")
+        } else {
+            val available =
+                mapOf(
+                    "easy" to selectedPack.difficultyTaskCounts.easy,
+                    "medium" to selectedPack.difficultyTaskCounts.medium,
+                    "hard" to selectedPack.difficultyTaskCounts.hard,
+                )
+            listOf("easy", "medium", "hard").forEach { difficulty ->
+                val otherTotal = settings.taskCounts.filterKeys { it != difficulty }.values.sum()
+                NumberSetting(
+                    difficulty.replaceFirstChar(Char::uppercase),
+                    settings.taskCounts[difficulty] ?: 0,
+                    0,
+                    minOf(available.getValue(difficulty), (15 - otherTotal).coerceAtLeast(0)),
+                ) {
+                    viewModel.updateTaskCount(difficulty, it)
+                }
+            }
+            Text(
+                "${settings.taskCounts.values.sum()} tasks selected; choose 1–15 in total.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        HorizontalDivider()
+        Text("Crew roles", style = MaterialTheme.typography.titleLarge)
+        if (selectedPack?.roles.isNullOrEmpty()) {
+            Text("This task pack has no specialist crew roles.")
+        } else {
+            val maximumCrew = (room.participants.size - settings.imposterCount).coerceAtLeast(0)
+            selectedPack.roles.forEach { role ->
+                val otherTotal = settings.roleCounts.filterKeys { it != role.name }.values.sum()
+                NumberSetting(
+                    role.name,
+                    settings.roleCounts[role.name] ?: 0,
+                    0,
+                    (maximumCrew - otherTotal).coerceAtLeast(0),
+                ) {
+                    viewModel.updateRoleCount(role.name, it)
+                }
+                Text(
+                    "${role.specialization}: ${role.ability}",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Text(
+                "${settings.roleCounts.values.sum()} of $maximumCrew available crewmates assigned a specialist role.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        state.settingsValidationErrors.forEach { error ->
+            Text(error, color = MaterialTheme.colorScheme.error)
+        }
+    }
+}
+
+@Composable
+private fun ChoiceSetting(
+    label: String,
+    value: String,
+    choices: List<Pair<String, String>>,
+    onChange: (String) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(GameSpacing.xs)) {
+        Text(label, fontWeight = FontWeight.Bold)
+        choices.forEach { (id, description) ->
+            Row(
+                modifier =
+                    Modifier.fillMaxWidth()
+                        .selectable(
+                            selected = value == id,
+                            role = Role.RadioButton,
+                            onClick = { onChange(id) },
+                        )
+                        .padding(vertical = GameSpacing.xs),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+            ) {
+                RadioButton(selected = value == id, onClick = null)
+                Text(description, modifier = Modifier.weight(1f))
+            }
         }
     }
 }

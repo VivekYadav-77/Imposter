@@ -4,105 +4,169 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 
-private val Space950 = Color(0xFF090B10)
-private val Space900 = Color(0xFF11141C)
-private val Space800 = Color(0xFF202532)
-private val Space200 = Color(0xFFDDE2F0)
-private val Space100 = Color(0xFFF0F2F8)
-private val Space050 = Color(0xFFFAFAFD)
+internal val BrandDarkCanvas = Color(0xFF0D0F0E)
+internal val BrandDarkCanvasSoft = Color(0xFF141714)
+internal val BrandDarkSurface = Color(0xFF171A17)
+internal val BrandDarkSurfaceRaised = Color(0xFF20241F)
+internal val BrandDarkSurfaceHighest = Color(0xFF2A2F29)
+internal val BrandDarkText = Color(0xFFF5F2E9)
+internal val BrandDarkTextSecondary = Color(0xFFC0BCAE)
+internal val BrandDarkTextTertiary = Color(0xFF8D8B80)
+internal val BrandDarkBorder = Color(0xFF343931)
+internal val BrandDarkBorderStrong = Color(0xFF4D5548)
+internal val BrandDarkAccent = Color(0xFFEF9C3D)
+internal val BrandDarkAccentStrong = Color(0xFFFFB45D)
+internal val BrandDarkAccentInk = Color(0xFF211307)
 
-private val Electric400 = Color(0xFF8FA8FF)
-private val Electric600 = Color(0xFF4C64D8)
-private val Electric800 = Color(0xFF263781)
-private val Cyan400 = Color(0xFF57D5E8)
-private val Cyan800 = Color(0xFF075D6B)
-private val Success400 = Color(0xFF69D59B)
-private val Warning400 = Color(0xFFFFC857)
-private val Warning900 = Color(0xFF5B3A00)
-private val Danger400 = Color(0xFFFF8A8A)
-private val Danger700 = Color(0xFFB32632)
-private val Danger900 = Color(0xFF60141C)
+internal val BrandLightCanvas = Color(0xFFF5F2EB)
+internal val BrandLightCanvasSoft = Color(0xFFEDE9DF)
+internal val BrandLightSurface = Color(0xFFFFFDF8)
+internal val BrandLightSurfaceRaised = Color(0xFFEEE9DF)
+internal val BrandLightSurfaceHighest = Color(0xFFE2DDD2)
+internal val BrandLightText = Color(0xFF1D211E)
+internal val BrandLightTextSecondary = Color(0xFF5F625B)
+internal val BrandLightTextTertiary = Color(0xFF777A72)
+internal val BrandLightBorder = Color(0xFFD5D0C5)
+internal val BrandLightBorderStrong = Color(0xFFAEA99E)
+internal val BrandLightAccent = Color(0xFFAE550B)
+internal val BrandLightAccentStrong = Color(0xFF8F4207)
+internal val BrandLightAccentInk = Color(0xFFFFFAF1)
+
+private val DangerDark = Color(0xFFFF6555)
+private val DangerLight = Color(0xFFB73229)
+private val SuccessDark = Color(0xFF39C77F)
+private val SuccessLight = Color(0xFF14794E)
+private val WarningDark = Color(0xFFF0B63F)
+private val WarningLight = Color(0xFF9A5B00)
 
 internal val DarkColorScheme =
     darkColorScheme(
-        primary = Electric400,
-        onPrimary = Color(0xFF101B4F),
-        primaryContainer = Electric800,
-        onPrimaryContainer = Color(0xFFDDE3FF),
-        secondary = Cyan400,
-        onSecondary = Color(0xFF00363E),
-        secondaryContainer = Cyan800,
-        onSecondaryContainer = Color(0xFFA8EDFA),
-        error = Danger400,
-        onError = Color(0xFF53000A),
-        errorContainer = Danger900,
-        onErrorContainer = Color(0xFFFFDADA),
-        background = Space950,
-        onBackground = Space100,
-        surface = Space900,
-        onSurface = Space100,
-        surfaceVariant = Space800,
-        onSurfaceVariant = Space200,
-        outline = Color(0xFF9096A6),
-        outlineVariant = Color(0xFF454B59),
-        scrim = Color(0xCC000000),
+        primary = BrandDarkAccent,
+        onPrimary = BrandDarkAccentInk,
+        primaryContainer = Color(0xFF4A2E13),
+        onPrimaryContainer = Color(0xFFFFDDB7),
+        secondary = Color(0xFFB48B55),
+        onSecondary = Color(0xFF2B1B09),
+        secondaryContainer = BrandDarkSurfaceHighest,
+        onSecondaryContainer = BrandDarkText,
+        tertiary = Color(0xFF27B8C8),
+        onTertiary = Color(0xFF001F23),
+        tertiaryContainer = Color(0xFF123438),
+        onTertiaryContainer = Color(0xFFB3F4FB),
+        error = DangerDark,
+        onError = Color(0xFF310300),
+        errorContainer = Color(0xFF351914),
+        onErrorContainer = Color(0xFFFFDAD4),
+        background = BrandDarkCanvas,
+        onBackground = BrandDarkText,
+        surface = BrandDarkSurface,
+        onSurface = BrandDarkText,
+        surfaceVariant = BrandDarkSurfaceRaised,
+        onSurfaceVariant = BrandDarkTextSecondary,
+        outline = BrandDarkBorderStrong,
+        outlineVariant = BrandDarkBorder,
+        scrim = Color(0xD9040605),
     )
 
 internal val LightColorScheme =
     lightColorScheme(
-        primary = Electric600,
-        onPrimary = Color.White,
-        primaryContainer = Color(0xFFDDE3FF),
-        onPrimaryContainer = Color(0xFF101B4F),
-        secondary = Color(0xFF176B7A),
+        primary = BrandLightAccent,
+        onPrimary = BrandLightAccentInk,
+        primaryContainer = Color(0xFFF4DEC5),
+        onPrimaryContainer = Color(0xFF3B1B03),
+        secondary = Color(0xFF7A5A30),
         onSecondary = Color.White,
-        secondaryContainer = Color(0xFFAFEDF6),
-        onSecondaryContainer = Color(0xFF00363E),
-        error = Danger700,
+        secondaryContainer = BrandLightSurfaceRaised,
+        onSecondaryContainer = BrandLightText,
+        tertiary = Color(0xFF087F91),
+        onTertiary = Color.White,
+        tertiaryContainer = Color(0xFFDCEBEF),
+        onTertiaryContainer = Color(0xFF07383F),
+        error = DangerLight,
         onError = Color.White,
-        errorContainer = Color(0xFFFFDADA),
-        onErrorContainer = Color(0xFF410007),
-        background = Space050,
-        onBackground = Color(0xFF191B21),
-        surface = Color.White,
-        onSurface = Color(0xFF191B21),
-        surfaceVariant = Color(0xFFE2E4EC),
-        onSurfaceVariant = Color(0xFF45464F),
-        outline = Color(0xFF73747D),
-        outlineVariant = Color(0xFFC4C6CF),
-        scrim = Color(0x99000000),
+        errorContainer = Color(0xFFF4DFD9),
+        onErrorContainer = Color(0xFF63150D),
+        background = BrandLightCanvas,
+        onBackground = BrandLightText,
+        surface = BrandLightSurface,
+        onSurface = BrandLightText,
+        surfaceVariant = BrandLightSurfaceRaised,
+        onSurfaceVariant = BrandLightTextSecondary,
+        outline = BrandLightBorderStrong,
+        outlineVariant = BrandLightBorder,
+        scrim = Color(0xB3191D1A),
     )
 
 internal val DarkSemanticColors =
     GameSemanticColors(
-        success = Success400,
-        onSuccess = Color(0xFF003921),
-        successContainer = Color(0xFF0B462B),
-        onSuccessContainer = Color(0xFFA3F2C5),
-        warning = Warning400,
-        onWarning = Warning900,
-        warningContainer = Color(0xFF513A08),
-        onWarningContainer = Color(0xFFFFE0A3),
-        danger = Danger400,
-        onDanger = Color(0xFF53000A),
-        focus = Color(0xFFFFD166),
-        scrim = Color(0xD9000000),
+        success = SuccessDark,
+        onSuccess = Color(0xFF052615),
+        successContainer = Color(0xFF183122),
+        onSuccessContainer = Color(0xFFB7F5CE),
+        warning = WarningDark,
+        onWarning = Color(0xFF2D2104),
+        warningContainer = Color(0xFF342A12),
+        onWarningContainer = Color(0xFFFFE5A1),
+        danger = DangerDark,
+        onDanger = Color(0xFF310300),
+        focus = Color(0xFFF3AA52),
+        scrim = Color(0xD9040605),
     )
 
 internal val LightSemanticColors =
     GameSemanticColors(
-        success = Color(0xFF166B45),
+        success = SuccessLight,
         onSuccess = Color.White,
-        successContainer = Color(0xFFC4F6D7),
-        onSuccessContainer = Color(0xFF063820),
-        warning = Color(0xFF7A5100),
+        successContainer = Color(0xFFDEEEE2),
+        onSuccessContainer = Color(0xFF174E2C),
+        warning = WarningLight,
         onWarning = Color.White,
-        warningContainer = Color(0xFFFFE2A8),
-        onWarningContainer = Color(0xFF3D2900),
-        danger = Danger700,
+        warningContainer = Color(0xFFF0E8CB),
+        onWarningContainer = Color(0xFF574303),
+        danger = DangerLight,
         onDanger = Color.White,
-        focus = Color(0xFF2945B8),
-        scrim = Color(0xB3000000),
+        focus = Color(0xFF9C4D08),
+        scrim = Color(0xB3191D1A),
+    )
+
+internal val DarkBrandColors =
+    GameBrandColors(
+        canvasSoft = BrandDarkCanvasSoft,
+        surfaceRaised = BrandDarkSurfaceRaised,
+        surfaceHighest = BrandDarkSurfaceHighest,
+        textTertiary = BrandDarkTextTertiary,
+        borderStrong = BrandDarkBorderStrong,
+        accentStrong = BrandDarkAccentStrong,
+        privateCanvas = Color(0xFF0B0C0B),
+        privateSurface = Color(0xFF171411),
+        privateText = Color(0xFFF5EEE4),
+        lobby = Color(0xFF27B8C8),
+        tasks = Color(0xFFF0B63F),
+        meeting = Color(0xFFFF6A5D),
+        voting = Color(0xFF8C7CFF),
+        results = Color(0xFF36C889),
+        ready = SuccessDark,
+        pending = WarningDark,
+    )
+
+internal val LightBrandColors =
+    GameBrandColors(
+        canvasSoft = BrandLightCanvasSoft,
+        surfaceRaised = BrandLightSurfaceRaised,
+        surfaceHighest = BrandLightSurfaceHighest,
+        textTertiary = BrandLightTextTertiary,
+        borderStrong = BrandLightBorderStrong,
+        accentStrong = BrandLightAccentStrong,
+        privateCanvas = Color(0xFF0B0C0B),
+        privateSurface = Color(0xFF171411),
+        privateText = Color(0xFFF5EEE4),
+        lobby = Color(0xFF087F91),
+        tasks = Color(0xFFA86100),
+        meeting = Color(0xFFBF3D35),
+        voting = Color(0xFF5B4BC4),
+        results = Color(0xFF14794E),
+        ready = SuccessLight,
+        pending = WarningLight,
     )
 
 internal val HighContrastDarkColorScheme =
@@ -111,8 +175,9 @@ internal val HighContrastDarkColorScheme =
         surface = Color.Black,
         onBackground = Color.White,
         onSurface = Color.White,
+        onSurfaceVariant = Color.White,
         outline = Color.White,
-        outlineVariant = Color(0xFFBFC5D2),
+        outlineVariant = Color(0xFFD8D8D8),
     )
 
 internal val HighContrastLightColorScheme =
@@ -121,6 +186,7 @@ internal val HighContrastLightColorScheme =
         surface = Color.White,
         onBackground = Color.Black,
         onSurface = Color.Black,
+        onSurfaceVariant = Color.Black,
         outline = Color.Black,
-        outlineVariant = Color(0xFF3D3F46),
+        outlineVariant = Color(0xFF353535),
     )

@@ -1,11 +1,11 @@
 # Current Android implementation state
 
-**Last updated:** 2026-09-28
-**Overall status:** Phase 8 controls plus the 2026-09-28 physical-device QA repairs are implemented; production acceptance remains blocked on the full multi-client matrix, staging, and owner/vendor/store approvals
+**Last updated:** 2026-09-29
+**Overall status:** Phase 8 controls, physical-device QA repairs, and the unblocked website-equivalent Android UI/UX scope are implemented; production acceptance remains blocked on the full multi-client matrix, staging, and owner/vendor/store approvals
 **Active phase:** Phase 8 — end-to-end quality, release, and operations
 **Active plan:** [`../plan/phase-08-quality-release.md`](../plan/phase-08-quality-release.md)
 **Last verified commit:** not recorded; current worktree contains the Phase 8 implementation
-**Android build status:** Full `quality` and `connectedQuality` gates pass with JDK 17; the latest physical run is 6/6 app plus 4/4 design-system tests on Acer/API 33
+**Android build status:** Full `quality` and `connectedQuality` gates pass with JDK 17; the latest physical run passed on Acer One 8 T4-82L/API 33 and the current debug APK was installed and visually checked in persistent light and dark modes
 
 ## Implemented through Phase 7
 
@@ -33,6 +33,16 @@
 - [x] Resolved same-origin relative signed-upload instructions against the validated API origin; a physical Acer run reached object transfer, confirmation, `Evidence accepted`, and a completed assignment.
 - [x] Lobby polling now routes non-host participants into gameplay/results when another client changes the authoritative room status.
 
+## Website-equivalent Android UI/UX implementation
+
+- [x] Replaced the former blue/cyan Material brand roles with semantic charcoal/amber light and dark schemes, phase colors, private surfaces, result colors, 10/18/30dp shape roles, and 120/200/480ms motion roles.
+- [x] Added persistent System/Light/Dark, sound, haptics, reduced-motion, and high-contrast app settings; system bars track the resolved theme.
+- [x] Added typed, deduplicated, rate-limited, foreground-only sound/haptic feedback for role, task, evidence, elimination, meeting, vote, result, and game lifecycle events without licensed-asset risk.
+- [x] Completed the server-supported host settings editor for voting/evidence visibility, meeting behavior, cooldowns, imposter count, task distribution, and specialist roles with local validation and authoritative Apply.
+- [x] Added branded lobby invitation/readiness treatment, phase-aware top bars, private role styling, bounded evidence zoom, and website-equivalent terminal-result hierarchy and metrics.
+- [x] Verified core token contrast in unit tests and verified the current APK plus preference persistence in light and dark modes on the physical Acer device.
+- [ ] Player-called meetings, same-room replay, and native account/dashboard/history remain intentionally absent pending ADR-A-006, ADR-A-008, and ADR-A-009.
+
 ## Verification
 
 - Android Studio, SDK Platform 36, Build Tools 36.0.0, platform tools, emulator, and API 36 Google APIs x86_64 images are installed; licenses are accepted.
@@ -45,6 +55,8 @@
 - `validateStagingConfiguration`, `validateReleaseConfiguration` with non-production validation inputs, and `git diff --check` — passed.
 - `gradlew quality --no-parallel --max-workers=1` — passed after QA remediation.
 - `gradlew connectedQuality --no-parallel --max-workers=1` — app 6/6 and design-system 4/4 passed on Acer One 8 T4-82L, Android 13/API 33.
+- 2026-09-29 `gradlew spotlessApply quality connectedQuality --no-parallel --max-workers=1` — final combined gate passed (234 tasks) on Acer One 8 T4-82L/API 33 after the UI/UX parity implementation.
+- The debug APK was installed, launched, and visually checked in both themes, including light-theme persistence after force-stop/relaunch; the final APK was reinstalled with the app returned to its default Follow device preference.
 - `npm run check` — formatting, lint, typecheck, 21 files/120 unit tests, OpenAPI, and realtime fixtures passed; the database-backed `tests/integration/task-packs.test.ts` also passed (3 tests).
 
 ## Remaining release blockers
@@ -62,33 +74,33 @@ Configure the protected CI environment and approved staging origin, then execute
 
 ## Session handoff
 
-**Date/time:** 2026-09-28 Asia/Calcutta
+**Date/time:** 2026-09-29 Asia/Calcutta
 **Agent/session:** Codex
 **Active phase:** Phase 8 — end-to-end quality, release, and operations
-**Milestone:** close remaining `improvementApp1.md` evidence and authoritative-transition acceptance gaps
-**Status:** partial; implementable code gaps are repaired and the physical evidence submission passes, while APP-004 remains an outstanding production-like acceptance run
+**Milestone:** implement the unblocked scope in `implementationAppui/ux.md`
+**Status:** unblocked UI/UX implementation complete and locally/device verified; approval-gated product features and production-like multi-client acceptance remain open
 
 ### Changed
 
-- `core:data`/`app`: relative upload URL resolution and authoritative remote-start/result routing, in addition to the prior evidence decoding, bootstrap recovery, form/lobby UX, accessibility, and predictive-back repairs.
-- `app`/`core:designsystem` tests: stable launch/layout assertions, lock-screen-safe test host, evidence source matrix, and resume/backoff unit coverage.
-- Gradle/CI: `connectedQuality` plus a required API 35 emulator job and retained reports.
-- Backend task packs: publish-time duplicate/placeholder validation with unit and integration coverage.
-- `context`: QA implementation status, ADR-A-022, and updated traceability.
+- `core:designsystem`: charcoal/amber themes, semantic phase/private/result colors, shared shape/motion roles, phase-aware top bar, and contrast tests.
+- `app`: persistent appearance/feedback settings, lifecycle-safe typed sound/haptics, complete host settings controls/validation, branded lobby readiness, private role styling, bounded evidence gesture API, and expanded result presentation.
+- `app` tests: preference parsing, feedback deduplication/rate limiting, and host-settings validation.
+- `context`: UI/UX implementation status, ADR-A-024, and updated traceability.
 
 ### Verified
 
-- `gradlew quality connectedQuality --no-parallel --max-workers=1` passes after the follow-up repairs (231 tasks); physical Acer/API 33 evidence upload reaches accepted/completed.
-- `npm run check` passes: formatting, lint, typecheck, 21 files/120 unit tests, OpenAPI, and realtime fixtures.
+- `gradlew spotlessApply quality connectedQuality --no-parallel --max-workers=1` passes (234 tasks) on physical Acer/API 33.
+- Current debug APK installs and launches; dark and light visual checks pass and the selected theme survives force-stop/relaunch.
 
 ### Decisions added
 
-- ADR-A-023 — Same-origin relative evidence upload instructions.
+- ADR-A-024 — Website-equivalent native brand, preferences, and feedback.
 
 ### Remaining issues
 
-- APP-004 remains: run the independently controlled three-client gameplay/meeting/results/replay/reconnect matrix on an approved production-like backend; player-called meeting and replay behavior remain blocked on ADR-A-006 and ADR-A-008.
-- Current published placeholder data must be archived or replaced administratively; the new validator prevents equivalent drafts from being published but intentionally does not mutate live data.
+- APP-004 remains: run the independently controlled three-client gameplay/meeting/results/reconnect matrix on an approved production-like backend.
+- Player-called meetings, replay, and account/dashboard/history remain blocked on ADR-A-006, ADR-A-008, and ADR-A-009; there is no dead placeholder UI for them.
+- Full TalkBack traversal, 200% font across every gameplay phase, API 26/31/36, and compact-landscape/tablet product acceptance still require the Phase 8 device matrix.
 
 ### Next action
 

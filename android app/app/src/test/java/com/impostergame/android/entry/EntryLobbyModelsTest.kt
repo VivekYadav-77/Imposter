@@ -3,6 +3,7 @@ package com.impostergame.android.entry
 import com.impostergame.data.model.DifficultyTaskCounts
 import com.impostergame.data.model.MapRole
 import com.impostergame.data.model.ParticipantSelf
+import com.impostergame.data.model.PublicTaskPack
 import com.impostergame.data.model.RoomParticipant
 import com.impostergame.data.model.RoomSettings
 import com.impostergame.data.model.RoomSnapshot
@@ -47,6 +48,39 @@ class EntryLobbyModelsTest {
             )
         assertEquals(listOf("Apply pending settings."), pendingSettings.startBlockingReasons)
         assertFalse(pendingSettings.canStart)
+    }
+
+    @Test
+    fun settingsValidationRejectsUnavailableTasksAndTooManyRoles() {
+        val snapshot = room(participantCount = 3, hasPack = true)
+        val state =
+            EntryLobbyUiState(
+                room = snapshot,
+                taskPacks =
+                    listOf(
+                        PublicTaskPack(
+                            id = "pack",
+                            name = "Station",
+                            description = null,
+                            activeTaskCount = 3,
+                            difficultyTaskCounts = DifficultyTaskCounts(1, 1, 1),
+                            revision = 1,
+                            roles = listOf(MapRole("Engineer", "Repair", "Fix")),
+                        )
+                    ),
+                settings =
+                    LobbySettingsDraft(
+                        selectedTaskPackId = "pack",
+                        imposterCount = 1,
+                        taskCounts = mapOf("easy" to 2, "medium" to 1, "hard" to 1),
+                        roleCounts = mapOf("Engineer" to 3),
+                        dirty = true,
+                    ),
+            )
+
+        assertTrue(state.settingsValidationErrors.any { it.contains("enough easy tasks") })
+        assertTrue(state.settingsValidationErrors.any { it.contains("available crewmates") })
+        assertFalse(state.canStart)
     }
 
     private fun room(participantCount: Int, hasPack: Boolean): RoomSnapshot {

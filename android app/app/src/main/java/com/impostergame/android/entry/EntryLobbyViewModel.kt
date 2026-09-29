@@ -3,6 +3,8 @@ package com.impostergame.android.entry
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.impostergame.android.feedback.GameFeedbackEvent
+import com.impostergame.android.feedback.GameFeedbackKind
 import com.impostergame.data.model.RoomSettingsInput
 import com.impostergame.data.model.RoomSnapshot
 import com.impostergame.data.model.RoomStatus
@@ -11,6 +13,8 @@ import com.impostergame.designsystem.component.ConnectionState
 import java.util.UUID
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -21,6 +25,8 @@ class EntryLobbyViewModel(
 ) : ViewModel() {
     private val _state = kotlinx.coroutines.flow.MutableStateFlow(restoredState())
     val state: kotlinx.coroutines.flow.StateFlow<EntryLobbyUiState> = _state
+    private val _feedback = MutableSharedFlow<GameFeedbackEvent>(extraBufferCapacity = 16)
+    val feedback = _feedback.asSharedFlow()
     private var lobbyRefresh: Job? = null
     private var bootstrapRetry: Job? = null
     private var pendingSubmission: PendingSubmission? = null
@@ -66,6 +72,10 @@ class EntryLobbyViewModel(
         lobbyRefresh?.cancel()
         cancelBootstrapRetry()
         setDestination(EntryDestination.HOME)
+    }
+
+    fun showSettings() {
+        setDestination(EntryDestination.SETTINGS)
     }
 
     fun showJoin() {
@@ -236,9 +246,18 @@ class EntryLobbyViewModel(
         it.copy(settings = it.settings.copy(advancedExpanded = !it.settings.advancedExpanded))
     }
 
-    fun selectTaskPack(id: String) = update {
-        it.copy(
-            settings = it.settings.copy(selectedTaskPackId = id, dirty = true),
+    fun selectTaskPack(id: String) = update { state ->
+        val pack = state.taskPacks.firstOrNull { it.id == id }
+        state.copy(
+            settings =
+                state.settings.copy(
+                    selectedTaskPackId = id,
+                    taskCounts =
+                        pack?.difficultyTaskCounts?.let(::initialTaskDistribution)
+                            ?: state.settings.taskCounts,
+                    roleCounts = emptyMap(),
+                    dirty = true,
+                ),
             message = null,
         )
     }
@@ -256,8 +275,115 @@ class EntryLobbyViewModel(
         )
     }
 
+    fun updateMeetingsPerPlayer(value: Int) = update {
+        it.copy(
+            settings = it.settings.copy(meetingsPerPlayer = value.coerceIn(0, 10), dirty = true)
+        )
+    }
+
+    fun updateMeetingVotingMode(value: String) = update {
+        if (value !in setOf("timed", "all_voted")) it
+        else it.copy(settings = it.settings.copy(meetingVotingMode = value, dirty = true))
+    }
+
+    fun updateVoteVisibility(value: String) = update {
+        if (value !in setOf("private", "public")) it
+        else it.copy(settings = it.settings.copy(voteVisibility = value, dirty = true))
+    }
+
+    fun updateEvidenceVisibility(value: String) = update {
+        if (value !in setOf("private", "public")) it
+        else it.copy(settings = it.settings.copy(evidenceVisibility = value, dirty = true))
+    }
+
+    fun updateImposterMeetingTaskRequirement(value: String) = update {
+        if (value !in setOf("none", "one")) it
+        else
+            it.copy(
+                settings = it.settings.copy(imposterMeetingTaskRequirement = value, dirty = true)
+            )
+    }
+
+    fun updateMeetingCooldown(value: Int) = update {
+        it.copy(
+            settings =
+                it.settings.copy(meetingCooldownSeconds = value.coerceIn(10, 1800), dirty = true)
+        )
+    }
+
+    fun updateImposterCooldown(value: Int) = update {
+        it.copy(
+            settings =
+                it.settings.copy(imposterCooldownSeconds = value.coerceIn(10, 300), dirty = true)
+        )
+    }
+
+    fun updateImposterCount(value: Int) = update { state ->
+        val allowed = state.room?.settings?.allowedImposterCounts.orEmpty()
+        val next =
+            if (allowed.isEmpty()) value.coerceIn(1, 7)
+            else allowed.minBy { kotlin.math.abs(it - value) }
+        val maximumCrew = ((state.room?.participants?.size ?: 1) - next).coerceAtLeast(0)
+        state.copy(
+            settings =
+                state.settings.copy(
+                    imposterCount = next,
+                    roleCounts = state.settings.roleCounts.fitWithin(maximumCrew),
+                    dirty = true,
+                )
+        )
+    }
+
+    fun updateTaskCount(difficulty: String, value: Int) = update { state ->
+        if (difficulty !in setOf("easy", "medium", "hard")) return@update state
+        val pack = state.taskPacks.firstOrNull { it.id == state.settings.selectedTaskPackId }
+        val available =
+            when (difficulty) {
+                "easy" -> pack?.difficultyTaskCounts?.easy
+                "medium" -> pack?.difficultyTaskCounts?.medium
+                else -> pack?.difficultyTaskCounts?.hard
+            } ?: 15
+        val otherTotal = state.settings.taskCounts.filterKeys { it != difficulty }.values.sum()
+        val maximum = minOf(available, (15 - otherTotal).coerceAtLeast(0))
+        state.copy(
+            settings =
+                state.settings.copy(
+                    taskCounts =
+                        state.settings.taskCounts + (difficulty to value.coerceIn(0, maximum)),
+                    dirty = true,
+                )
+        )
+    }
+
+    fun updateRoleCount(role: String, value: Int) = update { state ->
+        val roles =
+            state.taskPacks
+                .firstOrNull { it.id == state.settings.selectedTaskPackId }
+                ?.roles
+                .orEmpty()
+        if (roles.none { it.name == role }) return@update state
+        val maximumCrew =
+            ((state.room?.participants?.size ?: 1) - state.settings.imposterCount).coerceAtLeast(0)
+        val otherTotal = state.settings.roleCounts.filterKeys { it != role }.values.sum()
+        state.copy(
+            settings =
+                state.settings.copy(
+                    roleCounts =
+                        state.settings.roleCounts +
+                            (role to
+                                value.coerceIn(0, (maximumCrew - otherTotal).coerceAtLeast(0))),
+                    dirty = true,
+                )
+        )
+    }
+
     fun applySettings() {
-        val draft = _state.value.settings
+        val snapshot = _state.value
+        if (snapshot.settingsValidationErrors.isNotEmpty()) {
+            update { it.copy(message = snapshot.settingsValidationErrors.joinToString(" ")) }
+            return
+        }
+        val draft = snapshot.settings
         launchRequest {
             val result =
                 gateway.updateSettings(
@@ -269,8 +395,12 @@ class EntryLobbyViewModel(
                         meetingVotingMode = draft.meetingVotingMode,
                         voteVisibility = draft.voteVisibility,
                         evidenceVisibility = draft.evidenceVisibility,
+                        imposterMeetingTaskRequirement = draft.imposterMeetingTaskRequirement,
                         meetingCooldownSeconds = draft.meetingCooldownSeconds,
                         imposterCooldownSeconds = draft.imposterCooldownSeconds,
+                        imposterCount = draft.imposterCount,
+                        taskCounts = draft.taskCounts,
+                        roleCounts = draft.roleCounts,
                     )
                 )
             when (result) {
@@ -297,6 +427,12 @@ class EntryLobbyViewModel(
             when (val result = gateway.start()) {
                 is GatewayResult.Success -> {
                     lobbyRefresh?.cancel()
+                    _feedback.tryEmit(
+                        GameFeedbackEvent(
+                            GameFeedbackKind.GameStart,
+                            "${result.value.id}:${result.value.stateVersion}",
+                        )
+                    )
                     setDestination(EntryDestination.GAME)
                 }
                 is GatewayResult.Failure -> {
@@ -390,6 +526,12 @@ class EntryLobbyViewModel(
                     when (new.status) {
                         RoomStatus.ACTIVE -> {
                             lobbyRefresh?.cancel()
+                            _feedback.tryEmit(
+                                GameFeedbackEvent(
+                                    GameFeedbackKind.GameStart,
+                                    new.gameId ?: new.id,
+                                )
+                            )
                             setDestination(EntryDestination.GAME)
                             return@launch
                         }
@@ -401,6 +543,17 @@ class EntryLobbyViewModel(
                         else -> Unit
                     }
                     val announcement = rosterAnnouncement(old, new)
+                    if (old != null && new.participants.size > old.participants.size) {
+                        val joined =
+                            new.participants.map { it.id }.toSet() -
+                                old.participants.map { it.id }.toSet()
+                        _feedback.tryEmit(
+                            GameFeedbackEvent(
+                                GameFeedbackKind.PlayerJoin,
+                                joined.sorted().joinToString(","),
+                            )
+                        )
+                    }
                     update {
                         it.copy(
                             room = new,
@@ -523,9 +676,43 @@ private fun draftFrom(room: RoomSnapshot): LobbySettingsDraft =
         meetingVotingMode = room.settings.meetingVotingMode,
         voteVisibility = room.settings.voteVisibility,
         evidenceVisibility = room.settings.evidenceVisibility,
+        imposterMeetingTaskRequirement = room.settings.imposterMeetingTaskRequirement,
         meetingCooldownSeconds = room.settings.meetingCooldownSeconds,
         imposterCooldownSeconds = room.settings.imposterCooldownSeconds,
+        imposterCount = room.settings.imposterCount,
+        taskCounts = room.settings.taskCounts,
+        roleCounts = room.settings.roleCounts,
     )
+
+private fun initialTaskDistribution(
+    counts: com.impostergame.data.model.DifficultyTaskCounts
+): Map<String, Int> {
+    val available = mapOf("easy" to counts.easy, "medium" to counts.medium, "hard" to counts.hard)
+    val result = mutableMapOf("easy" to 0, "medium" to 0, "hard" to 0)
+    val target = minOf(3, available.values.sum())
+    while (result.values.sum() < target) {
+        val before = result.values.sum()
+        listOf("easy", "medium", "hard").forEach { difficulty ->
+            if (
+                result.values.sum() < target &&
+                    result.getValue(difficulty) < available.getValue(difficulty)
+            ) {
+                result[difficulty] = result.getValue(difficulty) + 1
+            }
+        }
+        if (result.values.sum() == before) break
+    }
+    return result
+}
+
+private fun Map<String, Int>.fitWithin(maximum: Int): Map<String, Int> {
+    var remaining = maximum
+    return entries.associate { (name, count) ->
+        val kept = count.coerceIn(0, remaining)
+        remaining -= kept
+        name to kept
+    }
+}
 
 private fun rosterAnnouncement(old: RoomSnapshot?, new: RoomSnapshot): String? {
     if (old == null) return null

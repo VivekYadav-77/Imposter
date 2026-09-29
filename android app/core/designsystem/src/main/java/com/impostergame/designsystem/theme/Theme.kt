@@ -19,6 +19,13 @@ private val GameTypography =
                 fontSize = 48.sp,
                 lineHeight = 52.sp,
             ),
+        displayMedium =
+            TextStyle(
+                fontFamily = FontFamily.SansSerif,
+                fontWeight = FontWeight.Black,
+                fontSize = 40.sp,
+                lineHeight = 44.sp,
+            ),
         headlineLarge =
             TextStyle(
                 fontFamily = FontFamily.SansSerif,
@@ -70,9 +77,11 @@ fun ImposterGameTheme(
             else -> LightColorScheme
         }
     val semanticColors = if (darkTheme) DarkSemanticColors else LightSemanticColors
+    val brandColors = if (darkTheme) DarkBrandColors else LightBrandColors
 
     CompositionLocalProvider(
         LocalGameSemanticColors provides semanticColors,
+        LocalGameBrandColors provides brandColors,
         LocalGameAccessibilityPreferences provides accessibilityPreferences,
     ) {
         MaterialTheme(
@@ -88,3 +97,6 @@ fun ImposterGameTheme(
         )
     }
 }
+
+val MaterialTheme.gameColors: GameBrandColors
+    @Composable get() = LocalGameBrandColors.current
