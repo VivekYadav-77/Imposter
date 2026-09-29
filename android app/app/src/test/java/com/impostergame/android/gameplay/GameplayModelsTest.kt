@@ -95,6 +95,28 @@ class GameplayModelsTest {
     }
 
     @Test
+    fun meetingCallRequiresServerCapabilityLifeAndRemainingCall() {
+        val ready = state(capabilities = listOf("call_meeting"))
+        val readySnapshot = requireNotNull(ready.snapshot)
+        assertTrue(ready.mayCallMeeting())
+        assertFalse(state(capabilities = emptyList()).mayCallMeeting())
+        val dead = readySnapshot.copy(self = readySnapshot.self.copy(lifeStatus = "killed"))
+        assertFalse(GameplayUiState(snapshot = dead).mayCallMeeting())
+        val exhausted =
+            readySnapshot.copy(meetingRules = readySnapshot.meetingRules.copy(remainingForSelf = 0))
+        assertFalse(GameplayUiState(snapshot = exhausted).mayCallMeeting())
+        val taskRequired =
+            readySnapshot.copy(
+                meetingRules =
+                    readySnapshot.meetingRules.copy(
+                        requiresCompletedTask = true,
+                        hasCompletedTask = false,
+                    )
+            )
+        assertFalse(GameplayUiState(snapshot = taskRequired).mayCallMeeting())
+    }
+
+    @Test
     fun privateBallotsAreNeverRenderedAsPublic() {
         val meeting = meeting("deadline")
         assertFalse(meeting.publicBallotsAllowed("private"))

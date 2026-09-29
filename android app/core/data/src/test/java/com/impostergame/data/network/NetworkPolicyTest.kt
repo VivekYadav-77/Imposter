@@ -1,6 +1,9 @@
 package com.impostergame.data.network
 
+import com.impostergame.data.gameSnapshot
 import com.impostergame.data.model.ApiEnvelope
+import com.impostergame.data.model.ApiMeta
+import com.impostergame.data.model.CallMeetingInput
 import com.impostergame.data.model.Cooldowns
 import com.impostergame.data.model.EjectionVoteInput
 import com.impostergame.data.model.EvidencePolicy
@@ -14,6 +17,7 @@ import com.impostergame.data.model.MeetingRules
 import com.impostergame.data.model.ParticipantSelf
 import com.impostergame.data.model.UploadIntent
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.encodeToString
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -305,6 +309,46 @@ class NetworkPolicyTest {
             assertEquals("vote-key", request.headers["Idempotency-Key"])
             assertEquals("/api/v1/meetings/meeting-1/ejection-vote", request.url.encodedPath)
             assertTrue(request.body?.utf8()?.contains("\"targetParticipantId\":null") == true)
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
+    fun meetingCallUsesVersionedIdempotentPost() = runTest {
+        val server = MockWebServer()
+        server.enqueue(
+            MockResponse.Builder()
+                .code(201)
+                .body(
+                    ContractJson.instance.encodeToString(
+                        ApiEnvelope(
+                            gameSnapshot(version = 10),
+                            ApiMeta("request", "2026-09-29T00:00:00Z"),
+                        )
+                    )
+                )
+                .build()
+        )
+        server.start()
+        try {
+            val api =
+                ParticipantApi(
+                    ApiClient(
+                        server.url("/").toString().toHttpUrl(),
+                        { "secret" },
+                        allowInsecureLocalDebug = true,
+                    )
+                )
+
+            val result = api.callMeeting(CallMeetingInput(9), "meeting-key")
+
+            assertTrue(result is ApiResult.Success)
+            val request = server.takeRequest()
+            assertEquals("POST", request.method)
+            assertEquals("meeting-key", request.headers["Idempotency-Key"])
+            assertEquals("/api/v1/games/current/meetings", request.url.encodedPath)
+            assertEquals("{\"expectedStateVersion\":9}", request.body?.utf8())
         } finally {
             server.close()
         }

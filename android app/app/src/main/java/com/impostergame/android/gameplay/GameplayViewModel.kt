@@ -36,6 +36,7 @@ class GameplayViewModel(
     private var uploadJob: Job? = null
     private var pendingUpload: PendingUpload? = null
     private var pendingKill: PendingAction? = null
+    private var pendingMeetingCall: PendingAction? = null
     private var pendingFlag: PendingAction? = null
     private var pendingReviewVote: PendingAction? = null
     private var pendingEjectionVote: PendingAction? = null
@@ -96,6 +97,30 @@ class GameplayViewModel(
     fun showEvidence() {
         update { it.copy(destination = GameplayDestination.EVIDENCE, message = null) }
         refreshSubmissions()
+    }
+
+    fun showStatus() = update {
+        it.copy(statusPanelVisible = true, killPickerVisible = false, message = null)
+    }
+
+    fun dismissStatus() = update { it.copy(statusPanelVisible = false) }
+
+    fun showKillPicker() {
+        if (_state.value.canKill) {
+            update {
+                it.copy(
+                    killPickerVisible = true,
+                    selectedKillTargetId = null,
+                    confirmKill = false,
+                    message = null,
+                )
+            }
+            emitFeedback(GameFeedbackKind.Ui)
+        }
+    }
+
+    fun dismissKillPicker() = update {
+        it.copy(killPickerVisible = false, selectedKillTargetId = null, confirmKill = false)
     }
 
     fun selectAssignment(id: String) {
@@ -322,6 +347,53 @@ class GameplayViewModel(
 
     fun dismissKill() = update { it.copy(confirmKill = false) }
 
+    fun requestMeetingConfirmation() {
+        if (_state.value.mayCallMeeting()) {
+            update {
+                it.copy(confirmMeetingCall = true, statusPanelVisible = false, message = null)
+            }
+        } else {
+            showStatus()
+        }
+    }
+
+    fun dismissMeetingConfirmation() = update { it.copy(confirmMeetingCall = false) }
+
+    fun confirmMeetingCall() {
+        val current = _state.value
+        val snapshot = current.snapshot ?: return
+        if (!current.mayCallMeeting()) return
+        val fingerprint = "${snapshot.id}|${snapshot.stateVersion}|meeting"
+        val command =
+            pendingMeetingCall?.takeIf { it.fingerprint == fingerprint }
+                ?: PendingAction(fingerprint, newKey()).also { pendingMeetingCall = it }
+        launchOnce {
+            when (val result = gateway.callMeeting(snapshot.stateVersion, command.key)) {
+                is GatewayResult.Success -> {
+                    pendingMeetingCall = null
+                    update {
+                        it.copy(
+                            snapshot = result.value,
+                            confirmMeetingCall = false,
+                            destination = GameplayDestination.MEETING,
+                            message = "Meeting called. Gather the room.",
+                        )
+                    }
+                    emitFeedback(GameFeedbackKind.Meeting, result.value.meeting?.id ?: fingerprint)
+                }
+                is GatewayResult.Failure -> {
+                    update {
+                        it.copy(
+                            confirmMeetingCall = false,
+                            message = messageFor(result.error),
+                        )
+                    }
+                    if (result.error is ApiFailure.Http && result.error.status == 409) refresh()
+                }
+            }
+        }
+    }
+
     fun dismissMeetingAlert() = update { it.copy(meetingAlertId = null) }
 
     fun selectReviewDecision(decision: String) {
@@ -441,6 +513,7 @@ class GameplayViewModel(
         uploadJob?.cancel()
         pendingUpload = null
         pendingKill = null
+        pendingMeetingCall = null
         pendingFlag = null
         pendingReviewVote = null
         pendingEjectionVote = null
@@ -467,6 +540,7 @@ class GameplayViewModel(
                     update {
                         it.copy(
                             selectedKillTargetId = null,
+                            killPickerVisible = false,
                             confirmKill = false,
                             message = "Action accepted.",
                         )
@@ -477,6 +551,7 @@ class GameplayViewModel(
                     update {
                         it.copy(
                             selectedKillTargetId = null,
+                            killPickerVisible = false,
                             confirmKill = false,
                             message = "The opportunity changed. ${messageFor(result.error)}",
                         )

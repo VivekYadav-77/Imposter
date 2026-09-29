@@ -29,7 +29,7 @@ This is a navigation aid, not a replacement for `../../openapi/openapi.json` or 
 |---|---|---|
 | Snapshot | `GET /api/v1/games/current/snapshot` | Replace state; optional known version may return no change. |
 | Kill | `POST /api/v1/games/current/kills` | Capability/cooldown/current-version controlled. |
-| Call meeting | `POST /api/v1/games/current/meetings` | Do not expose before Phase 0 decision and capability. |
+| Call meeting | `POST /api/v1/games/current/meetings` | ADR-A-026 approved; require `call_meeting`, alive status, allowance/task/cooldown readiness, current state version, confirmation, and an idempotency key. |
 | Upload intent | `/api/v1/task-assignments/{id}/upload-intents` | Follow returned upload instructions exactly. |
 | Confirm submission | `/api/v1/task-assignments/{id}/submissions` | Task remains provisional until server accepts/processes. |
 | Submissions | `GET /api/v1/games/current/submissions` | Visibility and short-lived media authorization apply. |

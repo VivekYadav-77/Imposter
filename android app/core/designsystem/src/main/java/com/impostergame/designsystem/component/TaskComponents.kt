@@ -5,9 +5,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -40,6 +42,8 @@ fun TaskCard(
     description: String,
     modifier: Modifier = Modifier,
     uploadState: UploadState = UploadState.Idle,
+    taskNumber: Int? = null,
+    statusLabel: String? = null,
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null,
 ) {
@@ -58,15 +62,69 @@ fun TaskCard(
             modifier = Modifier.padding(GameSpacing.md),
             verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
         ) {
-            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text(
-                description,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(GameSpacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                taskNumber?.let {
+                    Surface(
+                        modifier = Modifier.size(44.dp),
+                        shape = MaterialTheme.shapes.medium,
+                        color = MaterialTheme.gameColors.tasks.copy(alpha = 0.16f),
+                        contentColor = MaterialTheme.gameColors.tasks,
+                    ) {
+                        androidx.compose.foundation.layout.Box(
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                it.toString().padStart(2, '0'),
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Black,
+                            )
+                        }
+                    }
+                }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                    )
+                    Text(
+                        description,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                statusLabel?.let {
+                    Surface(
+                        shape = MaterialTheme.shapes.extraLarge,
+                        color =
+                            if (uploadState == UploadState.Complete) {
+                                LocalGameSemanticColors.current.success.copy(alpha = 0.16f)
+                            } else {
+                                LocalGameSemanticColors.current.warning.copy(alpha = 0.16f)
+                            },
+                    ) {
+                        Text(
+                            it,
+                            Modifier.padding(
+                                horizontal = GameSpacing.sm,
+                                vertical = GameSpacing.xs,
+                            ),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+            }
             UploadStateIndicator(uploadState)
             if (actionLabel != null && onAction != null) {
-                GameButton(text = actionLabel, onClick = onAction)
+                GameButton(
+                    text = actionLabel,
+                    onClick = onAction,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
     }

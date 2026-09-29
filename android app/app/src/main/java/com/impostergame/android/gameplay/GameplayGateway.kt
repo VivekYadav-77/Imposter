@@ -3,6 +3,7 @@ package com.impostergame.android.gameplay
 import android.graphics.BitmapFactory
 import com.impostergame.android.entry.GatewayResult
 import com.impostergame.android.sanitizedForDisplay
+import com.impostergame.data.model.CallMeetingInput
 import com.impostergame.data.model.ConfirmSubmissionInput
 import com.impostergame.data.model.EjectionVoteInput
 import com.impostergame.data.model.FlagSubmissionInput
@@ -47,6 +48,11 @@ interface GameplayGateway {
 
     suspend fun kill(
         targetParticipantId: String,
+        expectedStateVersion: Long,
+        key: String,
+    ): GatewayResult<GameSnapshot>
+
+    suspend fun callMeeting(
         expectedStateVersion: Long,
         key: String,
     ): GatewayResult<GameSnapshot>
@@ -99,6 +105,11 @@ class UnavailableGameplayGateway(private val reason: String) : GameplayGateway {
         key: String,
     ): GatewayResult<GameSnapshot> = failure()
 
+    override suspend fun callMeeting(
+        expectedStateVersion: Long,
+        key: String,
+    ): GatewayResult<GameSnapshot> = failure()
+
     override suspend fun reviewVote(
         reviewItemId: String,
         expectedStateVersion: Long,
@@ -130,6 +141,15 @@ class NetworkGameplayGateway(
                             IllegalStateException("Game snapshot was empty")
                         )
                     )
+        }
+
+    override suspend fun callMeeting(
+        expectedStateVersion: Long,
+        key: String,
+    ): GatewayResult<GameSnapshot> =
+        when (val result = api.callMeeting(CallMeetingInput(expectedStateVersion), key)) {
+            is ApiResult.Failure -> GatewayResult.Failure(result.error)
+            is ApiResult.Success -> GatewayResult.Success(result.value.sanitizedForDisplay())
         }
 
     override suspend fun submitEvidence(

@@ -32,6 +32,23 @@ internal fun GameplayUiState.mayKill(targetId: String): Boolean {
     return self.capabilities.contains("kill") && targetId in self.killableParticipantIds
 }
 
+internal fun GameplayUiState.mayCallMeeting(): Boolean {
+    val snapshot = snapshot ?: return false
+    val availableAt = snapshot.cooldowns.meetingAvailableAt
+    val cooldownReady =
+        availableAt == null ||
+            runCatching {
+                    java.time.Instant.parse(availableAt).epochSecond <=
+                        java.time.Instant.now().epochSecond
+                }
+                .getOrDefault(false)
+    return snapshot.self.lifeStatus == "alive" &&
+        snapshot.self.capabilities.contains("call_meeting") &&
+        snapshot.meetingRules.remainingForSelf > 0 &&
+        (!snapshot.meetingRules.requiresCompletedTask || snapshot.meetingRules.hasCompletedTask) &&
+        cooldownReady
+}
+
 internal fun GameplayUiState.mayReviewVote(): Boolean {
     val meeting = snapshot?.meeting ?: return false
     return remainingSeconds != 0L &&
@@ -120,7 +137,10 @@ data class GameplayUiState(
     val selectedSubmissionId: String? = null,
     val previewImageBytes: ByteArray? = null,
     val selectedKillTargetId: String? = null,
+    val statusPanelVisible: Boolean = false,
+    val killPickerVisible: Boolean = false,
     val confirmKill: Boolean = false,
+    val confirmMeetingCall: Boolean = false,
     val confirmFlag: Boolean = false,
     val meetingAlertId: String? = null,
     val selectedReviewDecision: String? = null,

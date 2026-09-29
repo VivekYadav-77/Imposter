@@ -20,7 +20,7 @@ Update status only with a link to implemented code and passing tests. Status val
 | AND-014 | Safe background/retry upload behavior | 5, 7 | Failure/process tests | in progress |
 | AND-015 | Evidence gallery and authorized flagging | 5 | Visibility/authorization tests | in progress |
 | AND-016 | Authorized imposter elimination | 5 | Role/cooldown/race tests | in progress |
-| AND-017 | Player-called meeting | 0, 5 | Product decision and E2E | blocked |
+| AND-017 | Player-called meeting | 0, 5 | ADR-A-026, model/unit checks, API contract and connected gameplay QA | implemented; external multi-client acceptance pending |
 | AND-018 | Discussion and evidence review | 6 | Multi-device phase E2E | in progress |
 | AND-019 | Private/public ejection voting | 0, 6 | Contract/privacy/race tests | in progress |
 | AND-020 | Meeting and terminal result | 6 | End-reason/reconnect tests | in progress |

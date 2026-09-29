@@ -7,14 +7,27 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.espresso.Espresso.pressBack
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import com.impostergame.session.AndroidKeystoreSessionStore
+import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.ExternalResource
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class NavigationBackTest {
-    @get:Rule val composeRule = createAndroidComposeRule<MainActivity>()
+    @get:Rule(order = 0)
+    val clearSessionRule =
+        object : ExternalResource() {
+            override fun before() {
+                val context = InstrumentationRegistry.getInstrumentation().targetContext
+                runBlocking { AndroidKeystoreSessionStore(context).clear() }
+            }
+        }
+
+    @get:Rule(order = 1) val composeRule = createAndroidComposeRule<MainActivity>()
 
     @Before
     fun awaitHome() {

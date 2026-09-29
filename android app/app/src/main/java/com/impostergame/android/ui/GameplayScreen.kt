@@ -38,6 +38,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -75,6 +76,7 @@ import com.impostergame.android.gameplay.GameplayViewModel
 import com.impostergame.android.gameplay.UploadStage
 import com.impostergame.android.gameplay.endReasonLabel
 import com.impostergame.android.gameplay.incompleteFirst
+import com.impostergame.android.gameplay.mayCallMeeting
 import com.impostergame.android.gameplay.mayEjectionVote
 import com.impostergame.android.gameplay.mayFlag
 import com.impostergame.android.gameplay.mayReviewVote
@@ -111,9 +113,12 @@ fun GameplayScreen(
     LaunchedEffect(Unit) { viewModel.load() }
     BackHandler(enabled = state.destination != GameplayDestination.LOADING) {
         when {
+            state.confirmMeetingCall -> viewModel.dismissMeetingConfirmation()
             state.confirmReviewVote -> viewModel.dismissReviewVote()
             state.confirmEjectionVote -> viewModel.dismissEjectionVote()
             state.confirmKill -> viewModel.dismissKill()
+            state.killPickerVisible -> viewModel.dismissKillPicker()
+            state.statusPanelVisible -> viewModel.dismissStatus()
             state.confirmFlag -> viewModel.dismissFlag()
             state.meetingAlertId != null -> viewModel.dismissMeetingAlert()
             state.selectedAssignmentId != null -> viewModel.dismissTaskDetail()
@@ -762,7 +767,10 @@ private fun TaskPhaseScreen(state: GameplayUiState, viewModel: GameplayViewModel
                 TaskEvidenceDialog(it, state, viewModel)
             }
     }
+    if (state.statusPanelVisible) StatusPanel(snapshot, state, viewModel)
+    if (state.killPickerVisible) KillTargetPicker(snapshot, state, viewModel)
     if (state.confirmKill) KillConfirmation(state, viewModel)
+    if (state.confirmMeetingCall) MeetingCallConfirmation(snapshot, viewModel)
     Column(Modifier.fillMaxSize().safeDrawingPadding()) {
         GameTopBar(
             phase = "Task phase",
@@ -793,17 +801,7 @@ private fun TaskPhaseScreen(state: GameplayUiState, viewModel: GameplayViewModel
                 color = MaterialTheme.colorScheme.error,
             )
         }
-        LinearProgressIndicator(
-            progress = { snapshot.progress.percent / 100f },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(GameSpacing.sm),
-            horizontalArrangement = Arrangement.spacedBy(GameSpacing.sm),
-        ) {
-            GameOutlinedButton("Status", {}, Modifier.weight(1f))
-            GameOutlinedButton("Evidence", viewModel::showEvidence, Modifier.weight(1f))
-        }
+        GameActionBar(snapshot, state, viewModel)
     }
 }
 
@@ -820,19 +818,57 @@ private fun TaskList(
         modifier = modifier.verticalScroll(rememberScrollState()).padding(GameSpacing.md),
         verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
     ) {
-        Text(
-            "Crew progress ${snapshot.progress.percent}%",
-            modifier = Modifier.semantics { heading() },
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    snapshot.taskPack.name.uppercase(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.gameColors.tasks,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    if (snapshot.self.lifeStatus == "alive") "Your assignments"
+                    else "Ghost assignments",
+                    modifier = Modifier.semantics { heading() },
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Black,
+                )
+            }
+            Surface(
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.gameColors.tasks.copy(alpha = 0.16f),
+            ) {
+                Text(
+                    "${snapshot.progress.percent}%",
+                    Modifier.padding(horizontal = GameSpacing.md, vertical = GameSpacing.sm),
+                    color = MaterialTheme.gameColors.tasks,
+                    fontWeight = FontWeight.Black,
+                )
+            }
+        }
+        LinearProgressIndicator(
+            progress = { snapshot.progress.percent / 100f },
+            modifier = Modifier.fillMaxWidth(),
         )
         Message(state.message)
+        if (showKill && state.canKill) KillControl(snapshot, state, viewModel)
         if (sorted.isEmpty()) Text("You have no assigned tasks.")
         sorted.forEachIndexed { index, assignment ->
             TaskCard(
-                title = "${index + 1}. ${assignment.description}",
+                title = assignment.description,
                 description =
-                    "Difficulty: ${assignment.difficulty.replaceFirstChar(Char::uppercase)}",
+                    "${assignment.difficulty.replaceFirstChar(Char::uppercase)} task · " +
+                        if (assignment.status == "completed") {
+                            "proof accepted"
+                        } else {
+                            "open to add photo proof"
+                        },
+                taskNumber = index + 1,
+                statusLabel = if (assignment.status == "completed") "Done" else "To do",
                 uploadState =
                     when {
                         assignment.status == "completed" -> UploadState.Complete
@@ -848,7 +884,6 @@ private fun TaskList(
                     else ({ viewModel.selectAssignment(assignment.id) }),
             )
         }
-        if (showKill && state.canKill) KillControl(snapshot, state, viewModel)
     }
 }
 
@@ -868,8 +903,222 @@ private fun StatusAndActions(
         Text("Task pack: ${snapshot.taskPack.name}")
         Text("Progress: ${snapshot.progress.percent}%")
         GameOutlinedButton("View evidence", viewModel::showEvidence, Modifier.fillMaxWidth())
+        GameOutlinedButton(
+            if (state.mayCallMeeting()) "Call emergency meeting"
+            else "Meeting unavailable · ${snapshot.meetingRules.remainingForSelf} left",
+            viewModel::requestMeetingConfirmation,
+            Modifier.fillMaxWidth(),
+            enabled = snapshot.self.lifeStatus == "alive" && !state.loading,
+        )
         if (state.canKill) KillControl(snapshot, state, viewModel)
     }
+}
+
+@Composable
+private fun GameActionBar(
+    snapshot: GameSnapshot,
+    state: GameplayUiState,
+    viewModel: GameplayViewModel,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        tonalElevation = 8.dp,
+        shadowElevation = 10.dp,
+        color = MaterialTheme.colorScheme.surface,
+    ) {
+        Column {
+            LinearProgressIndicator(
+                progress = { snapshot.progress.percent / 100f },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(GameSpacing.sm),
+                horizontalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+            ) {
+                GameActionButton(
+                    symbol = "◎",
+                    label = "Status",
+                    detail = "${snapshot.progress.percent}%",
+                    onClick = viewModel::showStatus,
+                    modifier = Modifier.weight(1f),
+                )
+                GameActionButton(
+                    symbol = "▣",
+                    label = "Evidence",
+                    detail = "${snapshot.assignments.count { it.status == "completed" }} done",
+                    onClick = viewModel::showEvidence,
+                    modifier = Modifier.weight(1f),
+                )
+                GameActionButton(
+                    symbol = if (state.mayCallMeeting()) "!" else "◷",
+                    label = "Meeting",
+                    detail =
+                        if (state.mayCallMeeting()) {
+                            "${snapshot.meetingRules.remainingForSelf} left"
+                        } else {
+                            "Status"
+                        },
+                    onClick =
+                        if (state.mayCallMeeting()) viewModel::requestMeetingConfirmation
+                        else viewModel::showStatus,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun GameActionButton(
+    symbol: String,
+    label: String,
+    detail: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    OutlinedButton(onClick = onClick, modifier = modifier.height(72.dp)) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(symbol, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                )
+            }
+            Text(
+                detail,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun StatusPanel(
+    snapshot: GameSnapshot,
+    state: GameplayUiState,
+    viewModel: GameplayViewModel,
+) {
+    val self = snapshot.participants.firstOrNull { it.id == snapshot.self.participantId }
+    val eliminated =
+        snapshot.self.knownEliminatedParticipantIds.mapNotNull { id ->
+            snapshot.participants.firstOrNull { it.id == id }
+        }
+    AlertDialog(
+        onDismissRequest = viewModel::dismissStatus,
+        title = { Text("Game status", fontWeight = FontWeight.Black) },
+        text = {
+            Column(
+                Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(GameSpacing.md),
+            ) {
+                self?.let { PlayerCard(it.nickname, it.avatarId) }
+                SignalCard(Modifier.fillMaxWidth(), accent = MaterialTheme.gameColors.tasks) {
+                    Column(
+                        Modifier.padding(GameSpacing.md),
+                        verticalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+                    ) {
+                        Text("PLAYING AS", style = MaterialTheme.typography.labelMedium)
+                        Text(
+                            if (snapshot.self.role == "imposter") "Imposter"
+                            else snapshot.self.crewRole?.name ?: "Crewmate",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Black,
+                        )
+                        Text(
+                            "Life status · ${snapshot.self.lifeStatus.replaceFirstChar(Char::uppercase)}"
+                        )
+                        Text("Task pack · ${snapshot.taskPack.name}")
+                        Text("Crew progress · ${snapshot.progress.percent}%")
+                    }
+                }
+                if (snapshot.self.role == "imposter") {
+                    SignalCard(Modifier.fillMaxWidth(), accent = MaterialTheme.colorScheme.error) {
+                        Column(
+                            Modifier.padding(GameSpacing.md),
+                            verticalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+                        ) {
+                            Text("PRIVATE RECORD", style = MaterialTheme.typography.labelMedium)
+                            Text("Your eliminations", fontWeight = FontWeight.ExtraBold)
+                            if (eliminated.isEmpty()) {
+                                Text("No confirmed eliminations yet.")
+                            } else {
+                                eliminated.forEach { player ->
+                                    Text("✓  ${player.nickname} · Eliminated by you")
+                                }
+                            }
+                        }
+                    }
+                }
+                SignalCard(
+                    Modifier.fillMaxWidth(),
+                    accent = MaterialTheme.gameColors.meeting,
+                ) {
+                    Column(
+                        Modifier.padding(GameSpacing.md),
+                        verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
+                    ) {
+                        Text("EMERGENCY MEETING", style = MaterialTheme.typography.labelMedium)
+                        Text(
+                            "${snapshot.meetingRules.remainingForSelf} calls remaining",
+                            fontWeight = FontWeight.ExtraBold,
+                        )
+                        Text(meetingAvailabilityLabel(snapshot, state))
+                        GameButton(
+                            "!  Call meeting",
+                            viewModel::requestMeetingConfirmation,
+                            Modifier.fillMaxWidth(),
+                            enabled = state.mayCallMeeting() && !state.loading,
+                        )
+                    }
+                }
+                GameOutlinedButton(
+                    "▣  View evidence",
+                    viewModel::showEvidence,
+                    Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = { GameBackButton("Game", viewModel::dismissStatus) },
+    )
+}
+
+private fun meetingAvailabilityLabel(snapshot: GameSnapshot, state: GameplayUiState): String =
+    when {
+        snapshot.self.lifeStatus != "alive" -> "Ghost players cannot call meetings."
+        snapshot.meetingRules.remainingForSelf <= 0 -> "You have no meeting calls remaining."
+        snapshot.meetingRules.requiresCompletedTask && !snapshot.meetingRules.hasCompletedTask ->
+            "Complete one task before calling a meeting."
+        snapshot.cooldowns.meetingAvailableAt != null && !state.mayCallMeeting() ->
+            "Meeting cooldown is active."
+        !snapshot.self.capabilities.contains("call_meeting") ->
+            "Meeting is not currently available."
+        else -> "Ready to gather the room."
+    }
+
+@Composable
+private fun MeetingCallConfirmation(snapshot: GameSnapshot, viewModel: GameplayViewModel) {
+    AlertDialog(
+        onDismissRequest = viewModel::dismissMeetingConfirmation,
+        title = { Text("Call emergency meeting?") },
+        text = {
+            Text(
+                "The task phase will pause and the room will gather to review evidence and vote. " +
+                    "You will have ${snapshot.meetingRules.remainingForSelf - 1} calls left."
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = viewModel::confirmMeetingCall) { Text("Call meeting") }
+        },
+        dismissButton = {
+            TextButton(onClick = viewModel::dismissMeetingConfirmation) { Text("Cancel") }
+        },
+    )
 }
 
 @Composable
@@ -888,28 +1137,77 @@ private fun KillControl(
                 color = MaterialTheme.colorScheme.error,
                 fontWeight = FontWeight.Bold,
             )
-            snapshot.cooldowns.killAvailableAt?.let { Text("Cooldown ends at $it") }
             val targets =
                 snapshot.participants.filter { it.id in snapshot.self.killableParticipantIds }
-            if (targets.isEmpty()) Text("No eligible target is currently available.")
-            targets.forEach { target ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(
-                        selected = state.selectedKillTargetId == target.id,
-                        onClick = { viewModel.selectKillTarget(target.id) },
-                    )
-                    Text("${target.nickname} • ${target.lifeStatus}")
-                }
-            }
+            Text(
+                if (targets.isEmpty()) "Elimination recharging" else "Choose a living crew member",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.ExtraBold,
+            )
+            Text(
+                if (targets.isEmpty()) "The server will unlock this ability when it is ready."
+                else "Your target choice stays private until you confirm it.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             GameButton(
-                "Review elimination",
-                viewModel::requestKillConfirmation,
+                if (targets.isEmpty()) "Kill · Recharging" else "☠  Kill · Ready",
+                viewModel::showKillPicker,
                 Modifier.fillMaxWidth(),
                 style = GameButtonStyle.Destructive,
-                enabled = state.selectedKillTargetId != null && !state.loading,
+                enabled = targets.isNotEmpty() && !state.loading,
             )
         }
     }
+}
+
+@Composable
+private fun KillTargetPicker(
+    snapshot: GameSnapshot,
+    state: GameplayUiState,
+    viewModel: GameplayViewModel,
+) {
+    val targets = snapshot.participants.filter { it.id in snapshot.self.killableParticipantIds }
+    AlertDialog(
+        onDismissRequest = viewModel::dismissKillPicker,
+        title = { Text("Choose a target", fontWeight = FontWeight.Black) },
+        text = {
+            Column(
+                Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+            ) {
+                Text("Only currently eligible living players are shown.")
+                targets.forEach { target ->
+                    SignalCard(Modifier.fillMaxWidth(), accent = MaterialTheme.colorScheme.error) {
+                        Row(
+                            Modifier.padding(GameSpacing.sm),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(
+                                selected = state.selectedKillTargetId == target.id,
+                                onClick = { viewModel.selectKillTarget(target.id) },
+                            )
+                            Column(Modifier.weight(1f)) {
+                                Text(target.nickname, fontWeight = FontWeight.Bold)
+                                Text(
+                                    "Living crew member",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = viewModel::requestKillConfirmation,
+                enabled = state.selectedKillTargetId != null,
+            ) {
+                Text("Review elimination")
+            }
+        },
+        dismissButton = { TextButton(onClick = viewModel::dismissKillPicker) { Text("Cancel") } },
+    )
 }
 
 @Composable

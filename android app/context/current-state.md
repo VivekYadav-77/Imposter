@@ -43,7 +43,8 @@
 - [x] Added branded lobby invitation/readiness treatment, phase-aware top bars, private role styling, bounded evidence zoom, and website-equivalent terminal-result hierarchy and metrics.
 - [x] Verified core token contrast in unit tests and verified the current APK plus preference persistence in light and dark modes on the physical Acer device.
 - [x] Added a reusable native signal-room layer (atmospheric canvas, brand mark/header, editorial eyebrow, signal cards/chips, pill controls, player accent rails, and phase-aware task/evidence/meeting/result surfaces) and applied it across home, settings, create/join, lobby, and gameplay without changing authoritative commands.
-- [ ] Player-called meetings, same-room replay, and native account/dashboard/history remain intentionally absent pending ADR-A-006, ADR-A-008, and ADR-A-009.
+- [x] Added server-authoritative player-called meetings plus a functional compact Status / Evidence / Meeting action rail, meeting readiness explanations, and confirmation flow under ADR-A-026.
+- [ ] Same-room replay and native account/dashboard/history remain intentionally absent pending ADR-A-008 and ADR-A-009.
 
 ## Verification
 
@@ -71,7 +72,7 @@
 - The 6 GB development host can run one 2 GB emulator reliably, but the API 36 system image can briefly show a System UI ANR during first boot; run phone and tablet AVDs one at a time. This is an emulator/host-capacity condition, not an app crash.
 - Crash/ANR vendor, retention/residency, dashboards, alert owners, and synthetic routing need explicit approval. The code provides privacy-safe seams, not a configured monitoring service.
 - Privacy-policy URL, data-safety form, permission declaration, content rating, store listing/screenshots, countries/locales, support contact, and owner acceptance are external sign-offs.
-- ADR-A-005 through ADR-A-009 remain unresolved. Player-called meetings, same-room replay, and account history cannot be accepted as implemented.
+- ADR-A-005, ADR-A-007 through ADR-A-009 remain unresolved. Same-room replay and account history cannot be accepted as implemented; ADR-A-006 is resolved by ADR-A-026.
 
 ## Next action
 
@@ -104,7 +105,7 @@ Configure the protected CI environment and approved staging origin, then execute
 ### Remaining issues
 
 - APP-004 remains: run the independently controlled three-client gameplay/meeting/results/reconnect matrix on an approved production-like backend.
-- Player-called meetings, replay, and account/dashboard/history remain blocked on ADR-A-006, ADR-A-008, and ADR-A-009; there is no dead placeholder UI for them.
+- Replay and account/dashboard/history remain blocked on ADR-A-008 and ADR-A-009. Player-called meetings are now implemented through the existing server contract with no client-side authority.
 - Full TalkBack traversal, 200% font across every gameplay phase, API 26/31/36, and compact-landscape/tablet product acceptance still require the Phase 8 device matrix.
 
 ### Next action

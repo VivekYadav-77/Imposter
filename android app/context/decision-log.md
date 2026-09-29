@@ -201,6 +201,16 @@ Use IDs `ADR-A-###`. Status is `proposed`, `approved`, `superseded`, or `rejecte
 - **Reason:** Token parity alone left the Android surfaces visually generic. Reusable native primitives create a cohesive, interactive identity without copying brittle web geometry or weakening platform behavior.
 - **Consequences:** Feature screens should compose these shared primitives instead of inventing isolated card and background treatments. Decorative effects remain nonessential, cannot carry state by themselves, and must preserve high contrast and reduced motion. This decision does not authorize account/history, replay, or player-called-meeting features that remain gated by ADR-A-009, ADR-A-008, and ADR-A-006.
 
+### ADR-A-026 — Server-authoritative Android emergency meetings
+
+- **Status:** approved by gameplay-parity implementation request
+- **Date:** 2026-09-29
+- **Approver:** product owner requested website-equivalent Android game flow and repair of missing gameplay actions
+- **Decision:** Expose player-called emergency meetings in Android only when the authoritative snapshot grants `call_meeting`, the player is alive, the server-provided allowance and task requirement pass, and the cooldown has elapsed. Require a deliberate confirmation, send the current state version with an idempotency key, and transition only from the returned server snapshot. A compact Status / Evidence / Meeting action rail and the expanded status surface share these same rules.
+- **Reason:** The production website and API already implement this game mechanic, while Android rendered a nonfunctional Status button and omitted Meeting entirely. The product owner explicitly requested equal game flow and asked that missing server-supported features be implemented.
+- **Consequences:** ADR-A-006 is approved for this server-backed behavior and no longer blocks Android meeting calls. Android still never starts or resolves a meeting locally, never reveals private ballots, and refreshes after stale-state conflicts. Replay and account/dashboard work remain gated by ADR-A-008 and ADR-A-009.
+- **Supersedes:** The player-called-meeting exclusion in ADR-A-024 and ADR-A-025.
+
 ## Adding a decision
 
 Copy this structure:
