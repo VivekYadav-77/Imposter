@@ -24,6 +24,7 @@
 
 ## Physical-device QA remediation
 
+- [x] System Back now follows the app hierarchy: settings and entry return Home, lobby Back requests explicit leave confirmation, transient gameplay surfaces close first, Evidence returns to Tasks, Results returns Home, and active authoritative phases offer safe minimization instead of closing the task. Labeled in-app back controls name their destination.
 - [x] Fixed bounds-only evidence decoding and added connected coverage for JPEG, PNG, WebP, corrupt, unsupported, oversized, and revoked sources.
 - [x] Failed cold resume now retains an explicit recovery state, exposes manual Retry, and retries automatically with bounded backoff without clearing the credential on transport failure.
 - [x] Dirty lobby settings are explained beside Start with the Apply action; validation scrolls/focuses the first invalid field and announces the error.
@@ -58,6 +59,8 @@
 - `gradlew connectedQuality --no-parallel --max-workers=1` — app 6/6 and design-system 4/4 passed on Acer One 8 T4-82L, Android 13/API 33.
 - 2026-09-29 `gradlew spotlessApply quality connectedQuality --no-parallel --max-workers=1` — final combined gate passed (234 tasks) on Acer One 8 T4-82L/API 33 after the UI/UX parity implementation.
 - 2026-09-29 `gradlew spotlessApply quality :app:installDebug connectedQuality --no-parallel --max-workers=1` — signal-room refinement passed all 235 tasks on Acer One 8 T4-82L/API 33; the APK was reinstalled with the localhost reverse route and the home/create-join layouts were visually inspected at the device's native 800x1280 resolution.
+- 2026-09-29 physical Acer/API 33 navigation check — the Join screen exposed `← Home`; the device Back button returned to the rendered Home screen while `MainActivity` remained the resumed activity.
+- 2026-09-29 `gradlew spotlessApply quality connectedQuality --no-parallel --max-workers=1` — passed all 234 tasks with the new device-Back and labeled-button regression suite; a follow-up app connected test passed after migrating to the non-deprecated Compose test API, and the final debug APK was reinstalled on Acer/API 33.
 - The debug APK was installed, launched, and visually checked in both themes, including light-theme persistence after force-stop/relaunch; the final APK was reinstalled with the app returned to its default Follow device preference.
 - `npm run check` — formatting, lint, typecheck, 21 files/120 unit tests, OpenAPI, and realtime fixtures passed; the database-backed `tests/integration/task-packs.test.ts` also passed (3 tests).
 

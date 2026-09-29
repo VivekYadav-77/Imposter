@@ -121,6 +121,7 @@ class MainActivity : ComponentActivity() {
                 onHighContrastChanged = appPreferences::setHighContrast,
                 onResolvedDarkTheme = ::updateSystemBars,
                 onFeedback = ::handleFeedback,
+                onMinimizeApp = { moveTaskToBack(true) },
             )
         }
     }

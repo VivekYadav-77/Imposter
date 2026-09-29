@@ -4,6 +4,7 @@ import android.app.Activity
 import android.graphics.BitmapFactory
 import android.os.Build
 import android.view.WindowManager
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -48,6 +49,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -82,6 +84,7 @@ import com.impostergame.android.gameplay.winnerLabel
 import com.impostergame.data.model.Assignment
 import com.impostergame.data.model.GameSnapshot
 import com.impostergame.data.model.Submission
+import com.impostergame.designsystem.component.GameBackButton
 import com.impostergame.designsystem.component.GameButton
 import com.impostergame.designsystem.component.GameButtonStyle
 import com.impostergame.designsystem.component.GameOutlinedButton
@@ -97,10 +100,57 @@ import com.impostergame.designsystem.theme.LocalGameAccessibilityPreferences
 import com.impostergame.designsystem.theme.gameColors
 
 @Composable
-fun GameplayScreen(viewModel: GameplayViewModel, onReturnHome: () -> Unit) {
+fun GameplayScreen(
+    viewModel: GameplayViewModel,
+    onMinimizeApp: () -> Unit,
+    onReturnHome: () -> Unit,
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    var confirmMinimize by rememberSaveable { mutableStateOf(false) }
     SecureContent()
     LaunchedEffect(Unit) { viewModel.load() }
+    BackHandler(enabled = state.destination != GameplayDestination.LOADING) {
+        when {
+            state.confirmReviewVote -> viewModel.dismissReviewVote()
+            state.confirmEjectionVote -> viewModel.dismissEjectionVote()
+            state.confirmKill -> viewModel.dismissKill()
+            state.confirmFlag -> viewModel.dismissFlag()
+            state.meetingAlertId != null -> viewModel.dismissMeetingAlert()
+            state.selectedAssignmentId != null -> viewModel.dismissTaskDetail()
+            state.selectedSubmissionId != null -> viewModel.dismissEvidencePreview()
+            state.destination == GameplayDestination.EVIDENCE -> viewModel.showTasks()
+            state.destination == GameplayDestination.RESULTS -> onReturnHome()
+            else -> {
+                viewModel.resealRole()
+                confirmMinimize = true
+            }
+        }
+    }
+    if (confirmMinimize) {
+        AlertDialog(
+            onDismissRequest = { confirmMinimize = false },
+            title = { Text("Keep the game running?") },
+            text = {
+                Text(
+                    "You are still in an active room. Going back will not leave the game. " +
+                        "You can minimize the app and return to the same phase."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmMinimize = false
+                        onMinimizeApp()
+                    }
+                ) {
+                    Text("Minimize app")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmMinimize = false }) { Text("Stay in game") }
+            },
+        )
+    }
     val accent =
         when (state.destination) {
             GameplayDestination.LOADING -> MaterialTheme.gameColors.accentStrong
@@ -489,7 +539,7 @@ private fun FinalResultScreen(
         }
         Message(state.message)
         GameButton(
-            "Return home",
+            "Back to home",
             onReturnHome,
             Modifier.fillMaxWidth().widthIn(max = 520.dp),
             loading = state.loading,
@@ -957,7 +1007,7 @@ private fun TaskEvidenceDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = viewModel::dismissTaskDetail) { Text("Close") }
+            GameBackButton("Tasks", viewModel::dismissTaskDetail)
         },
     )
 }
@@ -989,6 +1039,8 @@ private fun EvidenceGalleryScreen(state: GameplayUiState, viewModel: GameplayVie
                     ?: "You",
             playerColorId = snapshot.self.avatarId,
             connectionState = state.connectionState,
+            navigationLabel = "Tasks",
+            onNavigationClick = viewModel::showTasks,
         )
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(GameSpacing.md),
@@ -1003,8 +1055,8 @@ private fun EvidenceGalleryScreen(state: GameplayUiState, viewModel: GameplayVie
             if (state.submissions.isEmpty()) Text("No evidence is visible right now.")
             state.submissions.forEach { submission -> EvidenceCard(submission, viewModel) }
         }
-        GameButton(
-            "Back to tasks",
+        GameBackButton(
+            "Tasks",
             viewModel::showTasks,
             Modifier.fillMaxWidth().padding(GameSpacing.md),
         )
@@ -1049,7 +1101,7 @@ private fun EvidencePreviewDialog(state: GameplayUiState, viewModel: GameplayVie
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                     )
-                    TextButton(onClick = viewModel::dismissEvidencePreview) { Text("Close") }
+                    GameBackButton("Evidence", viewModel::dismissEvidencePreview)
                 }
                 state.previewImageBytes?.let { ZoomableEvidenceBitmap(it) }
                     ?: Text(if (state.loading) "Loading image…" else "Image unavailable.")

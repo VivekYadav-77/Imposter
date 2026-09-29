@@ -143,6 +143,28 @@ fun GameOutlinedButton(
     }
 }
 
+/** Consistent labeled navigation affordance for every non-root screen. */
+@Composable
+fun GameBackButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier =
+            modifier.defaultMinSize(
+                minWidth = GameTouchTarget.minimum,
+                minHeight = GameTouchTarget.minimum,
+            ),
+        enabled = enabled,
+        shape = GameShapes.pill,
+    ) {
+        Text("← $label")
+    }
+}
+
 @Composable
 fun GameIconButton(
     onClick: () -> Unit,

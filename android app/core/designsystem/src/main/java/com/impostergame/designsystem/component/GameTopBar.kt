@@ -42,6 +42,8 @@ fun GameTopBar(
     playerColorId: String,
     connectionState: ConnectionState,
     modifier: Modifier = Modifier,
+    navigationLabel: String? = null,
+    onNavigationClick: (() -> Unit)? = null,
 ) {
     val phaseColor =
         with(MaterialTheme.gameColors) {
@@ -68,6 +70,9 @@ fun GameTopBar(
                 horizontalArrangement = Arrangement.spacedBy(GameSpacing.sm),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                if (navigationLabel != null && onNavigationClick != null) {
+                    GameBackButton(navigationLabel, onNavigationClick)
+                }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = phase,

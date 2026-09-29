@@ -1,5 +1,6 @@
 package com.impostergame.android.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -90,6 +91,7 @@ import com.impostergame.designsystem.avatar.PlayerColors
 import com.impostergame.designsystem.avatar.PlayerStatus
 import com.impostergame.designsystem.component.BrandHeader
 import com.impostergame.designsystem.component.ConnectionState
+import com.impostergame.designsystem.component.GameBackButton
 import com.impostergame.designsystem.component.GameButton
 import com.impostergame.designsystem.component.GameEyebrow
 import com.impostergame.designsystem.component.GameOutlinedButton
@@ -120,8 +122,29 @@ fun ImposterGameApp(
     onHighContrastChanged: (Boolean) -> Unit,
     onResolvedDarkTheme: (Boolean) -> Unit,
     onFeedback: (GameFeedbackEvent) -> Unit,
+    onMinimizeApp: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    BackHandler(
+        enabled =
+            state.destination in
+                setOf(
+                    EntryDestination.SETTINGS,
+                    EntryDestination.JOIN,
+                    EntryDestination.CREATE,
+                    EntryDestination.LOBBY,
+                )
+    ) {
+        when (state.destination) {
+            EntryDestination.LOBBY -> {
+                if (state.confirmLeave) viewModel.dismissLeave() else viewModel.requestLeave()
+            }
+            EntryDestination.SETTINGS,
+            EntryDestination.JOIN,
+            EntryDestination.CREATE -> viewModel.showHome()
+            else -> Unit
+        }
+    }
     LaunchedEffect(viewModel) { viewModel.feedback.collect(onFeedback) }
     LaunchedEffect(gameplayViewModel) { gameplayViewModel.feedback.collect(onFeedback) }
     val systemDark = isSystemInDarkTheme()
@@ -170,12 +193,12 @@ fun ImposterGameApp(
                 EntryDestination.CREATE -> EntryScreen(state, viewModel)
                 EntryDestination.LOBBY -> LobbyScreen(state, viewModel, onCopyCode, onShareCode)
                 EntryDestination.GAME ->
-                    GameplayScreen(gameplayViewModel) {
+                    GameplayScreen(gameplayViewModel, onMinimizeApp = onMinimizeApp) {
                         gameplayViewModel.clearForHome()
                         viewModel.exitResults()
                     }
                 EntryDestination.RESULTS ->
-                    GameplayScreen(gameplayViewModel) {
+                    GameplayScreen(gameplayViewModel, onMinimizeApp = onMinimizeApp) {
                         gameplayViewModel.clearForHome()
                         viewModel.exitResults()
                     }
@@ -342,7 +365,7 @@ private fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(GameSpacing.sm),
                 ) {
-                    TextButton(onClick = onBack) { Text("Back") }
+                    GameBackButton("Home", onBack)
                     Text(
                         "App settings",
                         modifier = Modifier.semantics { heading() },
@@ -513,7 +536,7 @@ private fun EntryScreen(state: EntryLobbyUiState, viewModel: EntryLobbyViewModel
                     modifier = Modifier.fillMaxWidth().padding(GameSpacing.md),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    TextButton(onClick = viewModel::showHome) { Text("Back") }
+                    GameBackButton("Home", viewModel::showHome)
                     Text(
                         if (joining) "Join room" else "Create room",
                         style = MaterialTheme.typography.titleLarge,
