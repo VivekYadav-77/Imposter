@@ -35,7 +35,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
@@ -88,6 +87,8 @@ import com.impostergame.designsystem.component.GameButtonStyle
 import com.impostergame.designsystem.component.GameOutlinedButton
 import com.impostergame.designsystem.component.GameTopBar
 import com.impostergame.designsystem.component.PlayerCard
+import com.impostergame.designsystem.component.SignalBackground
+import com.impostergame.designsystem.component.SignalCard
 import com.impostergame.designsystem.component.TaskCard
 import com.impostergame.designsystem.component.UploadState
 import com.impostergame.designsystem.theme.GameMotion
@@ -100,13 +101,24 @@ fun GameplayScreen(viewModel: GameplayViewModel, onReturnHome: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     SecureContent()
     LaunchedEffect(Unit) { viewModel.load() }
-    when (state.destination) {
-        GameplayDestination.LOADING -> LoadingScreen("Loading the current game…")
-        GameplayDestination.SEALED_ROLE -> RoleRevealScreen(state, viewModel)
-        GameplayDestination.TASKS -> TaskPhaseScreen(state, viewModel)
-        GameplayDestination.EVIDENCE -> EvidenceGalleryScreen(state, viewModel)
-        GameplayDestination.MEETING -> MeetingScreen(state, viewModel)
-        GameplayDestination.RESULTS -> FinalResultScreen(state, viewModel, onReturnHome)
+    val accent =
+        when (state.destination) {
+            GameplayDestination.LOADING -> MaterialTheme.gameColors.accentStrong
+            GameplayDestination.SEALED_ROLE -> MaterialTheme.gameColors.voting
+            GameplayDestination.TASKS -> MaterialTheme.gameColors.tasks
+            GameplayDestination.EVIDENCE -> MaterialTheme.gameColors.tasks
+            GameplayDestination.MEETING -> MaterialTheme.gameColors.meeting
+            GameplayDestination.RESULTS -> MaterialTheme.gameColors.results
+        }
+    SignalBackground(accent = accent) {
+        when (state.destination) {
+            GameplayDestination.LOADING -> LoadingScreen("Loading the current game…")
+            GameplayDestination.SEALED_ROLE -> RoleRevealScreen(state, viewModel)
+            GameplayDestination.TASKS -> TaskPhaseScreen(state, viewModel)
+            GameplayDestination.EVIDENCE -> EvidenceGalleryScreen(state, viewModel)
+            GameplayDestination.MEETING -> MeetingScreen(state, viewModel)
+            GameplayDestination.RESULTS -> FinalResultScreen(state, viewModel, onReturnHome)
+        }
     }
 }
 
@@ -177,7 +189,7 @@ private fun MeetingScreen(state: GameplayUiState, viewModel: GameplayViewModel) 
 @Composable
 private fun DiscussionPanel(state: GameplayUiState) {
     val meeting = state.snapshot?.meeting ?: return
-    Card(Modifier.fillMaxWidth()) {
+    SignalCard(Modifier.fillMaxWidth(), accent = MaterialTheme.gameColors.meeting) {
         Column(
             Modifier.padding(GameSpacing.md),
             verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
@@ -200,7 +212,11 @@ private fun DiscussionPanel(state: GameplayUiState) {
 private fun ReviewPanel(state: GameplayUiState, viewModel: GameplayViewModel) {
     val item =
         state.snapshot?.meeting?.reviewItem ?: return Text("Waiting for the next evidence item…")
-    Card(Modifier.fillMaxWidth()) {
+    SignalCard(
+        Modifier.fillMaxWidth(),
+        accent = MaterialTheme.gameColors.meeting,
+        emphasized = true,
+    ) {
         Column(
             Modifier.padding(GameSpacing.md),
             verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
@@ -249,7 +265,11 @@ private fun ReviewPanel(state: GameplayUiState, viewModel: GameplayViewModel) {
 private fun EjectionVotingPanel(state: GameplayUiState, viewModel: GameplayViewModel) {
     val snapshot = state.snapshot ?: return
     val meeting = snapshot.meeting ?: return
-    Card(Modifier.fillMaxWidth()) {
+    SignalCard(
+        Modifier.fillMaxWidth(),
+        accent = MaterialTheme.gameColors.voting,
+        emphasized = true,
+    ) {
         Column(
             Modifier.padding(GameSpacing.md),
             verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
@@ -363,7 +383,11 @@ private fun MeetingResultPanel(state: GameplayUiState) {
         result.ejectedParticipantId?.let { id ->
             snapshot.participants.firstOrNull { it.id == id }?.nickname
         }
-    Card(Modifier.fillMaxWidth()) {
+    SignalCard(
+        Modifier.fillMaxWidth(),
+        accent = MaterialTheme.gameColors.results,
+        emphasized = true,
+    ) {
         Column(
             Modifier.padding(GameSpacing.md).semantics { liveRegion = LiveRegionMode.Assertive },
             verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
@@ -493,7 +517,10 @@ private fun FinalResultScreen(
                         shrinkVertically(tween(GameMotion.StandardMillis)),
         ) {
             if (summary != null)
-                Card(Modifier.fillMaxWidth().widthIn(max = 720.dp)) {
+                SignalCard(
+                    Modifier.fillMaxWidth().widthIn(max = 720.dp),
+                    accent = MaterialTheme.gameColors.results,
+                ) {
                     Column(
                         Modifier.padding(GameSpacing.md),
                         verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
@@ -801,7 +828,7 @@ private fun KillControl(
     state: GameplayUiState,
     viewModel: GameplayViewModel,
 ) {
-    Card(Modifier.fillMaxWidth()) {
+    SignalCard(Modifier.fillMaxWidth(), accent = MaterialTheme.colorScheme.error) {
         Column(
             Modifier.padding(GameSpacing.md),
             verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
@@ -986,7 +1013,7 @@ private fun EvidenceGalleryScreen(state: GameplayUiState, viewModel: GameplayVie
 
 @Composable
 private fun EvidenceCard(submission: Submission, viewModel: GameplayViewModel) {
-    Card(Modifier.fillMaxWidth()) {
+    SignalCard(Modifier.fillMaxWidth(), accent = MaterialTheme.gameColors.tasks) {
         Column(
             Modifier.padding(GameSpacing.md),
             verticalArrangement = Arrangement.spacedBy(GameSpacing.xs),

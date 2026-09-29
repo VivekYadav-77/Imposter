@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -19,9 +18,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.impostergame.designsystem.R
-import com.impostergame.designsystem.theme.GameShapes
 import com.impostergame.designsystem.theme.GameSpacing
 import com.impostergame.designsystem.theme.LocalGameSemanticColors
+import com.impostergame.designsystem.theme.gameColors
 
 enum class UploadState {
     Idle,
@@ -44,11 +43,16 @@ fun TaskCard(
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null,
 ) {
-    Surface(
+    SignalCard(
         modifier = modifier.fillMaxWidth(),
-        shape = GameShapes.medium,
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 1.dp,
+        accent =
+            when (uploadState) {
+                UploadState.Complete -> LocalGameSemanticColors.current.success
+                UploadState.RetryableFailure -> LocalGameSemanticColors.current.warning
+                UploadState.TerminalFailure -> LocalGameSemanticColors.current.danger
+                else -> MaterialTheme.gameColors.tasks
+            },
+        emphasized = uploadState !in setOf(UploadState.Idle, UploadState.Complete),
     ) {
         Column(
             modifier = Modifier.padding(GameSpacing.md),

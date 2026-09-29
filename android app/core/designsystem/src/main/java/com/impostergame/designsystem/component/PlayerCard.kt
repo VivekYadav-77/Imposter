@@ -1,10 +1,14 @@
 package com.impostergame.designsystem.component
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -12,6 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
@@ -38,7 +43,11 @@ fun PlayerCard(
     enabled: Boolean = true,
     onSelected: (() -> Unit)? = null,
 ) {
-    val colorName = stringResource(PlayerColors.fromTransportId(playerColorId).nameResource)
+    val playerColor = PlayerColors.fromTransportId(playerColorId)
+    val colorName = stringResource(playerColor.nameResource)
+    val accent =
+        if (MaterialTheme.colorScheme.background.luminance() < 0.5f) playerColor.dark
+        else playerColor.light
     val selectedDescription = stringResource(R.string.player_status_selected)
     val notSelectedDescription = stringResource(R.string.state_not_selected)
     val selectionModifier =
@@ -62,7 +71,8 @@ fun PlayerCard(
                 stateDescription = if (selected) selectedDescription else notSelectedDescription
             },
         shape = GameShapes.medium,
-        color = MaterialTheme.colorScheme.surface,
+        color = if (selected) accent.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surface,
+        tonalElevation = if (selected) 3.dp else 1.dp,
         border =
             androidx.compose.foundation.BorderStroke(if (selected) 3.dp else 1.dp, borderColor),
     ) {
@@ -71,6 +81,7 @@ fun PlayerCard(
             horizontalArrangement = Arrangement.spacedBy(GameSpacing.md),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            Box(Modifier.width(4.dp).height(48.dp).background(accent, GameShapes.pill))
             PlayerAvatar(
                 transportId = playerColorId,
                 size = 56.dp,
@@ -88,7 +99,7 @@ fun PlayerCard(
                 Text(
                     text = colorName,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = accent,
                 )
             }
             Column(horizontalAlignment = Alignment.End) {
@@ -102,9 +113,5 @@ fun PlayerCard(
 
 @Composable
 private fun StatusLabel(label: String) {
-    Text(
-        text = label,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.primary,
-    )
+    SignalChip(label)
 }

@@ -88,10 +88,15 @@ import com.impostergame.data.model.RoomSnapshot
 import com.impostergame.designsystem.avatar.PlayerAvatar
 import com.impostergame.designsystem.avatar.PlayerColors
 import com.impostergame.designsystem.avatar.PlayerStatus
+import com.impostergame.designsystem.component.BrandHeader
 import com.impostergame.designsystem.component.ConnectionState
 import com.impostergame.designsystem.component.GameButton
+import com.impostergame.designsystem.component.GameEyebrow
 import com.impostergame.designsystem.component.GameOutlinedButton
 import com.impostergame.designsystem.component.PlayerCard
+import com.impostergame.designsystem.component.SignalBackground
+import com.impostergame.designsystem.component.SignalCard
+import com.impostergame.designsystem.component.SignalChip
 import com.impostergame.designsystem.theme.GameAccessibilityPreferences
 import com.impostergame.designsystem.theme.GameMotion
 import com.impostergame.designsystem.theme.GameShapes
@@ -216,39 +221,104 @@ private fun HomeScreen(
             },
         )
     }
-    CenteredScrollableColumn {
-        PlayerAvatar("wolf", 112.dp, "Imposter Game")
-        Text(
-            "Ready to play?",
-            modifier = Modifier.semantics { heading() },
-            style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.Black,
-        )
-        Text(
-            "Join friends in a private room. No account needed.",
-            style = MaterialTheme.typography.bodyLarge,
-            textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Message(message)
-        if (resumeFailed) {
-            GameButton(
-                "Retry secure resume",
-                onRetry,
-                Modifier.fillMaxWidth(),
-                loading = loading,
+    SignalBackground {
+        Column(
+            modifier =
+                Modifier.fillMaxSize()
+                    .safeDrawingPadding()
+                    .verticalScroll(rememberScrollState())
+                    .padding(GameSpacing.lg)
+                    .widthIn(max = 760.dp)
+                    .align(Alignment.TopCenter),
+            verticalArrangement = Arrangement.spacedBy(GameSpacing.lg),
+        ) {
+            BrandHeader()
+            GameEyebrow("A live social deduction game")
+            Column(verticalArrangement = Arrangement.spacedBy(GameSpacing.xs)) {
+                Text(
+                    "Everyone’s watching.",
+                    modifier = Modifier.semantics { heading() },
+                    style = MaterialTheme.typography.displayMedium,
+                    fontWeight = FontWeight.Black,
+                )
+                Text(
+                    "Someone’s lying.",
+                    style = MaterialTheme.typography.displayMedium,
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.gameColors.accentStrong,
+                )
+            }
+            Text(
+                "Join friends, finish missions, read the room, and expose the imposters before the final vote.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+            ) {
+                SignalChip("18+")
+                SignalChip("Private rooms", Modifier.weight(1f))
+                SignalChip("Photos auto-delete", Modifier.weight(1f))
+            }
+            SignalCard(Modifier.fillMaxWidth(), emphasized = true) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(GameSpacing.lg),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(GameSpacing.lg),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        PlayerAvatar("wolf", 104.dp, "Crewmate")
+                        SignalChip("LIVE", Modifier.align(Alignment.BottomCenter))
+                    }
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+                    ) {
+                        GameEyebrow("No account needed")
+                        Text(
+                            "Your next room is one code away.",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            "Fast entry, clear phases, private roles, and a decisive result.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+            Message(message)
+            if (resumeFailed) {
+                GameButton(
+                    "Retry secure resume",
+                    onRetry,
+                    Modifier.fillMaxWidth(),
+                    loading = loading,
+                )
+            }
+            GameButton("Join a room  →", onJoin, Modifier.fillMaxWidth())
+            GameOutlinedButton("Create a private room", onCreate, Modifier.fillMaxWidth())
+            GameOutlinedButton("App settings", onSettings, Modifier.fillMaxWidth())
+            SignalCard(Modifier.fillMaxWidth()) {
+                Column(
+                    Modifier.padding(GameSpacing.md),
+                    verticalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+                ) {
+                    GameEyebrow("Privacy by design")
+                    Text(
+                        "Roles stay private, room access is controlled, and game photos are removed automatically.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            TextButton(
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+                onClick = { confirmDiagnostics = true },
+            ) {
+                Text("Share support diagnostics")
+            }
         }
-        GameButton("Join room", onJoin, Modifier.fillMaxWidth())
-        GameOutlinedButton("Create room", onCreate, Modifier.fillMaxWidth())
-        GameOutlinedButton("App settings", onSettings, Modifier.fillMaxWidth())
-        HorizontalDivider(Modifier.padding(vertical = GameSpacing.sm))
-        Text(
-            "Privacy and accessibility protections are applied automatically during play.",
-            textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        TextButton(onClick = { confirmDiagnostics = true }) { Text("Share support diagnostics") }
     }
 }
 
@@ -262,95 +332,114 @@ private fun SettingsScreen(
     onReduceMotionChanged: (Boolean) -> Unit,
     onHighContrastChanged: (Boolean) -> Unit,
 ) {
-    Scaffold(
-        modifier = Modifier.safeDrawingPadding(),
-        topBar = {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(GameSpacing.md),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(GameSpacing.sm),
-            ) {
-                TextButton(onClick = onBack) { Text("Back") }
-                Text(
-                    "App settings",
-                    modifier = Modifier.semantics { heading() },
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
-        },
-    ) { padding ->
-        Column(
-            modifier =
-                Modifier.padding(padding)
-                    .verticalScroll(rememberScrollState())
-                    .padding(GameSpacing.lg)
-                    .widthIn(max = 680.dp)
-                    .fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(GameSpacing.md),
-        ) {
-            Text("Appearance", style = MaterialTheme.typography.headlineLarge)
-            Text(
-                "Choose how the game looks on this device.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            ThemeMode.entries.forEach { mode ->
-                val label =
-                    when (mode) {
-                        ThemeMode.System -> "Follow device"
-                        ThemeMode.Light -> "Light"
-                        ThemeMode.Dark -> "Dark"
-                    }
+    SignalBackground {
+        Scaffold(
+            modifier = Modifier.fillMaxSize().safeDrawingPadding(),
+            containerColor = androidx.compose.ui.graphics.Color.Transparent,
+            topBar = {
                 Row(
-                    modifier =
-                        Modifier.fillMaxWidth()
-                            .selectable(
-                                selected = preferences.themeMode == mode,
-                                role = Role.RadioButton,
-                                onClick = { onThemeModeChanged(mode) },
-                            )
-                            .padding(vertical = GameSpacing.sm),
+                    modifier = Modifier.fillMaxWidth().padding(GameSpacing.md),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(GameSpacing.sm),
                 ) {
-                    RadioButton(
-                        selected = preferences.themeMode == mode,
-                        onClick = null,
+                    TextButton(onClick = onBack) { Text("Back") }
+                    Text(
+                        "App settings",
+                        modifier = Modifier.semantics { heading() },
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
                     )
-                    Text(label, style = MaterialTheme.typography.bodyLarge)
                 }
+            },
+        ) { padding ->
+            Column(
+                modifier =
+                    Modifier.padding(padding)
+                        .verticalScroll(rememberScrollState())
+                        .padding(GameSpacing.lg)
+                        .widthIn(max = 680.dp)
+                        .fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(GameSpacing.md),
+            ) {
+                BrandHeader()
+                GameEyebrow("Make the room yours")
+                Text(
+                    "App settings",
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.Black,
+                )
+                Text("Appearance", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    "Choose how the game looks on this device.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                SignalCard(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(GameSpacing.md)) {
+                        ThemeMode.entries.forEach { mode ->
+                            val label =
+                                when (mode) {
+                                    ThemeMode.System -> "Follow device"
+                                    ThemeMode.Light -> "Light"
+                                    ThemeMode.Dark -> "Dark"
+                                }
+                            Row(
+                                modifier =
+                                    Modifier.fillMaxWidth()
+                                        .selectable(
+                                            selected = preferences.themeMode == mode,
+                                            role = Role.RadioButton,
+                                            onClick = { onThemeModeChanged(mode) },
+                                        )
+                                        .padding(vertical = GameSpacing.sm),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(GameSpacing.sm),
+                            ) {
+                                RadioButton(
+                                    selected = preferences.themeMode == mode,
+                                    onClick = null,
+                                )
+                                Text(label, style = MaterialTheme.typography.bodyLarge)
+                            }
+                        }
+                    }
+                }
+                GameEyebrow("Feedback and accessibility")
+                SignalCard(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(horizontal = GameSpacing.md)) {
+                        PreferenceSwitchRow(
+                            title = "Game sounds",
+                            description =
+                                "Play short cues for game events. Important states still appear on screen.",
+                            checked = preferences.soundEnabled,
+                            onChecked = onSoundChanged,
+                        )
+                        PreferenceSwitchRow(
+                            title = "Haptic feedback",
+                            description =
+                                "Use optional touch feedback for confirmations and alerts.",
+                            checked = preferences.hapticsEnabled,
+                            onChecked = onHapticsChanged,
+                        )
+                        PreferenceSwitchRow(
+                            title = "Reduce motion",
+                            description = "Remove nonessential movement and animated emphasis.",
+                            checked = preferences.reduceMotion,
+                            onChecked = onReduceMotionChanged,
+                        )
+                        PreferenceSwitchRow(
+                            title = "High contrast",
+                            description =
+                                "Increase text and boundary contrast in the selected theme.",
+                            checked = preferences.highContrast,
+                            onChecked = onHighContrastChanged,
+                        )
+                    }
+                }
+                Text(
+                    "These preferences stay on this device and never contain room, role, vote, or photo data.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
-            HorizontalDivider(Modifier.padding(vertical = GameSpacing.sm))
-            Text("Feedback and accessibility", style = MaterialTheme.typography.headlineLarge)
-            PreferenceSwitchRow(
-                title = "Game sounds",
-                description =
-                    "Play short cues for game events. Important states still appear on screen.",
-                checked = preferences.soundEnabled,
-                onChecked = onSoundChanged,
-            )
-            PreferenceSwitchRow(
-                title = "Haptic feedback",
-                description = "Use optional touch feedback for confirmations and alerts.",
-                checked = preferences.hapticsEnabled,
-                onChecked = onHapticsChanged,
-            )
-            PreferenceSwitchRow(
-                title = "Reduce motion",
-                description = "Remove nonessential movement and animated emphasis.",
-                checked = preferences.reduceMotion,
-                onChecked = onReduceMotionChanged,
-            )
-            PreferenceSwitchRow(
-                title = "High contrast",
-                description = "Increase text and boundary contrast in the selected theme.",
-                checked = preferences.highContrast,
-                onChecked = onHighContrastChanged,
-            )
-            Text(
-                "These preferences stay on this device and never contain room, role, vote, or photo data.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }
@@ -415,102 +504,128 @@ private fun EntryScreen(state: EntryLobbyUiState, viewModel: EntryLobbyViewModel
             null -> Unit
         }
     }
-    Scaffold(
-        modifier = Modifier.safeDrawingPadding().imePadding(),
-        topBar = {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(GameSpacing.md),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                TextButton(onClick = viewModel::showHome) { Text("Back") }
-                Text(
-                    if (joining) "Join room" else "Create room",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
-        },
-        bottomBar = {
-            Surface(shadowElevation = 8.dp) {
-                GameButton(
-                    if (joining) "Join room" else "Create room",
-                    viewModel::submitEntry,
-                    Modifier.fillMaxWidth().padding(GameSpacing.md),
-                    loading = state.loading,
-                )
-            }
-        },
-    ) { padding ->
-        Column(
-            modifier =
-                Modifier.padding(padding)
-                    .verticalScroll(scrollState)
-                    .padding(GameSpacing.lg)
-                    .widthIn(max = 680.dp)
-                    .fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(GameSpacing.md),
-        ) {
-            if (joining) {
-                OutlinedTextField(
-                    value = state.form.roomCode,
-                    onValueChange = viewModel::setCode,
-                    modifier = Modifier.fillMaxWidth().focusRequester(codeFocus),
-                    label = { Text("Room code") },
-                    supportingText = { Text(state.form.codeError ?: "Six letters or numbers") },
-                    isError = state.form.codeError != null,
-                    singleLine = true,
-                    keyboardOptions =
-                        KeyboardOptions(
-                            capitalization = KeyboardCapitalization.Characters,
-                            imeAction = ImeAction.Next,
-                        ),
-                    keyboardActions = KeyboardActions(onNext = { viewModel.fetchJoinOptions() }),
-                )
-                GameOutlinedButton(
-                    "Check room",
-                    viewModel::fetchJoinOptions,
-                    Modifier.fillMaxWidth(),
-                    enabled = !state.loading,
-                )
-                state.form.spotsRemaining?.let {
-                    Text("$it ${if (it == 1) "spot" else "spots"} remaining")
+    SignalBackground {
+        Scaffold(
+            modifier = Modifier.fillMaxSize().safeDrawingPadding().imePadding(),
+            containerColor = androidx.compose.ui.graphics.Color.Transparent,
+            topBar = {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(GameSpacing.md),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(onClick = viewModel::showHome) { Text("Back") }
+                    Text(
+                        if (joining) "Join room" else "Create room",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                    )
                 }
-            }
-            OutlinedTextField(
-                value = state.form.nickname,
-                onValueChange = viewModel::setNickname,
-                modifier = Modifier.fillMaxWidth().focusRequester(nicknameFocus),
-                label = { Text("Nickname") },
-                supportingText = { Text(state.form.nicknameError ?: "1–24 characters") },
-                isError = state.form.nicknameError != null,
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                keyboardActions =
-                    KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) }),
-            )
-            ColorPicker(
-                state.form.availableColorIds,
-                state.form.selectedColorId,
-                viewModel::setColor,
-                Modifier.focusRequester(colorFocus).focusable(),
-            )
-            ConsentRow("I meet the age requirement.", state.form.ageAccepted) {
-                viewModel.setConsent(ConsentKind.AGE, it)
-            }
-            ConsentRow(
-                "I have permission to capture and share game photos.",
-                state.form.photoAccepted,
+            },
+            bottomBar = {
+                Surface(shadowElevation = 8.dp, color = MaterialTheme.gameColors.surfaceHighest) {
+                    GameButton(
+                        if (joining) "Join room" else "Create room",
+                        viewModel::submitEntry,
+                        Modifier.fillMaxWidth().padding(GameSpacing.md),
+                        loading = state.loading,
+                    )
+                }
+            },
+        ) { padding ->
+            Column(
+                modifier =
+                    Modifier.padding(padding)
+                        .verticalScroll(scrollState)
+                        .padding(GameSpacing.lg)
+                        .widthIn(max = 680.dp)
+                        .fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(GameSpacing.md),
             ) {
-                viewModel.setConsent(ConsentKind.PHOTO, it)
+                BrandHeader()
+                GameEyebrow(if (joining) "Enter a private room" else "Host a private room")
+                Text(
+                    if (joining) "Step into the room." else "Set the stage.",
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.Black,
+                )
+                Text(
+                    if (joining) "Use the invite code, choose your identity, and join the crew."
+                    else "Choose your identity now. You can tune the game once the lobby opens.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (joining) {
+                    OutlinedTextField(
+                        value = state.form.roomCode,
+                        onValueChange = viewModel::setCode,
+                        modifier = Modifier.fillMaxWidth().focusRequester(codeFocus),
+                        label = { Text("Room code") },
+                        supportingText = { Text(state.form.codeError ?: "Six letters or numbers") },
+                        isError = state.form.codeError != null,
+                        singleLine = true,
+                        keyboardOptions =
+                            KeyboardOptions(
+                                capitalization = KeyboardCapitalization.Characters,
+                                imeAction = ImeAction.Next,
+                            ),
+                        keyboardActions =
+                            KeyboardActions(onNext = { viewModel.fetchJoinOptions() }),
+                    )
+                    GameOutlinedButton(
+                        "Check room",
+                        viewModel::fetchJoinOptions,
+                        Modifier.fillMaxWidth(),
+                        enabled = !state.loading,
+                    )
+                    state.form.spotsRemaining?.let {
+                        Text("$it ${if (it == 1) "spot" else "spots"} remaining")
+                    }
+                }
+                OutlinedTextField(
+                    value = state.form.nickname,
+                    onValueChange = viewModel::setNickname,
+                    modifier = Modifier.fillMaxWidth().focusRequester(nicknameFocus),
+                    label = { Text("Nickname") },
+                    supportingText = { Text(state.form.nicknameError ?: "1–24 characters") },
+                    isError = state.form.nicknameError != null,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    keyboardActions =
+                        KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) }),
+                )
+                SignalCard(Modifier.fillMaxWidth()) {
+                    ColorPicker(
+                        state.form.availableColorIds,
+                        state.form.selectedColorId,
+                        viewModel::setColor,
+                        Modifier.focusRequester(colorFocus).focusable().padding(GameSpacing.md),
+                    )
+                }
+                GameEyebrow("Consent and privacy")
+                SignalCard(Modifier.fillMaxWidth()) {
+                    Column(
+                        Modifier.padding(GameSpacing.md),
+                        verticalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+                    ) {
+                        ConsentRow("I meet the age requirement.", state.form.ageAccepted) {
+                            viewModel.setConsent(ConsentKind.AGE, it)
+                        }
+                        ConsentRow(
+                            "I have permission to capture and share game photos.",
+                            state.form.photoAccepted,
+                        ) {
+                            viewModel.setConsent(ConsentKind.PHOTO, it)
+                        }
+                        ConsentRow("I accept the privacy notice.", state.form.privacyAccepted) {
+                            viewModel.setConsent(ConsentKind.PRIVACY, it)
+                        }
+                    }
+                }
+                Message(
+                    state.message,
+                    Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
+                )
+                Spacer(Modifier.height(GameSpacing.xl))
             }
-            ConsentRow("I accept the privacy notice.", state.form.privacyAccepted) {
-                viewModel.setConsent(ConsentKind.PRIVACY, it)
-            }
-            Message(
-                state.message,
-                Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
-            )
-            Spacer(Modifier.height(GameSpacing.xl))
         }
     }
 }
@@ -625,34 +740,36 @@ private fun LobbyScreen(
             viewModel.clearAnnouncement()
         }
     }
-    BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
-        val twoPane = maxWidth >= 600.dp || maxHeight < 480.dp
-        Column(Modifier.fillMaxSize()) {
-            LobbyHeader(room, onCopyCode, onShareCode, viewModel::requestLeave)
-            if (state.connectionState != ConnectionState.Connected) {
-                Message(
-                    if (state.connectionState == ConnectionState.Offline) {
-                        "Offline. Room details will refresh when the connection returns."
-                    } else {
-                        "Reconnecting. You can still read the latest room details."
-                    },
-                    Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                )
-            }
-            Message(state.announce, Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-            Message(state.message)
-            if (twoPane) {
-                Row(Modifier.weight(1f).fillMaxWidth()) {
-                    Roster(room, Modifier.weight(1f).fillMaxHeight())
-                    LobbySettings(state, viewModel, Modifier.weight(1f).fillMaxHeight())
+    SignalBackground(accent = MaterialTheme.gameColors.lobby) {
+        BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
+            val twoPane = maxWidth >= 600.dp || maxHeight < 480.dp
+            Column(Modifier.fillMaxSize()) {
+                LobbyHeader(room, onCopyCode, onShareCode, viewModel::requestLeave)
+                if (state.connectionState != ConnectionState.Connected) {
+                    Message(
+                        if (state.connectionState == ConnectionState.Offline) {
+                            "Offline. Room details will refresh when the connection returns."
+                        } else {
+                            "Reconnecting. You can still read the latest room details."
+                        },
+                        Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                    )
                 }
-            } else {
-                Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-                    Roster(room, scrollable = false)
-                    LobbySettings(state, viewModel, scrollable = false)
+                Message(state.announce, Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                Message(state.message)
+                if (twoPane) {
+                    Row(Modifier.weight(1f).fillMaxWidth()) {
+                        Roster(room, Modifier.weight(1f).fillMaxHeight())
+                        LobbySettings(state, viewModel, Modifier.weight(1f).fillMaxHeight())
+                    }
+                } else {
+                    Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                        Roster(room, scrollable = false)
+                        LobbySettings(state, viewModel, scrollable = false)
+                    }
                 }
+                LobbyAction(state, viewModel)
             }
-            LobbyAction(state, viewModel)
         }
     }
 }
@@ -664,10 +781,10 @@ private fun LobbyHeader(
     onShare: (String) -> Unit,
     onLeave: () -> Unit,
 ) {
-    Surface(
+    SignalCard(
         modifier = Modifier.fillMaxWidth().padding(GameSpacing.md),
-        color = MaterialTheme.gameColors.lobby.copy(alpha = 0.12f),
-        shape = GameShapes.large,
+        accent = MaterialTheme.gameColors.lobby,
+        emphasized = true,
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(GameSpacing.md),

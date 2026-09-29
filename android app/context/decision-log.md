@@ -192,6 +192,15 @@ Use IDs `ADR-A-###`. Status is `proposed`, `approved`, `superseded`, or `rejecte
 - **Reason:** A shared semantic language provides recognizable parity across adaptive native layouts while retaining Android accessibility, privacy, and server authority. Typed events and stable identities prevent recomposition or reconnect from replaying feedback.
 - **Consequences:** New UI must consume the design-system roles instead of hard-coded brand colors. Preferences never contain participant/session/game data. Sound and haptics remain optional and are never the only state signal. Replay, player-called meetings, and account/dashboard UI remain absent until ADR-A-008, ADR-A-006, and ADR-A-009 are approved.
 
+### ADR-A-025 — Native signal-room presentation layer
+
+- **Status:** approved by major Android presentation update request
+- **Date:** 2026-09-29
+- **Approver:** product owner requested the website as the completed design and feature reference
+- **Decision:** Express the website's signal-room character through reusable Compose primitives: an atmospheric but contrast-safe canvas, a code-native signal mark, editorial headings, bordered raised cards, compact trust/status chips, phase accents, player-color rails, pill actions, and reduced-motion-aware press feedback. Apply the layer to every existing server-supported flow while keeping adaptive scrolling, native form controls, canonical crewmate identities, and the established accessibility semantics.
+- **Reason:** Token parity alone left the Android surfaces visually generic. Reusable native primitives create a cohesive, interactive identity without copying brittle web geometry or weakening platform behavior.
+- **Consequences:** Feature screens should compose these shared primitives instead of inventing isolated card and background treatments. Decorative effects remain nonessential, cannot carry state by themselves, and must preserve high contrast and reduced motion. This decision does not authorize account/history, replay, or player-called-meeting features that remain gated by ADR-A-009, ADR-A-008, and ADR-A-006.
+
 ## Adding a decision
 
 Copy this structure:

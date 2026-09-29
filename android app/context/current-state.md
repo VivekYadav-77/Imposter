@@ -41,6 +41,7 @@
 - [x] Completed the server-supported host settings editor for voting/evidence visibility, meeting behavior, cooldowns, imposter count, task distribution, and specialist roles with local validation and authoritative Apply.
 - [x] Added branded lobby invitation/readiness treatment, phase-aware top bars, private role styling, bounded evidence zoom, and website-equivalent terminal-result hierarchy and metrics.
 - [x] Verified core token contrast in unit tests and verified the current APK plus preference persistence in light and dark modes on the physical Acer device.
+- [x] Added a reusable native signal-room layer (atmospheric canvas, brand mark/header, editorial eyebrow, signal cards/chips, pill controls, player accent rails, and phase-aware task/evidence/meeting/result surfaces) and applied it across home, settings, create/join, lobby, and gameplay without changing authoritative commands.
 - [ ] Player-called meetings, same-room replay, and native account/dashboard/history remain intentionally absent pending ADR-A-006, ADR-A-008, and ADR-A-009.
 
 ## Verification
@@ -56,6 +57,7 @@
 - `gradlew quality --no-parallel --max-workers=1` — passed after QA remediation.
 - `gradlew connectedQuality --no-parallel --max-workers=1` — app 6/6 and design-system 4/4 passed on Acer One 8 T4-82L, Android 13/API 33.
 - 2026-09-29 `gradlew spotlessApply quality connectedQuality --no-parallel --max-workers=1` — final combined gate passed (234 tasks) on Acer One 8 T4-82L/API 33 after the UI/UX parity implementation.
+- 2026-09-29 `gradlew spotlessApply quality :app:installDebug connectedQuality --no-parallel --max-workers=1` — signal-room refinement passed all 235 tasks on Acer One 8 T4-82L/API 33; the APK was reinstalled with the localhost reverse route and the home/create-join layouts were visually inspected at the device's native 800x1280 resolution.
 - The debug APK was installed, launched, and visually checked in both themes, including light-theme persistence after force-stop/relaunch; the final APK was reinstalled with the app returned to its default Follow device preference.
 - `npm run check` — formatting, lint, typecheck, 21 files/120 unit tests, OpenAPI, and realtime fixtures passed; the database-backed `tests/integration/task-packs.test.ts` also passed (3 tests).
 
