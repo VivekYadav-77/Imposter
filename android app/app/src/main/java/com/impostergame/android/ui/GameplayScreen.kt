@@ -15,7 +15,10 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
@@ -33,6 +36,7 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -48,6 +52,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -59,6 +64,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
@@ -85,10 +92,14 @@ import com.impostergame.android.gameplay.publicBallotsAllowed
 import com.impostergame.android.gameplay.winnerLabel
 import com.impostergame.data.model.Assignment
 import com.impostergame.data.model.GameSnapshot
+import com.impostergame.data.model.RoomSnapshot
 import com.impostergame.data.model.Submission
 import com.impostergame.designsystem.component.GameBackButton
 import com.impostergame.designsystem.component.GameButton
 import com.impostergame.designsystem.component.GameButtonStyle
+import com.impostergame.designsystem.component.GameEyebrow
+import com.impostergame.designsystem.component.GameGlyph
+import com.impostergame.designsystem.component.GameGlyphKind
 import com.impostergame.designsystem.component.GameOutlinedButton
 import com.impostergame.designsystem.component.GameTopBar
 import com.impostergame.designsystem.component.PlayerCard
@@ -100,12 +111,16 @@ import com.impostergame.designsystem.theme.GameMotion
 import com.impostergame.designsystem.theme.GameSpacing
 import com.impostergame.designsystem.theme.LocalGameAccessibilityPreferences
 import com.impostergame.designsystem.theme.gameColors
+import kotlinx.coroutines.delay
 
 @Composable
 fun GameplayScreen(
     viewModel: GameplayViewModel,
     onMinimizeApp: () -> Unit,
+    onReplayRoom: (RoomSnapshot) -> Unit,
     onReturnHome: () -> Unit,
+    onToggleSound: (() -> Unit)? = null,
+    onToggleTheme: (() -> Unit)? = null,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var confirmMinimize by rememberSaveable { mutableStateOf(false) }
@@ -165,20 +180,40 @@ fun GameplayScreen(
             GameplayDestination.MEETING -> MaterialTheme.gameColors.meeting
             GameplayDestination.RESULTS -> MaterialTheme.gameColors.results
         }
-    SignalBackground(accent = accent) {
+    SignalBackground(
+        accent = accent,
+        watermarkPlayerColorId = state.snapshot?.self?.avatarId,
+    ) {
         when (state.destination) {
             GameplayDestination.LOADING -> LoadingScreen("Loading the current game…")
-            GameplayDestination.SEALED_ROLE -> RoleRevealScreen(state, viewModel)
-            GameplayDestination.TASKS -> TaskPhaseScreen(state, viewModel)
-            GameplayDestination.EVIDENCE -> EvidenceGalleryScreen(state, viewModel)
-            GameplayDestination.MEETING -> MeetingScreen(state, viewModel)
-            GameplayDestination.RESULTS -> FinalResultScreen(state, viewModel, onReturnHome)
+            GameplayDestination.SEALED_ROLE ->
+                RoleRevealScreen(state, viewModel, onToggleSound, onToggleTheme)
+            GameplayDestination.TASKS ->
+                TaskPhaseScreen(state, viewModel, onToggleSound, onToggleTheme)
+            GameplayDestination.EVIDENCE ->
+                EvidenceGalleryScreen(state, viewModel, onToggleSound, onToggleTheme)
+            GameplayDestination.MEETING ->
+                MeetingScreen(state, viewModel, onToggleSound, onToggleTheme)
+            GameplayDestination.RESULTS ->
+                FinalResultScreen(
+                    state,
+                    viewModel,
+                    onReplayRoom,
+                    onReturnHome,
+                    onToggleSound,
+                    onToggleTheme,
+                )
         }
     }
 }
 
 @Composable
-private fun MeetingScreen(state: GameplayUiState, viewModel: GameplayViewModel) {
+private fun MeetingScreen(
+    state: GameplayUiState,
+    viewModel: GameplayViewModel,
+    onToggleSound: (() -> Unit)?,
+    onToggleTheme: (() -> Unit)?,
+) {
     val snapshot = state.snapshot ?: return LoadingScreen("Loading meeting…")
     val meeting = snapshot.meeting ?: return LoadingScreen("Waiting for meeting details…")
     state.meetingAlertId?.let {
@@ -210,6 +245,8 @@ private fun MeetingScreen(state: GameplayUiState, viewModel: GameplayViewModel) 
                 },
             playerColorId = snapshot.self.avatarId,
             connectionState = state.connectionState,
+            onToggleSound = onToggleSound,
+            onToggleTheme = onToggleTheme,
         )
         Column(
             Modifier.weight(1f)
@@ -218,6 +255,7 @@ private fun MeetingScreen(state: GameplayUiState, viewModel: GameplayViewModel) 
                 .padding(GameSpacing.md),
             verticalArrangement = Arrangement.spacedBy(GameSpacing.md),
         ) {
+            MeetingProgress(meeting.phase)
             Text(
                 snapshot.meetingReason(),
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
@@ -236,6 +274,60 @@ private fun MeetingScreen(state: GameplayUiState, viewModel: GameplayViewModel) 
                 "voting" -> EjectionVotingPanel(state, viewModel)
                 "resolved" -> MeetingResultPanel(state)
                 else -> Text("Waiting for the server to advance the meeting…")
+            }
+        }
+    }
+}
+
+@Composable
+private fun MeetingProgress(currentPhase: String) {
+    val steps =
+        listOf(
+            "discussion" to "Discuss",
+            "review" to "Review",
+            "voting" to "Vote",
+            "resolved" to "Result",
+        )
+    val currentIndex = steps.indexOfFirst { it.first == currentPhase }.coerceAtLeast(0)
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+    ) {
+        steps.forEachIndexed { index, (_, label) ->
+            val active = index == currentIndex
+            val complete = index < currentIndex
+            Surface(
+                modifier =
+                    Modifier.weight(1f).semantics {
+                        stateDescription =
+                            when {
+                                active -> "Current step"
+                                complete -> "Complete"
+                                else -> "Upcoming"
+                            }
+                    },
+                shape = RoundedCornerShape(18.dp),
+                color =
+                    if (active) MaterialTheme.gameColors.meeting.copy(alpha = 0.18f)
+                    else MaterialTheme.colorScheme.surface,
+                border =
+                    BorderStroke(
+                        if (active) 2.dp else 1.dp,
+                        if (active) MaterialTheme.gameColors.meeting
+                        else MaterialTheme.colorScheme.outlineVariant,
+                    ),
+            ) {
+                Text(
+                    text = if (complete) "✓ $label" else label,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = GameSpacing.sm),
+                    color =
+                        if (active || complete) MaterialTheme.gameColors.meeting
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                )
             }
         }
     }
@@ -320,70 +412,120 @@ private fun ReviewPanel(state: GameplayUiState, viewModel: GameplayViewModel) {
 private fun EjectionVotingPanel(state: GameplayUiState, viewModel: GameplayViewModel) {
     val snapshot = state.snapshot ?: return
     val meeting = snapshot.meeting ?: return
-    SignalCard(
+    Column(
         Modifier.fillMaxWidth(),
-        accent = MaterialTheme.gameColors.voting,
-        emphasized = true,
+        verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
     ) {
-        Column(
-            Modifier.padding(GameSpacing.md),
-            verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
-        ) {
-            Text(
-                "Vote to eject",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
+        Text(
+            "MEETING ${meeting.sequenceNumber}",
+            color = MaterialTheme.gameColors.accentStrong,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Black,
+        )
+        Text(
+            "Who do you trust least?",
+            modifier = Modifier.fillMaxWidth().semantics { heading() },
+            style = MaterialTheme.typography.displaySmall,
+            fontWeight = FontWeight.Black,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            if (state.mayEjectionVote())
+                "Choose carefully. Your ballot locks as soon as you confirm it."
+            else "Your ballot is locked. Watch the remaining votes arrive.",
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.titleMedium,
+            textAlign = TextAlign.Center,
+        )
+        if (meeting.hasCastEjectionVote || state.ejectionVoteSubmittedMeetingId == meeting.id) {
+            val name =
+                meeting.ownEjectionTargetParticipantId?.let { id ->
+                    meeting.eligibleParticipants.firstOrNull { it.id == id }?.nickname
+                } ?: "Skip"
+            Text("Your vote: $name — locked")
+        } else if (state.mayEjectionVote()) {
+            meeting.eligibleParticipants.forEach { participant ->
+                PlayerCard(
+                    nickname = participant.nickname,
+                    playerColorId = participant.avatarId,
+                    compact = true,
+                    selected =
+                        state.hasEjectionSelection &&
+                            state.selectedEjectionTargetId == participant.id,
+                    onSelected = { viewModel.selectEjectionTarget(participant.id) },
+                )
+            }
+            VoteChoice(
+                "Skip",
+                state.hasEjectionSelection && state.selectedEjectionTargetId == null,
+            ) {
+                viewModel.selectEjectionTarget(null)
+            }
+            GameButton(
+                "Review vote",
+                viewModel::requestEjectionVoteConfirmation,
+                Modifier.fillMaxWidth(),
+                enabled = state.hasEjectionSelection && !state.loading,
             )
-            Text("${meeting.votesCast} of ${meeting.requiredVotes} votes cast")
-            if (meeting.hasCastEjectionVote || state.ejectionVoteSubmittedMeetingId == meeting.id) {
-                val name =
-                    meeting.ownEjectionTargetParticipantId?.let { id ->
-                        meeting.eligibleParticipants.firstOrNull { it.id == id }?.nickname
-                    } ?: "Skip"
-                Text("Your vote: $name — locked")
-            } else if (state.mayEjectionVote()) {
-                meeting.eligibleParticipants.forEach { participant ->
-                    PlayerCard(
-                        nickname = participant.nickname,
-                        playerColorId = participant.avatarId,
-                        selected =
-                            state.hasEjectionSelection &&
-                                state.selectedEjectionTargetId == participant.id,
-                        onSelected = { viewModel.selectEjectionTarget(participant.id) },
-                    )
-                }
-                VoteChoice(
-                    "Skip — eject no one",
-                    state.hasEjectionSelection && state.selectedEjectionTargetId == null,
-                ) {
-                    viewModel.selectEjectionTarget(null)
-                }
-                GameButton(
-                    "Review vote",
-                    viewModel::requestEjectionVoteConfirmation,
-                    Modifier.fillMaxWidth(),
-                    enabled = state.hasEjectionSelection && !state.loading,
-                )
-            } else {
-                Text(
-                    if (state.remainingSeconds == 0L) "Time is up. Waiting for the server…"
-                    else "Observing the vote."
-                )
-            }
-            if (meeting.publicBallotsAllowed(snapshot.meetingRules.voteVisibility)) {
-                PublicBallots(meeting.publicVotes)
-            } else {
-                Text("Ballots are private. Only the aggregate count is shown.")
-            }
+        } else {
+            Text(
+                if (state.remainingSeconds == 0L) "Time is up. Waiting for the server…"
+                else "Observing the vote."
+            )
+        }
+        LinearProgressIndicator(
+            progress = { meeting.votesCast.toFloat() / meeting.requiredVotes.coerceAtLeast(1) },
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.gameColors.voting,
+            trackColor = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            "${meeting.votesCast} of ${meeting.requiredVotes} required ballots locked",
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        if (meeting.publicBallotsAllowed(snapshot.meetingRules.voteVisibility)) {
+            PublicBallots(meeting.publicVotes)
+        } else {
+            Text("Ballots are private. Only the aggregate count is shown.")
         }
     }
 }
 
 @Composable
 private fun VoteChoice(label: String, selected: Boolean, onClick: () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        RadioButton(selected = selected, onClick = onClick)
-        Text(label)
+    Surface(
+        modifier =
+            Modifier.fillMaxWidth()
+                .selectable(
+                    selected = selected,
+                    role = Role.RadioButton,
+                    onClick = onClick,
+                ),
+        shape = RoundedCornerShape(18.dp),
+        color =
+            if (selected) MaterialTheme.gameColors.voting.copy(alpha = 0.14f)
+            else MaterialTheme.colorScheme.surface,
+        border =
+            BorderStroke(
+                if (selected) 2.dp else 1.dp,
+                if (selected) MaterialTheme.gameColors.voting
+                else MaterialTheme.colorScheme.outlineVariant,
+            ),
+    ) {
+        Row(
+            modifier = Modifier.padding(GameSpacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            RadioButton(
+                selected = selected,
+                onClick = null,
+                modifier = Modifier.clearAndSetSemantics {},
+            )
+            Text(label)
+        }
     }
 }
 
@@ -480,136 +622,188 @@ private fun PublicBallots(ballots: List<com.impostergame.data.model.PublicVote>)
 private fun FinalResultScreen(
     state: GameplayUiState,
     viewModel: GameplayViewModel,
+    onReplayRoom: (RoomSnapshot) -> Unit,
     onReturnHome: () -> Unit,
+    onToggleSound: (() -> Unit)?,
+    onToggleTheme: (() -> Unit)?,
 ) {
     val snapshot = state.snapshot ?: return LoadingScreen("Loading final result…")
     val summary = snapshot.resultSummary
-    Column(
-        Modifier.fillMaxSize()
-            .safeDrawingPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(GameSpacing.xl),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(GameSpacing.md),
-    ) {
-        Text(
-            "CASE CLOSED",
-            color = MaterialTheme.gameColors.results,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Black,
+    var resultSecretTaps by rememberSaveable(snapshot.id) { mutableIntStateOf(0) }
+    Column(Modifier.fillMaxSize().safeDrawingPadding()) {
+        GameTopBar(
+            phase = "Results",
+            timerText = "",
+            timerDescription = "Final results",
+            nickname =
+                snapshot.participants.firstOrNull { it.id == snapshot.self.participantId }?.nickname
+                    ?: "You",
+            playerColorId = snapshot.self.avatarId,
+            connectionState = state.connectionState,
+            onToggleSound = onToggleSound,
+            onToggleTheme = onToggleTheme,
         )
-        Text(
-            snapshot.winnerLabel(),
-            modifier = Modifier.semantics { heading() },
-            style = MaterialTheme.typography.displaySmall,
-            fontWeight = FontWeight.Black,
-            textAlign = TextAlign.Center,
-        )
-        Text(snapshot.endReasonLabel(), textAlign = TextAlign.Center)
-        Text(
-            "You finished as ${snapshot.self.role.replaceFirstChar(Char::uppercase)} • ${snapshot.self.lifeStatus}"
-        )
-        if (summary != null) {
-            BoxWithConstraints(Modifier.fillMaxWidth().widthIn(max = 720.dp)) {
-                val compact = maxWidth < 520.dp
-                if (compact) {
-                    Column(verticalArrangement = Arrangement.spacedBy(GameSpacing.sm)) {
-                        ResultMetric("Players", summary.players.size.toString())
-                        ResultMetric(
-                            "Crew tasks",
-                            "${summary.completedTasks}/${summary.totalTasks}",
-                        )
-                        ResultMetric("Duration", formatDuration(summary.durationSeconds))
-                    }
-                } else {
-                    Row(horizontalArrangement = Arrangement.spacedBy(GameSpacing.sm)) {
-                        ResultMetric(
-                            "Players",
-                            summary.players.size.toString(),
-                            Modifier.weight(1f),
-                        )
-                        ResultMetric(
-                            "Crew tasks",
-                            "${summary.completedTasks}/${summary.totalTasks}",
-                            Modifier.weight(1f),
-                        )
-                        ResultMetric(
-                            "Duration",
-                            formatDuration(summary.durationSeconds),
-                            Modifier.weight(1f),
-                        )
-                    }
+        Column(
+            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(GameSpacing.xl),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(GameSpacing.md),
+        ) {
+            Text(
+                "CASE CLOSED",
+                color = MaterialTheme.gameColors.results,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Black,
+            )
+            Text(
+                snapshot.winnerLabel(),
+                modifier = Modifier.semantics { heading() },
+                style = MaterialTheme.typography.displaySmall,
+                fontWeight = FontWeight.Black,
+                textAlign = TextAlign.Center,
+            )
+            Text(snapshot.endReasonLabel(), textAlign = TextAlign.Center)
+            Text(
+                "You finished as ${snapshot.self.role.replaceFirstChar(Char::uppercase)} • ${snapshot.self.lifeStatus}"
+            )
+            if (summary != null) {
+                Row(
+                    Modifier.fillMaxWidth().widthIn(max = 720.dp),
+                    horizontalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+                ) {
+                    ResultMetric("Players", summary.players.size.toString(), Modifier.weight(1f))
+                    ResultMetric(
+                        "Crew tasks",
+                        "${summary.completedTasks}/${summary.totalTasks}",
+                        Modifier.weight(1f),
+                    )
+                    ResultMetric(
+                        "Duration",
+                        formatDuration(summary.durationSeconds),
+                        Modifier.weight(1f),
+                    )
                 }
             }
-        }
-        Message(state.message)
-        GameButton(
-            "Back to home",
-            onReturnHome,
-            Modifier.fillMaxWidth().widthIn(max = 520.dp),
-            loading = state.loading,
-        )
-        GameOutlinedButton(
-            if (state.resultDetailsExpanded) "Hide game details" else "Show game details",
-            viewModel::toggleResultDetails,
-            Modifier.fillMaxWidth().widthIn(max = 520.dp),
-        )
-        val reduceMotion = LocalGameAccessibilityPreferences.current.reduceMotion
-        AnimatedVisibility(
-            visible = state.resultDetailsExpanded && summary != null,
-            enter =
-                if (reduceMotion) EnterTransition.None
-                else
-                    fadeIn(tween(GameMotion.StandardMillis)) +
-                        expandVertically(
-                            animationSpec =
-                                tween(GameMotion.EmphasisMillis, easing = GameMotion.EmphasisEasing)
-                        ),
-            exit =
-                if (reduceMotion) ExitTransition.None
-                else
-                    fadeOut(tween(GameMotion.QuickMillis)) +
-                        shrinkVertically(tween(GameMotion.StandardMillis)),
-        ) {
-            if (summary != null)
-                SignalCard(
-                    Modifier.fillMaxWidth().widthIn(max = 720.dp),
-                    accent = MaterialTheme.gameColors.results,
-                ) {
-                    Column(
-                        Modifier.padding(GameSpacing.md),
-                        verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
+            Message(state.message)
+            GameOutlinedButton(
+                if (state.resultDetailsExpanded) "Hide full results" else "See full results",
+                viewModel::toggleResultDetails,
+                Modifier.fillMaxWidth().widthIn(max = 520.dp),
+            )
+            val reduceMotion = LocalGameAccessibilityPreferences.current.reduceMotion
+            AnimatedVisibility(
+                visible = state.resultDetailsExpanded && summary != null,
+                enter =
+                    if (reduceMotion) EnterTransition.None
+                    else
+                        fadeIn(tween(GameMotion.StandardMillis)) +
+                            expandVertically(
+                                animationSpec =
+                                    tween(
+                                        GameMotion.EmphasisMillis,
+                                        easing = GameMotion.EmphasisEasing,
+                                    )
+                            ),
+                exit =
+                    if (reduceMotion) ExitTransition.None
+                    else
+                        fadeOut(tween(GameMotion.QuickMillis)) +
+                            shrinkVertically(tween(GameMotion.StandardMillis)),
+            ) {
+                if (summary != null)
+                    SignalCard(
+                        Modifier.fillMaxWidth().widthIn(max = 720.dp),
+                        accent = MaterialTheme.gameColors.results,
                     ) {
-                        Text(
-                            "Game summary",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Text("Duration: ${formatDuration(summary.durationSeconds)}")
-                        Text("Tasks: ${summary.completedTasks}/${summary.totalTasks}")
-                        Text("Task pack: ${snapshot.taskPack.name}")
-                        summary.players.forEach { player ->
-                            PlayerCard(
-                                nickname = player.nickname,
-                                playerColorId = player.avatarId,
-                                status = null,
-                            )
+                        Column(
+                            Modifier.padding(GameSpacing.md),
+                            verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
+                        ) {
                             Text(
-                                "${player.role.replaceFirstChar(Char::uppercase)} • ${player.crewRole?.name ?: "No crew specialization"} • ${player.lifeStatus} • tasks ${player.completedTasks}/${player.totalTasks}"
+                                "Game summary",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
                             )
+                            Text("Duration: ${formatDuration(summary.durationSeconds)}")
+                            Text("Tasks: ${summary.completedTasks}/${summary.totalTasks}")
+                            Text("Task pack: ${snapshot.taskPack.name}")
+                            summary.players.forEach { player ->
+                                PlayerCard(
+                                    nickname = player.nickname,
+                                    playerColorId = player.avatarId,
+                                    status = null,
+                                    compact = true,
+                                )
+                                Text(
+                                    "${player.role.replaceFirstChar(Char::uppercase)} • ${player.crewRole?.name ?: "No crew specialization"} • ${player.lifeStatus} • tasks ${player.completedTasks}/${player.totalTasks}"
+                                )
+                            }
+                            val accepted =
+                                state.submissions.filter { it.processingStatus == "accepted" }
+                            Text(
+                                "Accepted evidence: ${accepted.size}",
+                                fontWeight = FontWeight.Bold,
+                            )
+                            accepted.forEach {
+                                Text("Evidence ${it.id.take(8)} • ${it.reviewStatus}")
+                            }
+                            val meeting = snapshot.meeting
+                            if (
+                                meeting != null &&
+                                    meeting.publicBallotsAllowed(
+                                        snapshot.meetingRules.voteVisibility
+                                    )
+                            )
+                                PublicBallots(meeting.result?.ballots.orEmpty())
                         }
-                        val accepted =
-                            state.submissions.filter { it.processingStatus == "accepted" }
-                        Text("Accepted evidence: ${accepted.size}", fontWeight = FontWeight.Bold)
-                        accepted.forEach { Text("Evidence ${it.id.take(8)} • ${it.reviewStatus}") }
-                        val meeting = snapshot.meeting
-                        if (
-                            meeting != null &&
-                                meeting.publicBallotsAllowed(snapshot.meetingRules.voteVisibility)
-                        )
-                            PublicBallots(meeting.result?.ballots.orEmpty())
                     }
+            }
+            TextButton(
+                onClick = {
+                    resultSecretTaps = (resultSecretTaps + 1).coerceAtMost(3)
+                    viewModel.playResultInteraction(resultSecretTaps >= 3)
                 }
+            ) {
+                Text(
+                    if (resultSecretTaps >= 3)
+                        "✦ The smallest operative was suspicious all along. ✦"
+                    else "◉"
+                )
+            }
+            SignalCard(
+                Modifier.fillMaxWidth().widthIn(max = 720.dp),
+                accent = MaterialTheme.gameColors.results,
+                emphasized = true,
+            ) {
+                Column(
+                    Modifier.padding(GameSpacing.lg),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
+                ) {
+                    Text(
+                        "Play again with this room?",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Black,
+                        textAlign = TextAlign.Center,
+                    )
+                    Text(
+                        "Return everyone to the lobby with the same room code, players, and game settings.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                    )
+                    GameButton(
+                        "Yes, play again",
+                        { viewModel.replay(onReplayRoom) },
+                        Modifier.fillMaxWidth(),
+                        loading = state.loading,
+                    )
+                    GameOutlinedButton(
+                        "Leave and return home",
+                        onReturnHome,
+                        Modifier.fillMaxWidth(),
+                        enabled = !state.loading,
+                    )
+                }
+            }
         }
     }
     LaunchedEffect(summary?.players?.size) {
@@ -626,7 +820,7 @@ private fun ResultMetric(label: String, value: String, modifier: Modifier = Modi
         contentColor = MaterialTheme.colorScheme.onSurface,
     ) {
         Column(
-            Modifier.padding(GameSpacing.md),
+            Modifier.padding(horizontal = GameSpacing.xs, vertical = GameSpacing.sm),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
@@ -635,7 +829,12 @@ private fun ResultMetric(label: String, value: String, modifier: Modifier = Modi
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Black,
             )
-            Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                label,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelMedium,
+                textAlign = TextAlign.Center,
+            )
         }
     }
 }
@@ -659,98 +858,140 @@ private fun SecureContent() {
 }
 
 @Composable
-private fun RoleRevealScreen(state: GameplayUiState, viewModel: GameplayViewModel) {
+private fun RoleRevealScreen(
+    state: GameplayUiState,
+    viewModel: GameplayViewModel,
+    onToggleSound: (() -> Unit)?,
+    onToggleTheme: (() -> Unit)?,
+) {
     val snapshot = state.snapshot ?: return LoadingScreen("Sealing your private role…")
     Surface(
-        modifier = Modifier.fillMaxSize().safeDrawingPadding(),
+        Modifier.fillMaxSize(),
         color = MaterialTheme.gameColors.privateCanvas,
         contentColor = MaterialTheme.gameColors.privateText,
     ) {
-        Column(
-            modifier =
-                Modifier.fillMaxSize()
+        Column(Modifier.fillMaxSize().safeDrawingPadding()) {
+            GameTopBar(
+                phase = "Role",
+                timerText = "",
+                timerDescription = "Private role",
+                nickname =
+                    snapshot.participants
+                        .firstOrNull { it.id == snapshot.self.participantId }
+                        ?.nickname ?: "You",
+                playerColorId = snapshot.self.avatarId,
+                connectionState = state.connectionState,
+                onToggleSound = onToggleSound,
+                onToggleTheme = onToggleTheme,
+            )
+            Column(
+                Modifier.weight(1f)
                     .verticalScroll(rememberScrollState())
-                    .padding(GameSpacing.xl),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(GameSpacing.lg, Alignment.CenterVertically),
-        ) {
-            if (!state.roleRevealed) {
-                Text(
-                    "Private role sealed",
-                    modifier = Modifier.semantics { heading() },
-                    style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.Black,
-                )
-                Text(
-                    "Check that nobody can see your screen before revealing your role.",
-                    textAlign = TextAlign.Center,
-                )
-                Surface(
-                    modifier =
-                        Modifier.size(220.dp)
-                            .semantics {
-                                contentDescription = "Hold to reveal private role"
-                                stateDescription = "Role sealed"
+                    .padding(horizontal = 34.dp, vertical = GameSpacing.xl),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement =
+                    Arrangement.spacedBy(GameSpacing.sm, Alignment.CenterVertically),
+            ) {
+                GameEyebrow("Private briefing", modifier = Modifier.align(Alignment.Start))
+                val holdModifier =
+                    Modifier.pointerInput(Unit) {
+                        detectTapGestures(
+                            onPress = {
+                                viewModel.revealRole()
+                                tryAwaitRelease()
+                                viewModel.resealRole()
                             }
-                            .pointerInput(Unit) {
-                                detectTapGestures(
-                                    onPress = {
-                                        viewModel.revealRole()
-                                        tryAwaitRelease()
-                                        viewModel.resealRole()
-                                    }
-                                )
-                            },
-                    shape = RoundedCornerShape(110.dp),
-                    color = MaterialTheme.gameColors.privateSurface,
-                    contentColor = MaterialTheme.gameColors.privateText,
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(
-                            "Press and hold\nto reveal",
-                            textAlign = TextAlign.Center,
-                            fontWeight = FontWeight.Bold,
                         )
                     }
+                AnimatedVisibility(
+                    visible = true,
+                    enter =
+                        if (LocalGameAccessibilityPreferences.current.reduceMotion)
+                            EnterTransition.None
+                        else
+                            fadeIn(tween(GameMotion.RevealMillis)) +
+                                scaleIn(
+                                    tween(
+                                        GameMotion.RevealMillis,
+                                        easing = GameMotion.EmphasisEasing,
+                                    ),
+                                    initialScale = 0.96f,
+                                ),
+                ) {
+                    Surface(
+                        modifier =
+                            Modifier.fillMaxWidth()
+                                .height(334.dp)
+                                .then(if (state.roleRevealed) Modifier else holdModifier)
+                                .semantics {
+                                    contentDescription =
+                                        if (state.roleRevealed) "Private role revealed"
+                                        else "Hold to reveal private role"
+                                    stateDescription =
+                                        if (state.roleRevealed) "Role revealed" else "Role sealed"
+                                },
+                        shape = RoundedCornerShape(30.dp),
+                        color = MaterialTheme.gameColors.privateSurface,
+                        border = BorderStroke(2.dp, MaterialTheme.gameColors.accentStrong),
+                        shadowElevation = 18.dp,
+                    ) {
+                        Column(
+                            Modifier.padding(GameSpacing.lg),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement =
+                                Arrangement.spacedBy(GameSpacing.md, Alignment.CenterVertically),
+                        ) {
+                            GameGlyph(
+                                GameGlyphKind.Status,
+                                tint = MaterialTheme.gameColors.accentStrong,
+                                size = 30.dp,
+                            )
+                            Text(
+                                if (state.roleRevealed) "Your role" else "Your role is sealed",
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                            if (state.roleRevealed) {
+                                val roleTitle =
+                                    if (snapshot.self.role == "imposter") "IMPOSTER" else "CREW"
+                                Text(
+                                    roleTitle,
+                                    modifier = Modifier.semantics { heading() },
+                                    style = MaterialTheme.typography.displayLarge,
+                                    fontWeight = FontWeight.Black,
+                                )
+                                Text(
+                                    if (snapshot.self.role == "imposter")
+                                        "Stay hidden. Complete your cover tasks."
+                                    else "Complete your tasks. Watch everyone.",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    textAlign = TextAlign.Center,
+                                )
+                                snapshot.self.crewRole?.let {
+                                    Text(
+                                        "${it.name} · ${it.specialization}",
+                                        color = MaterialTheme.gameColors.accentStrong,
+                                        textAlign = TextAlign.Center,
+                                    )
+                                }
+                            } else {
+                                Text(
+                                    "Press and hold to reveal",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
                 }
-                GameOutlinedButton(
-                    "Reveal without holding",
-                    viewModel::revealRole,
-                    Modifier.fillMaxWidth().widthIn(max = 420.dp),
-                )
-                if (state.roleViewed) {
-                    GameButton(
-                        "I’ve seen my role — continue",
-                        viewModel::acknowledgeRole,
-                        Modifier.fillMaxWidth().widthIn(max = 420.dp),
-                    )
-                }
-            } else {
-                val roleTitle = if (snapshot.self.role == "imposter") "Imposter" else "Crewmate"
-                Text(
-                    roleTitle,
-                    modifier = Modifier.semantics { heading() },
-                    style = MaterialTheme.typography.displayMedium,
-                    fontWeight = FontWeight.Black,
-                    color = MaterialTheme.gameColors.accentStrong,
-                )
-                snapshot.self.crewRole?.let { role ->
-                    Text(role.name, style = MaterialTheme.typography.headlineSmall)
-                    Text(role.specialization, fontWeight = FontWeight.Bold)
-                    Text(role.ability, textAlign = TextAlign.Center)
-                }
-                Text(
-                    if (snapshot.self.role == "imposter") {
-                        "Stay hidden and use only the actions the game authorizes."
-                    } else {
-                        "Complete your assigned tasks and help identify the imposters."
-                    },
-                    textAlign = TextAlign.Center,
-                )
                 GameButton(
-                    "I understand — hide role",
-                    viewModel::acknowledgeRole,
-                    Modifier.fillMaxWidth().widthIn(max = 420.dp),
+                    if (state.roleRevealed) "I understand" else "Reveal my role",
+                    if (state.roleRevealed) viewModel::acknowledgeRole else viewModel::revealRole,
+                    Modifier.fillMaxWidth(),
+                )
+                Text(
+                    "Your role will hide if you switch apps or lock your phone.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.bodySmall,
                 )
             }
         }
@@ -758,7 +999,12 @@ private fun RoleRevealScreen(state: GameplayUiState, viewModel: GameplayViewMode
 }
 
 @Composable
-private fun TaskPhaseScreen(state: GameplayUiState, viewModel: GameplayViewModel) {
+private fun TaskPhaseScreen(
+    state: GameplayUiState,
+    viewModel: GameplayViewModel,
+    onToggleSound: (() -> Unit)?,
+    onToggleTheme: (() -> Unit)?,
+) {
     val snapshot = state.snapshot ?: return LoadingScreen("Loading tasks…")
     state.selectedAssignmentId?.let { assignmentId ->
         snapshot.assignments
@@ -781,6 +1027,8 @@ private fun TaskPhaseScreen(state: GameplayUiState, viewModel: GameplayViewModel
                     ?: "You",
             playerColorId = snapshot.self.avatarId,
             connectionState = state.connectionState,
+            onToggleSound = onToggleSound,
+            onToggleTheme = onToggleTheme,
         )
         BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
             val twoPane = maxWidth >= 700.dp || maxHeight < 480.dp
@@ -853,36 +1101,60 @@ private fun TaskList(
         LinearProgressIndicator(
             progress = { snapshot.progress.percent / 100f },
             modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.gameColors.tasks,
+            trackColor = MaterialTheme.gameColors.tasks.copy(alpha = 0.16f),
         )
         Message(state.message)
         if (showKill && state.canKill) KillControl(snapshot, state, viewModel)
         if (sorted.isEmpty()) Text("You have no assigned tasks.")
         sorted.forEachIndexed { index, assignment ->
-            TaskCard(
-                title = assignment.description,
-                description =
-                    "${assignment.difficulty.replaceFirstChar(Char::uppercase)} task · " +
-                        if (assignment.status == "completed") {
-                            "proof accepted"
-                        } else {
-                            "open to add photo proof"
+            var entered by remember(assignment.id) { mutableStateOf(false) }
+            val reduceMotion = LocalGameAccessibilityPreferences.current.reduceMotion
+            LaunchedEffect(assignment.id, reduceMotion) {
+                if (!reduceMotion)
+                    delay((index.coerceAtMost(4) * GameMotion.StaggerMillis).toLong())
+                entered = true
+            }
+            AnimatedVisibility(
+                visible = entered,
+                enter =
+                    if (reduceMotion) EnterTransition.None
+                    else
+                        fadeIn(
+                            tween(GameMotion.ProgressMillis, easing = GameMotion.EmphasisEasing)
+                        ) +
+                            slideInVertically(
+                                tween(GameMotion.ProgressMillis, easing = GameMotion.EmphasisEasing)
+                            ) {
+                                it / 5
+                            },
+            ) {
+                TaskCard(
+                    title = assignment.description,
+                    description =
+                        "${assignment.difficulty.replaceFirstChar(Char::uppercase)} task · " +
+                            if (assignment.status == "completed") {
+                                "proof accepted"
+                            } else {
+                                "open to add photo proof"
+                            },
+                    taskNumber = index + 1,
+                    statusLabel = if (assignment.status == "completed") "Done" else "To do",
+                    uploadState =
+                        when {
+                            assignment.status == "completed" -> UploadState.Complete
+                            assignment.id == state.selectedAssignmentId ->
+                                state.uploadStage.toDesignUploadState()
+                            else -> UploadState.Idle
                         },
-                taskNumber = index + 1,
-                statusLabel = if (assignment.status == "completed") "Done" else "To do",
-                uploadState =
-                    when {
-                        assignment.status == "completed" -> UploadState.Complete
-                        assignment.id == state.selectedAssignmentId ->
-                            state.uploadStage.toDesignUploadState()
-                        else -> UploadState.Idle
-                    },
-                actionLabel =
-                    if (assignment.status == "completed" || !state.canSubmitEvidence) null
-                    else "Add evidence",
-                onAction =
-                    if (assignment.status == "completed" || !state.canSubmitEvidence) null
-                    else ({ viewModel.selectAssignment(assignment.id) }),
-            )
+                    actionLabel =
+                        if (assignment.status == "completed" || !state.canSubmitEvidence) null
+                        else "Add evidence",
+                    onAction =
+                        if (assignment.status == "completed" || !state.canSubmitEvidence) null
+                        else ({ viewModel.selectAssignment(assignment.id) }),
+                )
+            }
         }
     }
 }
@@ -930,27 +1202,30 @@ private fun GameActionBar(
             LinearProgressIndicator(
                 progress = { snapshot.progress.percent / 100f },
                 modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.gameColors.tasks,
+                trackColor = MaterialTheme.gameColors.tasks.copy(alpha = 0.16f),
             )
             Row(
                 modifier = Modifier.fillMaxWidth().padding(GameSpacing.sm),
                 horizontalArrangement = Arrangement.spacedBy(GameSpacing.xs),
             ) {
                 GameActionButton(
-                    symbol = "◎",
+                    icon = GameGlyphKind.Status,
                     label = "Status",
                     detail = "${snapshot.progress.percent}%",
                     onClick = viewModel::showStatus,
                     modifier = Modifier.weight(1f),
                 )
                 GameActionButton(
-                    symbol = "▣",
+                    icon = GameGlyphKind.Evidence,
                     label = "Evidence",
                     detail = "${snapshot.assignments.count { it.status == "completed" }} done",
                     onClick = viewModel::showEvidence,
                     modifier = Modifier.weight(1f),
                 )
                 GameActionButton(
-                    symbol = if (state.mayCallMeeting()) "!" else "◷",
+                    icon =
+                        if (state.mayCallMeeting()) GameGlyphKind.Meeting else GameGlyphKind.Timer,
                     label = "Meeting",
                     detail =
                         if (state.mayCallMeeting()) {
@@ -970,7 +1245,7 @@ private fun GameActionBar(
 
 @Composable
 private fun GameActionButton(
-    symbol: String,
+    icon: GameGlyphKind,
     label: String,
     detail: String,
     onClick: () -> Unit,
@@ -982,7 +1257,7 @@ private fun GameActionButton(
                 horizontalArrangement = Arrangement.spacedBy(GameSpacing.xs),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(symbol, style = MaterialTheme.typography.titleMedium)
+                GameGlyph(icon)
                 Text(
                     label,
                     style = MaterialTheme.typography.labelLarge,
@@ -1311,7 +1586,12 @@ private fun TaskEvidenceDialog(
 }
 
 @Composable
-private fun EvidenceGalleryScreen(state: GameplayUiState, viewModel: GameplayViewModel) {
+private fun EvidenceGalleryScreen(
+    state: GameplayUiState,
+    viewModel: GameplayViewModel,
+    onToggleSound: (() -> Unit)?,
+    onToggleTheme: (() -> Unit)?,
+) {
     val snapshot = state.snapshot ?: return LoadingScreen("Loading evidence…")
     state.selectedSubmissionId?.let {
         EvidencePreviewDialog(state, viewModel)
@@ -1339,6 +1619,8 @@ private fun EvidenceGalleryScreen(state: GameplayUiState, viewModel: GameplayVie
             connectionState = state.connectionState,
             navigationLabel = "Tasks",
             onNavigationClick = viewModel::showTasks,
+            onToggleSound = onToggleSound,
+            onToggleTheme = onToggleTheme,
         )
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(GameSpacing.md),

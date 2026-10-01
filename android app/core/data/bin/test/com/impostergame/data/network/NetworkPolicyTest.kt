@@ -399,6 +399,59 @@ class NetworkPolicyTest {
     }
 
     @Test
+    fun signedUploadResolvesRelativeInstructionsAgainstApiOrigin() = runTest {
+        val server = MockWebServer()
+        server.enqueue(MockResponse.Builder().code(200).build())
+        server.start()
+        try {
+            val intent =
+                UploadIntent(
+                    uploadId = "upload",
+                    expiresAt = "2026-09-28T01:00:00Z",
+                    method = "PUT",
+                    url = "/api/v1/evidence-objects/scoped-capability",
+                    headers = mapOf("Content-Type" to "image/jpeg"),
+                    policy = EvidencePolicy("v1", 18, 24, "Temporary evidence"),
+                )
+
+            val result =
+                SignedUploadClient(
+                        apiBaseUrl = server.url("/api/v1/"),
+                        allowInsecureLocalDebug = true,
+                    )
+                    .upload(intent, "image/jpeg", byteArrayOf(1, 2, 3))
+
+            assertTrue(result is ApiResult.Success)
+            assertEquals(
+                "/api/v1/evidence-objects/scoped-capability",
+                server.takeRequest().url.encodedPath,
+            )
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
+    fun signedUploadRejectsProtocolRelativeInstructions() = runTest {
+        val intent =
+            UploadIntent(
+                uploadId = "upload",
+                expiresAt = "2026-09-28T01:00:00Z",
+                method = "PUT",
+                url = "//uploads.example.test/object",
+                headers = emptyMap(),
+                policy = EvidencePolicy("v1", 18, 24, "Temporary evidence"),
+            )
+
+        val result =
+            SignedUploadClient(apiBaseUrl = "https://api.example.test/".toHttpUrl())
+                .upload(intent, "image/jpeg", byteArrayOf(1))
+
+        assertTrue(result is ApiResult.Failure)
+        assertTrue((result as ApiResult.Failure).error is ApiFailure.Contract)
+    }
+
+    @Test
     fun signedUploadRejectsUnknownMethodBeforeNetworkUse() = runTest {
         val intent =
             UploadIntent(

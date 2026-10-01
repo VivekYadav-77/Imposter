@@ -1,7 +1,7 @@
 # Current Android implementation state
 
-**Last updated:** 2026-09-29
-**Overall status:** Phase 8 controls, physical-device QA repairs, and the unblocked website-equivalent Android UI/UX scope are implemented; production acceptance remains blocked on the full multi-client matrix, staging, and owner/vendor/store approvals
+**Last updated:** 2026-10-01
+**Overall status:** Phase 8 remains active. The product owner has replaced the earlier native-adaptation direction with approval-gated exact mobile-website parity under ADR-A-028. The shared design-system foundation and first screen group (bootstrap/resume, Home, Settings) are implemented and locally verified; later screen groups are intentionally waiting for approval.
 **Active phase:** Phase 8 — end-to-end quality, release, and operations
 **Active plan:** [`../plan/phase-08-quality-release.md`](../plan/phase-08-quality-release.md)
 **Last verified commit:** not recorded; current worktree contains the Phase 8 implementation
@@ -36,6 +36,12 @@
 
 ## Website-equivalent Android UI/UX implementation
 
+- [x] Frozen the website as the exact presentation authority under ADR-A-028, superseding the former crewmate-only/native-adaptation visual constraints while retaining server authority, privacy, accessibility, and existing feature behavior.
+- [x] Bundled the website fonts (Public Sans Variable and Barlow Condensed 400/600/700/800) with OFL licenses; centralized audited palettes, mobile layout measurements, 10/18/30dp shapes, CSS-equivalent elevation roles, and 120/200/480ms motion roles.
+- [x] Added website-path icons, exact signal brand geometry, code-native signal-scene artwork, journey cards, phase glyphs/swatches, trust rows, and branded loading primitives.
+- [x] Rebuilt bootstrap/resume, the full mobile Home hierarchy, mobile menu/theme control, and Settings presentation. Home now includes the website hero copy, trust proof, meeting artwork, four-card journey, phase band, privacy callout, and footer. Existing Android-only settings and support diagnostics remain available in the website visual system.
+- [x] Verified this screen group with `spotlessApply quality`, `connectedQuality`, a debug APK install, physical light-theme screenshots, navigation semantics, and reduced-motion handling on Acer One 8 T4-82L/API 33.
+
 - [x] Replaced the former blue/cyan Material brand roles with semantic charcoal/amber light and dark schemes, phase colors, private surfaces, result colors, 10/18/30dp shape roles, and 120/200/480ms motion roles.
 - [x] Added persistent System/Light/Dark, sound, haptics, reduced-motion, and high-contrast app settings; system bars track the resolved theme.
 - [x] Added typed, deduplicated, rate-limited, foreground-only sound/haptic feedback for role, task, evidence, elimination, meeting, vote, result, and game lifecycle events without licensed-asset risk.
@@ -44,7 +50,9 @@
 - [x] Verified core token contrast in unit tests and verified the current APK plus preference persistence in light and dark modes on the physical Acer device.
 - [x] Added a reusable native signal-room layer (atmospheric canvas, brand mark/header, editorial eyebrow, signal cards/chips, pill controls, player accent rails, and phase-aware task/evidence/meeting/result surfaces) and applied it across home, settings, create/join, lobby, and gameplay without changing authoritative commands.
 - [x] Added server-authoritative player-called meetings plus a functional compact Status / Evidence / Meeting action rail, meeting readiness explanations, and confirmation flow under ADR-A-026.
-- [ ] Same-room replay and native account/dashboard/history remain intentionally absent pending ADR-A-008 and ADR-A-009.
+- [x] Refined lobby/meeting/task/result parity with paper-surface cards, phase watermarks, compact connection/header behavior, a meeting step tracker, compact vote targets, coherent vector action icons, responsive invite actions, and corrected single-node selection semantics.
+- [x] Added server-authoritative same-room replay from results through `POST /api/v1/rooms/current/replay`; the returned room snapshot resets gameplay state and restores lobby polling/settings under ADR-A-027.
+- [ ] Native account/dashboard/history remains intentionally absent pending ADR-A-009 because the current account API is cookie-only and has no approved native OAuth/token exchange.
 
 ## Verification
 
@@ -62,6 +70,11 @@
 - 2026-09-29 `gradlew spotlessApply quality :app:installDebug connectedQuality --no-parallel --max-workers=1` — signal-room refinement passed all 235 tasks on Acer One 8 T4-82L/API 33; the APK was reinstalled with the localhost reverse route and the home/create-join layouts were visually inspected at the device's native 800x1280 resolution.
 - 2026-09-29 physical Acer/API 33 navigation check — the Join screen exposed `← Home`; the device Back button returned to the rendered Home screen while `MainActivity` remained the resumed activity.
 - 2026-09-29 `gradlew spotlessApply quality connectedQuality --no-parallel --max-workers=1` — passed all 234 tasks with the new device-Back and labeled-button regression suite; a follow-up app connected test passed after migrating to the non-deprecated Compose test API, and the final debug APK was reinstalled on Acer/API 33.
+- 2026-09-29 parity follow-up — `gradlew spotlessApply quality` passed 145 tasks; `gradlew connectedQuality` passed 143 tasks; the targeted app connected suite passed after adding the unmerged-tree color-choice semantics regression. The current debug APK was installed and the light paper-surface hierarchy was visually checked on Acer/API 33.
+- 2026-10-01 lobby/gameplay website-parity pass — imported the website operative artwork and palette, rebuilt the lobby phase/invite/readiness/roster/settings/action hierarchy, compact role/task/vote/result surfaces, website motion timings, and deterministic PCM feedback recipes under ADR-A-029.
+- 2026-10-01 `gradlew spotlessApply quality` passed after the parity pass; `gradlew spotlessCheck connectedQuality :app:installDebug -PDEBUG_API_BASE_URL=http://127.0.0.1:3000` then passed all app/design-system connected tests and installed the APK on Acer One 8 T4-82L/API 33.
+- 2026-10-01 physical backend-connected path — created a host room, joined two independent participants, selected/applied a published task pack, started the authoritative game, revealed and acknowledged the private role, and reached the task command center. Lobby was captured at 800×1280; gameplay capture is intentionally blocked by the active secure-window privacy policy and was verified through rendered semantics and interaction.
+- The temporary local backend used for the physical path was stopped after verification; port 3000 is not left running.
 - The debug APK was installed, launched, and visually checked in both themes, including light-theme persistence after force-stop/relaunch; the final APK was reinstalled with the app returned to its default Follow device preference.
 - `npm run check` — formatting, lint, typecheck, 21 files/120 unit tests, OpenAPI, and realtime fixtures passed; the database-backed `tests/integration/task-packs.test.ts` also passed (3 tests).
 
@@ -72,40 +85,40 @@
 - The 6 GB development host can run one 2 GB emulator reliably, but the API 36 system image can briefly show a System UI ANR during first boot; run phone and tablet AVDs one at a time. This is an emulator/host-capacity condition, not an app crash.
 - Crash/ANR vendor, retention/residency, dashboards, alert owners, and synthetic routing need explicit approval. The code provides privacy-safe seams, not a configured monitoring service.
 - Privacy-policy URL, data-safety form, permission declaration, content rating, store listing/screenshots, countries/locales, support contact, and owner acceptance are external sign-offs.
-- ADR-A-005, ADR-A-007 through ADR-A-009 remain unresolved. Same-room replay and account history cannot be accepted as implemented; ADR-A-006 is resolved by ADR-A-026.
+- ADR-A-005, ADR-A-007, and ADR-A-009 remain unresolved. Same-room replay is resolved by ADR-A-027 and emergency meetings by ADR-A-026; native account history still requires a secure native account contract.
 
 ## Next action
 
-Configure the protected CI environment and approved staging origin, then execute the required independently controlled three-client gameplay matrix and produce the first signed internal candidate.
+Run the remaining independently controlled multi-client meeting, evidence, elimination, result, and replay acceptance path on approved staging and record website/Android reference comparisons where the secure-window policy permits capture.
 
 ## Session handoff
 
-**Date/time:** 2026-09-29 Asia/Calcutta
+**Date/time:** 2026-10-01 Asia/Calcutta
 **Agent/session:** Codex
 **Active phase:** Phase 8 — end-to-end quality, release, and operations
-**Milestone:** implement the unblocked scope in `implementationAppui/ux.md`
-**Status:** unblocked UI/UX implementation complete and locally/device verified; approval-gated product features and production-like multi-client acceptance remain open
+**Milestone:** complete lobby and gameplay website-parity pass
+**Status:** implementation, host/device gates, and lobby-to-task physical flow complete; production-like multi-client terminal-flow acceptance remains open
 
 ### Changed
 
-- `core:designsystem`: charcoal/amber themes, semantic phase/private/result colors, shared shape/motion roles, phase-aware top bar, and contrast tests.
-- `app`: persistent appearance/feedback settings, lifecycle-safe typed sound/haptics, complete host settings controls/validation, branded lobby readiness, private role styling, bounded evidence gesture API, and expanded result presentation.
-- `app` tests: preference parsing, feedback deduplication/rate limiting, and host-settings validation.
-- `context`: UI/UX implementation status, ADR-A-024, and updated traceability.
+- `core:designsystem`: exact website operative geometry/colors/names, website typography/tokens, compact phase bar, task cards, vectors, responsive roles, and updated semantics tests.
+- `app`: website lobby/gameplay hierarchy, private role reveal, task stagger/progress motion, voting/results presentation, and synthesized website sound/haptic recipes while retaining authoritative commands.
+- `app` tests: website sound-recipe coverage plus updated identity/navigation semantics.
+- `context`: parity implementation status, ADR-A-029, and updated traceability.
 
 ### Verified
 
-- `gradlew spotlessApply quality connectedQuality --no-parallel --max-workers=1` passes (234 tasks) on physical Acer/API 33.
-- Current debug APK installs and launches; dark and light visual checks pass and the selected theme survives force-stop/relaunch.
+- `gradlew spotlessApply quality` and the final `gradlew spotlessCheck connectedQuality :app:installDebug -PDEBUG_API_BASE_URL=http://127.0.0.1:3000 --no-parallel --max-workers=1` pass on physical Acer/API 33.
+- Current debug APK installs and launches; the physical backend-connected path reaches the rebuilt host lobby, private role reveal, and task command center.
 
 ### Decisions added
 
-- ADR-A-024 — Website-equivalent native brand, preferences, and feedback.
+- ADR-A-029 — Website-exact lobby/gameplay presentation and synthesized feedback.
 
 ### Remaining issues
 
 - APP-004 remains: run the independently controlled three-client gameplay/meeting/results/reconnect matrix on an approved production-like backend.
-- Replay and account/dashboard/history remain blocked on ADR-A-008 and ADR-A-009. Player-called meetings are now implemented through the existing server contract with no client-side authority.
+- Account/dashboard/history remains blocked on ADR-A-009. Replay and player-called meetings are now implemented through existing authoritative server contracts with no client-side authority.
 - Full TalkBack traversal, 200% font across every gameplay phase, API 26/31/36, and compact-landscape/tablet product acceptance still require the Phase 8 device matrix.
 
 ### Next action

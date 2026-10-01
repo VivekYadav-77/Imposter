@@ -9,6 +9,7 @@ import com.impostergame.android.feedback.GameFeedbackEvent
 import com.impostergame.android.feedback.GameFeedbackKind
 import com.impostergame.data.model.GamePhase
 import com.impostergame.data.model.GameSnapshot
+import com.impostergame.data.model.RoomSnapshot
 import com.impostergame.data.network.ApiFailure
 import com.impostergame.designsystem.component.ConnectionState
 import java.time.Clock
@@ -40,6 +41,7 @@ class GameplayViewModel(
     private var pendingFlag: PendingAction? = null
     private var pendingReviewVote: PendingAction? = null
     private var pendingEjectionVote: PendingAction? = null
+    private var pendingReplay: PendingAction? = null
     private var commandInFlight = false
     private val announcedMeetings = mutableSetOf<String>()
     private var refreshedExpiredDeadline: String? = null
@@ -504,6 +506,29 @@ class GameplayViewModel(
         it.copy(resultDetailsExpanded = !it.resultDetailsExpanded)
     }
 
+    fun replay(onSuccess: (RoomSnapshot) -> Unit) {
+        val snapshot = _state.value.snapshot ?: return
+        if (snapshot.phase !in setOf(GamePhase.GAME_OVER, GamePhase.ABANDONED)) return
+        val fingerprint = snapshot.id
+        val command =
+            pendingReplay?.takeIf { it.fingerprint == fingerprint }
+                ?: PendingAction(fingerprint, newKey()).also { pendingReplay = it }
+        launchOnce {
+            when (val result = gateway.replay(command.key)) {
+                is GatewayResult.Success -> {
+                    pendingReplay = null
+                    onSuccess(result.value)
+                }
+                is GatewayResult.Failure ->
+                    update {
+                        it.copy(
+                            message = "The room could not be reset. ${messageFor(result.error)}"
+                        )
+                    }
+            }
+        }
+    }
+
     fun refreshReviewEvidence() {
         refreshSubmissions(loadMeetingEvidence = true)
     }
@@ -517,6 +542,7 @@ class GameplayViewModel(
         pendingFlag = null
         pendingReviewVote = null
         pendingEjectionVote = null
+        pendingReplay = null
         announcedMeetings.clear()
         refreshedExpiredDeadline = null
         update { GameplayUiState() }
@@ -823,6 +849,11 @@ class GameplayViewModel(
 
     private fun update(transform: (GameplayUiState) -> GameplayUiState) {
         _state.value = transform(_state.value)
+    }
+
+    /** Presentation-only result interaction; it never mutates authoritative game state. */
+    fun playResultInteraction(revealed: Boolean) {
+        emitFeedback(if (revealed) GameFeedbackKind.EasterEgg else GameFeedbackKind.Ui)
     }
 
     private fun emitFeedback(kind: GameFeedbackKind, stableId: String? = null) {

@@ -20,7 +20,7 @@ This is a navigation aid, not a replacement for `../../openapi/openapi.json` or 
 | Update settings | `PATCH /api/v1/rooms/current/settings` | Host/lobby capability; prevent stale responses. |
 | Leave | `POST /api/v1/rooms/current/leave` | Explicit action only; active games reject permanent leave. |
 | Start | `POST /api/v1/rooms/current/start` | Host only; server readiness is authoritative. |
-| Replay | `POST /api/v1/rooms/current/replay` | Do not expose before Phase 0 decision. |
+| Replay | `POST /api/v1/rooms/current/replay` | ADR-A-027 approved; terminal phase only, idempotent, and route exclusively from the returned authoritative room snapshot. |
 | Task packs | `/api/v1/task-packs...` | Published packs only. |
 
 ## Active game

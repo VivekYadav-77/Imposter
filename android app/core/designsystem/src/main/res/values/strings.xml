@@ -1,24 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="player_color_coral">Coral</string>
-    <string name="player_color_gold">Gold</string>
-    <string name="player_color_blue">Blue</string>
-    <string name="player_color_violet">Violet</string>
-    <string name="player_color_teal">Teal</string>
-    <string name="player_color_green">Green</string>
-    <string name="player_color_bronze">Bronze</string>
-    <string name="player_color_rose">Rose</string>
-    <string name="player_color_indigo">Indigo</string>
-    <string name="player_color_cyan">Cyan</string>
-    <string name="player_color_red">Red</string>
-    <string name="player_color_lime">Lime</string>
-    <string name="player_color_amber">Amber</string>
-    <string name="player_color_magenta">Magenta</string>
-    <string name="player_color_purple">Purple</string>
-    <string name="player_color_slate">Slate</string>
-    <string name="player_color_orange">Orange</string>
-    <string name="player_color_sea_green">Sea green</string>
-    <string name="player_color_unknown">Unknown color</string>
+    <string name="player_color_coral">Fox</string>
+    <string name="player_color_gold">Owl</string>
+    <string name="player_color_blue">Wolf</string>
+    <string name="player_color_violet">Raven</string>
+    <string name="player_color_teal">Moth</string>
+    <string name="player_color_green">Cobra</string>
+    <string name="player_color_bronze">Stag</string>
+    <string name="player_color_rose">Hare</string>
+    <string name="player_color_indigo">Panther</string>
+    <string name="player_color_cyan">Shark</string>
+    <string name="player_color_red">Bull</string>
+    <string name="player_color_lime">Gecko</string>
+    <string name="player_color_amber">Beetle</string>
+    <string name="player_color_magenta">Spider</string>
+    <string name="player_color_purple">Bat</string>
+    <string name="player_color_slate">Raccoon</string>
+    <string name="player_color_orange">Lynx</string>
+    <string name="player_color_sea_green">Falcon</string>
+    <string name="player_color_unknown">Unknown operative</string>
 
     <string name="player_status_selected">Selected</string>
     <string name="player_status_disconnected">Disconnected</string>

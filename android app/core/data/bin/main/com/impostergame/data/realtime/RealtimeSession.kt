@@ -1,5 +1,9 @@
 package com.impostergame.data.realtime
 
+import com.impostergame.data.network.ApiResult
+import com.impostergame.data.operations.OperationalMetric
+import com.impostergame.data.operations.OperationalOutcome
+import com.impostergame.data.operations.PrivacySafeOperations
 import com.impostergame.data.repository.ConnectionState
 import com.impostergame.data.repository.ConnectivityRepository
 import com.impostergame.data.repository.GameRepository
@@ -28,6 +32,7 @@ class RealtimeSession(
     private val connectivity: ConnectivityRepository,
     private val sessionStore: SessionStore,
     private val backoff: ReconnectBackoff = ReconnectBackoff(),
+    private val operations: PrivacySafeOperations = PrivacySafeOperations(),
 ) {
     private val resyncMutex = Mutex()
     private var job: Job? = null
@@ -49,6 +54,7 @@ class RealtimeSession(
 
     private suspend fun connectLoop(token: String) {
         var attempt = 0
+        var reconnecting = false
         while (!revoked) {
             connectivity.update(ConnectionState.CONNECTING)
             transport.connect(token)
@@ -56,6 +62,13 @@ class RealtimeSession(
                 transport.events().collect { event ->
                     when (event) {
                         TransportEvent.Connected -> {
+                            if (reconnecting) {
+                                operations.record(
+                                    OperationalMetric.SOCKET_RECONNECT,
+                                    OperationalOutcome.SUCCEEDED,
+                                )
+                                reconnecting = false
+                            }
                             attempt = 0
                             connectivity.update(ConnectionState.CONNECTED)
                             transport.heartbeat()
@@ -71,6 +84,11 @@ class RealtimeSession(
                 return
             } catch (_: ReconnectRequired) {
                 if (!revoked) {
+                    reconnecting = true
+                    operations.record(
+                        OperationalMetric.SOCKET_RECONNECT,
+                        OperationalOutcome.RETRYING,
+                    )
                     connectivity.update(ConnectionState.BACKING_OFF)
                     backoff.pause(attempt++)
                 }
@@ -100,23 +118,39 @@ class RealtimeSession(
         resyncMutex.withLock {
             if (!gameResyncPending) {
                 gameResyncPending = true
+                operations.record(OperationalMetric.RESYNC, OperationalOutcome.STARTED)
                 transport.emit("game.resync")
             }
         }
     }
 
     private suspend fun markGameResynced() {
-        resyncMutex.withLock { gameResyncPending = false }
+        resyncMutex.withLock {
+            if (gameResyncPending) {
+                operations.record(OperationalMetric.RESYNC, OperationalOutcome.SUCCEEDED)
+            }
+            gameResyncPending = false
+        }
     }
 
     private suspend fun resyncAllOnce() {
         resyncMutex.withLock {
-            roomRepository.refresh()
-            gameRepository.refresh()
+            operations.record(OperationalMetric.RESYNC, OperationalOutcome.STARTED)
+            val roomResult = roomRepository.refresh()
+            val gameResult = gameRepository.refresh()
+            operations.record(
+                OperationalMetric.RESYNC,
+                if (roomResult is ApiResult.Success && gameResult is ApiResult.Success) {
+                    OperationalOutcome.SUCCEEDED
+                } else {
+                    OperationalOutcome.FAILED
+                },
+            )
         }
     }
 
     private suspend fun revoke() {
+        operations.record(OperationalMetric.SESSION_REVOCATION, OperationalOutcome.SUCCEEDED)
         revoked = true
         transport.disconnect()
         sessionStore.clear()

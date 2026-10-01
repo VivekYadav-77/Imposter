@@ -119,6 +119,19 @@ class ParticipantApi(
             )
             .map { it.data }
 
+    suspend fun replayRoom(idempotencyKey: String): ApiResult<RoomSnapshot> =
+        client
+            .command(
+                CommandRequest(
+                    routeTemplate = "/api/v1/rooms/current/replay",
+                    encodedPath = "/api/v1/rooms/current/replay",
+                    body = EMPTY_JSON,
+                    idempotencyKey = idempotencyKey,
+                ),
+                ApiEnvelope.serializer(RoomSnapshot.serializer()),
+            )
+            .map { it.data }
+
     suspend fun taskPacks(): ApiResult<List<PublicTaskPack>> =
         client
             .get(

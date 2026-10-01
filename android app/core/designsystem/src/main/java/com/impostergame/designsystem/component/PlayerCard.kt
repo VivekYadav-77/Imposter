@@ -41,6 +41,7 @@ fun PlayerCard(
     isSelf: Boolean = false,
     selected: Boolean = false,
     enabled: Boolean = true,
+    compact: Boolean = false,
     onSelected: (() -> Unit)? = null,
 ) {
     val playerColor = PlayerColors.fromTransportId(playerColorId)
@@ -65,11 +66,20 @@ fun PlayerCard(
         if (selected) LocalGameSemanticColors.current.focus
         else MaterialTheme.colorScheme.outlineVariant
 
+    val semanticModifier =
+        if (onSelected != null) {
+            Modifier.semantics {
+                stateDescription = if (selected) selectedDescription else notSelectedDescription
+            }
+        } else {
+            Modifier
+        }
+
     Surface(
         modifier =
-            modifier.fillMaxWidth().then(selectionModifier).semantics {
-                stateDescription = if (selected) selectedDescription else notSelectedDescription
-            },
+            modifier.fillMaxWidth().then(selectionModifier).then(semanticModifier).semantics(
+                mergeDescendants = true
+            ) {},
         shape = GameShapes.medium,
         color = if (selected) accent.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surface,
         tonalElevation = if (selected) 3.dp else 1.dp,
@@ -77,22 +87,30 @@ fun PlayerCard(
             androidx.compose.foundation.BorderStroke(if (selected) 3.dp else 1.dp, borderColor),
     ) {
         Row(
-            modifier = Modifier.padding(GameSpacing.md),
-            horizontalArrangement = Arrangement.spacedBy(GameSpacing.md),
+            modifier = Modifier.padding(if (compact) GameSpacing.sm else GameSpacing.md),
+            horizontalArrangement =
+                Arrangement.spacedBy(if (compact) GameSpacing.sm else GameSpacing.md),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(Modifier.width(4.dp).height(48.dp).background(accent, GameShapes.pill))
+            Box(
+                Modifier.width(4.dp)
+                    .height(if (compact) 38.dp else 48.dp)
+                    .background(accent, GameShapes.pill)
+            )
             PlayerAvatar(
                 transportId = playerColorId,
-                size = 56.dp,
+                size = if (compact) 42.dp else 56.dp,
                 contentDescription = nickname,
                 status = status,
                 selected = selected,
+                decorative = true,
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = nickname,
-                    style = MaterialTheme.typography.titleLarge,
+                    style =
+                        if (compact) MaterialTheme.typography.titleMedium
+                        else MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                 )

@@ -16,6 +16,7 @@ import com.impostergame.data.model.Meeting
 import com.impostergame.data.model.MeetingRules
 import com.impostergame.data.model.ParticipantSelf
 import com.impostergame.data.model.UploadIntent
+import com.impostergame.data.roomSnapshot
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.encodeToString
 import mockwebserver3.MockResponse
@@ -349,6 +350,46 @@ class NetworkPolicyTest {
             assertEquals("meeting-key", request.headers["Idempotency-Key"])
             assertEquals("/api/v1/games/current/meetings", request.url.encodedPath)
             assertEquals("{\"expectedStateVersion\":9}", request.body?.utf8())
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
+    fun replayUsesAuthoritativeIdempotentRoomCommand() = runTest {
+        val server = MockWebServer()
+        server.enqueue(
+            MockResponse.Builder()
+                .code(200)
+                .body(
+                    ContractJson.instance.encodeToString(
+                        ApiEnvelope(
+                            roomSnapshot(),
+                            ApiMeta("request", "2026-09-29T00:00:00Z"),
+                        )
+                    )
+                )
+                .build()
+        )
+        server.start()
+        try {
+            val api =
+                ParticipantApi(
+                    ApiClient(
+                        server.url("/").toString().toHttpUrl(),
+                        { "secret" },
+                        allowInsecureLocalDebug = true,
+                    )
+                )
+
+            val result = api.replayRoom("replay-key")
+
+            assertTrue(result is ApiResult.Success)
+            val request = server.takeRequest()
+            assertEquals("POST", request.method)
+            assertEquals("replay-key", request.headers["Idempotency-Key"])
+            assertEquals("/api/v1/rooms/current/replay", request.url.encodedPath)
+            assertEquals("{}", request.body?.utf8())
         } finally {
             server.close()
         }

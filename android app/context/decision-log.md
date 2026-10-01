@@ -211,6 +211,36 @@ Use IDs `ADR-A-###`. Status is `proposed`, `approved`, `superseded`, or `rejecte
 - **Consequences:** ADR-A-006 is approved for this server-backed behavior and no longer blocks Android meeting calls. Android still never starts or resolves a meeting locally, never reveals private ballots, and refreshes after stale-state conflicts. Replay and account/dashboard work remain gated by ADR-A-008 and ADR-A-009.
 - **Supersedes:** The player-called-meeting exclusion in ADR-A-024 and ADR-A-025.
 
+### ADR-A-027 — Server-authoritative same-room replay
+
+- **Status:** approved by gameplay-parity implementation request
+- **Date:** 2026-09-29
+- **Approver:** product owner requested feature-complete website-equivalent lobby/game/results flow
+- **Decision:** Expose same-room replay after an authoritative terminal game through `POST /api/v1/rooms/current/replay`. Reuse one idempotency identity for retries, accept only the returned room snapshot, clear every per-game private/UI state, rebuild the lobby settings draft from that snapshot, and restart lobby refresh. Keep explicit leave/home as the alternative.
+- **Reason:** The endpoint and production website already support replay for hosts and participants, and omitting it forced players to learn a different Android flow and re-enter a room unnecessarily.
+- **Consequences:** Replay never resets a room locally or preserves role, ballot, evidence preview, selection, or meeting state from the prior round. Multi-client staging acceptance remains required. Native account/dashboard/history remains separately blocked by ADR-A-009.
+- **Supersedes:** ADR-A-008 and replay exclusions in ADR-A-018, ADR-A-024, and ADR-A-025.
+
+### ADR-A-028 — Website is the exact Android presentation authority
+
+- **Status:** approved by explicit product-owner direction
+- **Date:** 2026-10-01
+- **Approver:** product owner
+- **Decision:** The frozen mobile website is the source of truth for Android layout, copy, typography, colors, spacing, radii, shadows, icons, artwork, identity presentation, animation, and navigation presentation. Android maps website CSS pixels one-to-one to logical dp/sp except for documented font-metric or OS-surface constraints. Existing Android-only accessibility and feedback controls remain, styled with the website system. Backend, API, authentication, persistence, realtime, privacy, and gameplay authority remain unchanged.
+- **Reason:** The product owner rejected preserving the current Android presentation and explicitly requested full website parity.
+- **Consequences:** UI work proceeds in approval-gated screen groups against frozen website references. Public Sans Variable and Barlow Condensed are bundled under OFL. Screen-local visual constants are migrated into the shared design system. Website operative identities replace the earlier crewmate-only presentation when player screens are migrated; transport identifiers and server authority remain intact.
+- **Supersedes:** ADR-A-002, the presentation-only portion of ADR-A-010, and the native-adaptation constraints in ADR-A-024 and ADR-A-025. Security, accessibility, server-authority, and feedback-preference requirements in those decisions remain active.
+
+### ADR-A-029 — Website-exact lobby/gameplay presentation and synthesized feedback
+
+- **Status:** approved by implementation request and verified locally
+- **Date:** 2026-10-01
+- **Approver:** product owner
+- **Decision:** Port the frozen website lobby and post-lobby presentation into shared Compose tokens and components, including the 18 operative SVG geometries, website identity names/colors, compact phase/invite/readiness/roster/task/vote/result hierarchy, 120/200/420/440/480/560ms motion roles, 45ms task stagger, and the website cubic-bezier easing. Replace stock Android tones with deterministic foreground-only PCM synthesis matching the website oscillator, envelope, noise, timing, and event recipes while retaining the existing typed feedback contract and preference gates.
+- **Reason:** The prior Android lobby and gameplay surfaces, generic crewmate artwork, Material icons, and `ToneGenerator` feedback were visibly and audibly different from the approved mobile website.
+- **Consequences:** Lobby and gameplay UI consumes the shared website roles instead of introducing screen-local presentation constants. Transport identity IDs, API/gateway signatures, authentication, persistence, realtime, evidence, and gameplay authority remain unchanged. Android secure-window privacy blocks ordinary role/gameplay screenshots; those states require semantics/interaction verification or test-host captures. Native photo picker, font rasterization, status/navigation bars, haptic motor response, and speaker response remain OS/device controlled.
+- **Supersedes:** The temporary native-tone choice in ADR-A-024 and the canonical-crewmate artwork constraint in ADR-A-025.
+
 ## Adding a decision
 
 Copy this structure:

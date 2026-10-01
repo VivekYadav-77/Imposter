@@ -1,11 +1,15 @@
 package com.impostergame.data.network
 
 import com.impostergame.data.model.UploadIntent
+import com.impostergame.data.operations.OperationalMetric
+import com.impostergame.data.operations.OperationalOutcome
+import com.impostergame.data.operations.PrivacySafeOperations
 import java.io.IOException
 import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.Call
 import okhttp3.Callback
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -15,7 +19,9 @@ import okhttp3.Response
 
 class SignedUploadClient(
     client: OkHttpClient = ApiClient.defaultClient(),
+    private val apiBaseUrl: HttpUrl? = null,
     private val allowInsecureLocalDebug: Boolean = false,
+    private val operations: PrivacySafeOperations = PrivacySafeOperations(),
 ) {
     private val client =
         client
@@ -30,23 +36,33 @@ class SignedUploadClient(
         contentType: String,
         bytes: ByteArray,
     ): ApiResult<Unit> {
+        operations.record(OperationalMetric.UPLOAD_TRANSFER, OperationalOutcome.STARTED)
         if (bytes.isEmpty() || bytes.size > MAX_UPLOAD_BYTES || contentType != "image/jpeg") {
+            operations.record(OperationalMetric.UPLOAD_TRANSFER, OperationalOutcome.FAILED)
             return ApiResult.Failure(
                 ApiFailure.Contract(IllegalArgumentException("Invalid evidence upload payload"))
             )
         }
         val url =
-            intent.url.toHttpUrlOrNull()
+            resolveUploadUrl(intent.url)
                 ?: return ApiResult.Failure(
-                    ApiFailure.Contract(IllegalArgumentException("Invalid signed upload URL"))
-                )
+                        ApiFailure.Contract(IllegalArgumentException("Invalid signed upload URL"))
+                    )
+                    .also {
+                        operations.record(
+                            OperationalMetric.UPLOAD_TRANSFER,
+                            OperationalOutcome.FAILED,
+                        )
+                    }
         val local = url.host in setOf("localhost", "127.0.0.1", "10.0.2.2")
         if (!url.isHttps && !(allowInsecureLocalDebug && local)) {
+            operations.record(OperationalMetric.UPLOAD_TRANSFER, OperationalOutcome.FAILED)
             return ApiResult.Failure(
                 ApiFailure.Contract(IllegalArgumentException("Signed upload URL must use HTTPS"))
             )
         }
         if (intent.method != "PUT") {
+            operations.record(OperationalMetric.UPLOAD_TRANSFER, OperationalOutcome.FAILED)
             return ApiResult.Failure(
                 ApiFailure.Contract(IllegalArgumentException("Unsupported signed upload method"))
             )
@@ -61,14 +77,22 @@ class SignedUploadClient(
             try {
                 client.newCall(request).awaitUpload()
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                operations.record(OperationalMetric.UPLOAD_TRANSFER, OperationalOutcome.FAILED)
                 return ApiResult.Failure(ApiFailure.Cancelled)
             } catch (io: IOException) {
+                operations.record(OperationalMetric.UPLOAD_TRANSFER, OperationalOutcome.RETRYING)
                 return ApiResult.Failure(ApiFailure.Transport(io))
             }
         response.use {
             return if (it.isSuccessful) {
+                operations.record(OperationalMetric.UPLOAD_TRANSFER, OperationalOutcome.SUCCEEDED)
                 ApiResult.Success(Unit, it.header("X-Request-ID"))
             } else {
+                operations.record(
+                    OperationalMetric.UPLOAD_TRANSFER,
+                    if (it.code == 429 || it.code >= 500) OperationalOutcome.RETRYING
+                    else OperationalOutcome.FAILED,
+                )
                 ApiResult.Failure(
                     ApiFailure.Http(
                         status = it.code,
@@ -81,6 +105,30 @@ class SignedUploadClient(
                 )
             }
         }
+    }
+
+    private fun resolveUploadUrl(value: String): HttpUrl? {
+        if (value.startsWith("//")) return null
+        val absolute = value.toHttpUrlOrNull()
+        val resolved = absolute ?: apiBaseUrl?.resolve(value) ?: return null
+        if (
+            resolved.fragment != null ||
+                resolved.username.isNotEmpty() ||
+                resolved.password.isNotEmpty()
+        ) {
+            return null
+        }
+        if (
+            absolute == null &&
+                apiBaseUrl?.let {
+                    resolved.scheme != it.scheme ||
+                        resolved.host != it.host ||
+                        resolved.port != it.port
+                } != false
+        ) {
+            return null
+        }
+        return resolved
     }
 
     private companion object {

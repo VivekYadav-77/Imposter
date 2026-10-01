@@ -1,12 +1,17 @@
 package com.impostergame.data.network
 
+import com.impostergame.data.operations.OperationalMetric
+import com.impostergame.data.operations.OperationalOutcome
+import com.impostergame.data.operations.PrivacySafeOperations
 import java.io.IOException
 import java.time.Instant
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.builtins.nullable
 import kotlinx.serialization.builtins.serializer
@@ -25,6 +30,7 @@ class ApiClient(
     baseUrl: HttpUrl,
     private val credentialProvider: () -> String?,
     private val logger: SafeLogger = NoOpSafeLogger,
+    private val operations: PrivacySafeOperations = PrivacySafeOperations(),
     private val json: Json = ContractJson.instance,
     allowInsecureLocalDebug: Boolean = false,
     client: OkHttpClient = defaultClient(),
@@ -106,6 +112,13 @@ class ApiClient(
         deserializer: KSerializer<T>,
         onNoContent: (() -> T)? = null,
     ): ApiResult<T> {
+        val routeMetric =
+            when (routeTemplate) {
+                "/api/v1/rooms",
+                "/api/v1/rooms/{code}/participants" -> OperationalMetric.JOIN
+                else -> null
+            }
+        routeMetric?.let { operations.record(it, OperationalOutcome.STARTED) }
         val requestId = UuidIdGenerator.create()
         val request =
             builder
@@ -120,66 +133,105 @@ class ApiClient(
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 return ApiResult.Failure(ApiFailure.Cancelled)
             } catch (io: IOException) {
+                routeMetric?.let { operations.record(it, OperationalOutcome.FAILED) }
                 logger.log(safeEvent(routeTemplate, null, startedAt, null, "transport_error"))
                 return ApiResult.Failure(ApiFailure.Transport(io))
             }
 
-        response.use {
-            val responseRequestId = UntrustedText.diagnostic(it.header("X-Request-ID") ?: requestId)
-            if (!it.isSuccessful) {
-                val parsed = runCatching {
-                    json.decodeFromString(
-                        ErrorEnvelope.serializer(),
-                        it.body.readBoundedUtf8(MAX_ERROR_BYTES),
+        return withContext(Dispatchers.IO) {
+            response.use {
+                val responseRequestId =
+                    UntrustedText.diagnostic(it.header("X-Request-ID") ?: requestId)
+                if (!it.isSuccessful) {
+                    val parsed = runCatching {
+                        json.decodeFromString(
+                            ErrorEnvelope.serializer(),
+                            it.body.readBoundedUtf8(MAX_ERROR_BYTES),
+                        )
+                    }
+                        .getOrNull()
+                    val failure =
+                        ApiFailure.Http(
+                            status = it.code,
+                            code =
+                                parsed?.error?.code?.takeIf { code ->
+                                    code.length <= 64 &&
+                                        code.all { char ->
+                                            char.isUpperCase() || char.isDigit() || char == '_'
+                                        }
+                                } ?: "http_${it.code}",
+                            safeMessage = UntrustedText.display(parsed?.error?.message),
+                            requestId =
+                                UntrustedText.diagnostic(
+                                    parsed?.error?.requestId ?: responseRequestId
+                                ),
+                            safeDetails = null,
+                            retryAfterMillis = retryAfterMillis(it.header("Retry-After")),
+                        )
+                    logger.log(
+                        safeEvent(
+                            routeTemplate,
+                            it.code,
+                            startedAt,
+                            responseRequestId,
+                            failure.code,
+                        )
                     )
+                    routeMetric?.let { metric ->
+                        operations.record(
+                            metric,
+                            if (it.code == 429 || it.code >= 500) OperationalOutcome.RETRYING
+                            else OperationalOutcome.FAILED,
+                        )
+                    }
+                    if (it.code == 409) {
+                        operations.record(
+                            OperationalMetric.COMMAND_CONFLICT,
+                            OperationalOutcome.FAILED,
+                        )
+                    }
+                    return@withContext ApiResult.Failure(failure)
                 }
-                    .getOrNull()
-                val failure =
-                    ApiFailure.Http(
-                        status = it.code,
-                        code =
-                            parsed?.error?.code?.takeIf { code ->
-                                code.length <= 64 &&
-                                    code.all { char ->
-                                        char.isUpperCase() || char.isDigit() || char == '_'
-                                    }
-                            } ?: "http_${it.code}",
-                        safeMessage = UntrustedText.display(parsed?.error?.message),
-                        requestId =
-                            UntrustedText.diagnostic(parsed?.error?.requestId ?: responseRequestId),
-                        safeDetails = null,
-                        retryAfterMillis = retryAfterMillis(it.header("Retry-After")),
-                    )
-                logger.log(
-                    safeEvent(routeTemplate, it.code, startedAt, responseRequestId, failure.code)
-                )
-                return ApiResult.Failure(failure)
-            }
-            if (it.code == 204) {
-                val noContent = onNoContent
-                if (noContent != null) {
+                if (it.code == 204) {
+                    val noContent = onNoContent
+                    if (noContent != null) {
+                        logger.log(
+                            safeEvent(routeTemplate, it.code, startedAt, responseRequestId, null)
+                        )
+                        routeMetric?.let { metric ->
+                            operations.record(metric, OperationalOutcome.SUCCEEDED)
+                        }
+                        return@withContext ApiResult.Success(noContent(), responseRequestId)
+                    }
+                }
+                try {
+                    val decoded =
+                        json.decodeFromString(
+                            deserializer,
+                            it.body.readBoundedUtf8(MAX_RESPONSE_BYTES),
+                        )
                     logger.log(
                         safeEvent(routeTemplate, it.code, startedAt, responseRequestId, null)
                     )
-                    return ApiResult.Success(noContent(), responseRequestId)
-                }
-            }
-            return try {
-                val decoded =
-                    json.decodeFromString(deserializer, it.body.readBoundedUtf8(MAX_RESPONSE_BYTES))
-                logger.log(safeEvent(routeTemplate, it.code, startedAt, responseRequestId, null))
-                ApiResult.Success(decoded, responseRequestId)
-            } catch (error: Exception) {
-                logger.log(
-                    safeEvent(
-                        routeTemplate,
-                        it.code,
-                        startedAt,
-                        responseRequestId,
-                        "contract_error",
+                    routeMetric?.let { metric ->
+                        operations.record(metric, OperationalOutcome.SUCCEEDED)
+                    }
+                    ApiResult.Success(decoded, responseRequestId)
+                } catch (error: Exception) {
+                    routeMetric?.let { metric ->
+                        operations.record(metric, OperationalOutcome.FAILED)
+                    }
+                    logger.log(
+                        safeEvent(
+                            routeTemplate,
+                            it.code,
+                            startedAt,
+                            responseRequestId,
+                            "contract_error",
+                        )
                     )
-                )
-                ApiResult.Failure(ApiFailure.Contract(error))
+                    ApiResult.Failure(ApiFailure.Contract(error))
+                }
             }
         }
     }

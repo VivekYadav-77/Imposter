@@ -477,6 +477,11 @@ class EntryLobbyViewModel(
         }
     }
 
+    /** Accepts the authoritative lobby returned by the replay command. */
+    fun enterReplayedRoom(room: RoomSnapshot) {
+        enterLobby(room, "Room reset. Waiting in the lobby.")
+    }
+
     fun clearAnnouncement() = update { it.copy(announce = null) }
 
     private fun enterLobby(room: RoomSnapshot, announcement: String?) {

@@ -22,15 +22,22 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.vector.PathParser
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.impostergame.designsystem.avatar.PlayerWatermark
+import com.impostergame.designsystem.theme.GameElevation
 import com.impostergame.designsystem.theme.GameShapes
 import com.impostergame.designsystem.theme.GameSpacing
 import com.impostergame.designsystem.theme.gameColors
@@ -42,6 +49,7 @@ import com.impostergame.designsystem.theme.gameColors
 fun SignalBackground(
     modifier: Modifier = Modifier,
     accent: Color = MaterialTheme.gameColors.accentStrong,
+    watermarkPlayerColorId: String? = null,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val background = MaterialTheme.colorScheme.background
@@ -75,6 +83,12 @@ fun SignalBackground(
                 strokeWidth = 1.dp.toPx(),
             )
         }
+        watermarkPlayerColorId?.let { id ->
+            PlayerWatermark(
+                transportId = id,
+                modifier = Modifier.align(Alignment.TopEnd).fillMaxSize(),
+            )
+        }
         content()
     }
 }
@@ -85,30 +99,32 @@ fun BrandMark(
     accent: Color = MaterialTheme.gameColors.accentStrong,
     size: Dp = 34.dp,
 ) {
+    val orbit =
+        PathParser()
+            .parsePathString(
+                "M3.5 20c0-9.1 7.4-16.5 16.5-16.5S36.5 10.9 36.5 20 29.1 36.5 20 36.5 3.5 29.1 3.5 20Z"
+            )
+            .toPath()
+    val visor =
+        PathParser()
+            .parsePathString("M9.5 20s3.8-6 10.5-6 10.5 6 10.5 6-3.8 6-10.5 6S9.5 20 9.5 20Z")
+            .toPath()
+    val signal = PathParser().parsePathString("M28.5 8.5 32 5").toPath()
     Canvas(modifier.size(size)) {
-        val stroke = this.size.minDimension * 0.085f
-        drawArc(
-            color = accent,
-            startAngle = 200f,
-            sweepAngle = 140f,
-            useCenter = false,
-            topLeft = Offset(stroke, this.size.height * 0.22f),
-            size = Size(this.size.width - stroke * 2f, this.size.height * 0.56f),
-            style = Stroke(stroke, cap = StrokeCap.Round),
-        )
-        drawCircle(accent, radius = this.size.minDimension * 0.14f, center = center)
-        drawCircle(
-            color = accent.copy(alpha = 0.35f),
-            radius = this.size.minDimension * 0.27f,
-            center = center,
-            style = Stroke(stroke * 0.55f),
-        )
+        val scale = this.size.minDimension / 40f
+        withTransform({ scale(scale, scale, pivot = Offset.Zero) }) {
+            drawPath(orbit, accent.copy(alpha = 0.42f), style = Stroke(1.5f))
+            drawPath(visor, accent, style = Stroke(1.8f, cap = StrokeCap.Round))
+            drawCircle(accent, radius = 2.6f, center = Offset(20f, 20f))
+            drawPath(signal, accent, style = Stroke(2.4f, cap = StrokeCap.Round))
+        }
     }
 }
 
 @Composable
 fun BrandHeader(
     modifier: Modifier = Modifier,
+    compact: Boolean = false,
     trailing: (@Composable RowScope.() -> Unit)? = null,
 ) {
     Row(
@@ -116,20 +132,32 @@ fun BrandHeader(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(GameSpacing.sm),
     ) {
-        BrandMark()
-        Column(Modifier.weight(1f)) {
-            Text(
-                "IMPOSTER",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Black,
-                letterSpacing = androidx.compose.ui.unit.TextUnit.Unspecified,
-            )
-            Text(
-                "LIVE SOCIAL DEDUCTION",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        BrandMark(size = 36.dp)
+        Text(
+            text =
+                buildAnnotatedString {
+                    append("IMPOSTER")
+                    if (!compact) {
+                        withStyle(
+                            SpanStyle(
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 10.14.sp,
+                            )
+                        ) {
+                            append(" GAME")
+                        }
+                    }
+                },
+            modifier = Modifier.weight(1f),
+            style =
+                MaterialTheme.typography.labelLarge.copy(
+                    fontSize = 14.08.sp,
+                    lineHeight = 14.08.sp,
+                    letterSpacing = 1.55.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                ),
+            maxLines = 1,
+        )
         trailing?.invoke(this)
     }
 }
@@ -166,16 +194,17 @@ fun SignalCard(
     Surface(
         modifier = modifier,
         shape = GameShapes.medium,
-        color =
-            if (emphasized) MaterialTheme.gameColors.surfaceHighest
-            else MaterialTheme.gameColors.surfaceRaised,
+        // Cards use the website-equivalent paper/surface role in both themes. The raised and
+        // highest roles are reserved for nested controls and pressed states; using them here made
+        // light-theme cards look muddy and inverted the intended surface hierarchy.
+        color = MaterialTheme.colorScheme.surface,
         border =
             BorderStroke(
                 if (emphasized) 2.dp else 1.dp,
                 accent.copy(alpha = if (emphasized) 0.72f else 0.24f),
             ),
-        tonalElevation = if (emphasized) 3.dp else 1.dp,
-        shadowElevation = if (emphasized) 3.dp else 0.dp,
+        tonalElevation = GameElevation.resting,
+        shadowElevation = if (emphasized) GameElevation.soft else GameElevation.card,
     ) {
         Box(Modifier.border(0.dp, Color.Transparent, GameShapes.medium)) { content() }
     }

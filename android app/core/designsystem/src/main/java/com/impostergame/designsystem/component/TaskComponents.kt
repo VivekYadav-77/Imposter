@@ -1,11 +1,16 @@
 package com.impostergame.designsystem.component
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -20,8 +25,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.impostergame.designsystem.R
+import com.impostergame.designsystem.theme.GameShapes
 import com.impostergame.designsystem.theme.GameSpacing
 import com.impostergame.designsystem.theme.LocalGameSemanticColors
+import com.impostergame.designsystem.theme.WebsiteLayout
 import com.impostergame.designsystem.theme.gameColors
 
 enum class UploadState {
@@ -58,73 +65,88 @@ fun TaskCard(
             },
         emphasized = uploadState !in setOf(UploadState.Idle, UploadState.Complete),
     ) {
-        Column(
-            modifier = Modifier.padding(GameSpacing.md),
-            verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(GameSpacing.sm),
-                verticalAlignment = Alignment.CenterVertically,
+        Row(modifier = Modifier.fillMaxWidth().heightIn(min = WebsiteLayout.taskCardMinHeight)) {
+            Box(
+                Modifier.width(4.dp)
+                    .fillMaxHeight()
+                    .background(
+                        if (uploadState == UploadState.Complete)
+                            LocalGameSemanticColors.current.success
+                        else MaterialTheme.gameColors.tasks
+                    )
+            )
+            Column(
+                modifier = Modifier.weight(1f).padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(GameSpacing.xs),
             ) {
-                taskNumber?.let {
-                    Surface(
-                        modifier = Modifier.size(44.dp),
-                        shape = MaterialTheme.shapes.medium,
-                        color = MaterialTheme.gameColors.tasks.copy(alpha = 0.16f),
-                        contentColor = MaterialTheme.gameColors.tasks,
-                    ) {
-                        androidx.compose.foundation.layout.Box(
-                            contentAlignment = Alignment.Center
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(GameSpacing.sm),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    taskNumber?.let {
+                        Surface(
+                            modifier = Modifier.size(WebsiteLayout.taskNumber),
+                            shape = GameShapes.small,
+                            color = MaterialTheme.gameColors.tasks.copy(alpha = 0.16f),
+                            contentColor = MaterialTheme.gameColors.tasks,
                         ) {
-                            Text(
-                                it.toString().padStart(2, '0'),
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Black,
-                            )
+                            androidx.compose.foundation.layout.Box(
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    it.toString().padStart(2, '0'),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Black,
+                                )
+                            }
                         }
                     }
-                }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(
-                        title,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.ExtraBold,
-                    )
-                    Text(
-                        description,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                statusLabel?.let {
-                    Surface(
-                        shape = MaterialTheme.shapes.extraLarge,
-                        color =
-                            if (uploadState == UploadState.Complete) {
-                                LocalGameSemanticColors.current.success.copy(alpha = 0.16f)
-                            } else {
-                                LocalGameSemanticColors.current.warning.copy(alpha = 0.16f)
-                            },
-                    ) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
-                            it,
-                            Modifier.padding(
-                                horizontal = GameSpacing.sm,
-                                vertical = GameSpacing.xs,
-                            ),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
+                            title,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                        )
+                        Text(
+                            description,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
+                if (uploadState != UploadState.Idle) UploadStateIndicator(uploadState)
+                statusLabel?.let {
+                    Text(
+                        it.uppercase(),
+                        color =
+                            if (uploadState == UploadState.Complete)
+                                LocalGameSemanticColors.current.success
+                            else MaterialTheme.gameColors.tasks,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Black,
+                    )
+                }
             }
-            UploadStateIndicator(uploadState)
             if (actionLabel != null && onAction != null) {
-                GameButton(
-                    text = actionLabel,
-                    onClick = onAction,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    border =
+                        androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            MaterialTheme.colorScheme.outlineVariant,
+                        ),
+                ) {
+                    Box(
+                        Modifier.width(WebsiteLayout.taskProofWidth).fillMaxHeight().padding(6.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        GameOutlinedButton(
+                            if (uploadState == UploadState.Complete) "✓" else "↥",
+                            onAction,
+                            Modifier.size(48.dp),
+                        )
+                    }
+                }
             }
         }
     }

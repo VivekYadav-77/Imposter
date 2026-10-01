@@ -27,7 +27,50 @@ object GameShapes {
 object GameElevation {
     val resting = 0.dp
     val raised = 3.dp
-    val overlay = 8.dp
+    val card = 10.dp
+    val soft = 18.dp
+    val overlay = 18.dp
+}
+
+/** Mobile CSS measurements from the website reference. */
+object WebsiteLayout {
+    val mobileGutter = 20.dp
+    val headerHorizontal = 18.dp
+    val headerVertical = 14.dp
+    val themeControl = 46.dp
+    val heroTop = 56.dp
+    val heroBottom = 90.dp
+    val journeyTop = 90.dp
+    val journeyBottom = 110.dp
+    val journeyCardWidth = 278.dp
+    val journeyCardBodyHeight = 210.dp
+    val bandVertical = 82.dp
+    val phaseSwatchHeight = 96.dp
+    val privacyMargin = 90.dp
+    val privacyPadding = 28.dp
+    val footerBottom = 56.dp
+
+    // Frozen mobile game-command-center measurements.
+    val gamePageBottom = 92.dp
+    val phaseBarMinHeight = 70.dp
+    val phaseBarHorizontal = 12.dp
+    val phaseBarVertical = 8.dp
+    val phaseControl = 44.dp
+    val gameContentGutter = 10.dp
+    val taskCardMinHeight = 104.dp
+    val taskCardRadius = 16.dp
+    val taskNumber = 36.dp
+    val taskProofWidth = 76.dp
+    val mobileActionHeight = 70.dp
+    val mobileActionRadius = 18.dp
+    val dialogMobileRadius = 22.dp
+    val votingOptionRadius = 18.dp
+}
+
+object WebsiteTypeScale {
+    fun mobileHero(widthDp: Float): Float = (widthDp * 0.18f).coerceIn(59.2f, 89.6f)
+
+    fun mobileSection(widthDp: Float): Float = (widthDp * 0.15f).coerceIn(52.8f, 80f)
 }
 
 object GameMotion {
@@ -35,6 +78,10 @@ object GameMotion {
     const val QuickMillis = 120
     const val StandardMillis = 200
     const val EmphasisMillis = 480
+    const val ProgressMillis = 420
+    const val CompletionMillis = 440
+    const val RevealMillis = 560
+    const val StaggerMillis = 45
     val EmphasisEasing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)
 }
 

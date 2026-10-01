@@ -10,6 +10,7 @@ import com.impostergame.data.model.FlagSubmissionInput
 import com.impostergame.data.model.GameSnapshot
 import com.impostergame.data.model.KillInput
 import com.impostergame.data.model.ReviewVoteInput
+import com.impostergame.data.model.RoomSnapshot
 import com.impostergame.data.model.Submission
 import com.impostergame.data.model.SubmissionConfirmation
 import com.impostergame.data.model.UploadIntentInput
@@ -70,6 +71,8 @@ interface GameplayGateway {
         targetParticipantId: String?,
         key: String,
     ): GatewayResult<Unit>
+
+    suspend fun replay(key: String): GatewayResult<RoomSnapshot>
 }
 
 class UnavailableGameplayGateway(private val reason: String) : GameplayGateway {
@@ -123,6 +126,8 @@ class UnavailableGameplayGateway(private val reason: String) : GameplayGateway {
         targetParticipantId: String?,
         key: String,
     ): GatewayResult<Unit> = failure()
+
+    override suspend fun replay(key: String): GatewayResult<RoomSnapshot> = failure()
 }
 
 class NetworkGameplayGateway(
@@ -340,6 +345,9 @@ class NetworkGameplayGateway(
             is ApiResult.Failure -> GatewayResult.Failure(result.error)
             is ApiResult.Success -> GatewayResult.Success(Unit)
         }
+
+    override suspend fun replay(key: String): GatewayResult<RoomSnapshot> =
+        api.replayRoom(key).toGateway().mapSuccess(RoomSnapshot::sanitizedForDisplay)
 
     private companion object {
         const val MAX_PREVIEW_BYTES = 5 * 1024 * 1024

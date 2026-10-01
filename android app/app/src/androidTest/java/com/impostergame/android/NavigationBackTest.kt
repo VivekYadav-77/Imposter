@@ -1,6 +1,8 @@
 package com.impostergame.android
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -32,13 +34,14 @@ class NavigationBackTest {
     @Before
     fun awaitHome() {
         composeRule.waitUntil(timeoutMillis = 10_000) {
-            composeRule.onAllNodesWithText("Join a room  →").fetchSemanticsNodes().isNotEmpty()
+            composeRule.onAllNodesWithText("Start a room  →").fetchSemanticsNodes().isNotEmpty()
         }
     }
 
     @Test
     fun deviceBackFromJoinReturnsHomeWithoutClosingActivity() {
-        composeRule.onNodeWithText("Join a room  →").performClick()
+        composeRule.onNodeWithText("Menu").performClick()
+        composeRule.onNodeWithText("Join a room").performClick()
         composeRule.onNodeWithText("← Home").assertIsDisplayed()
 
         pressBack()
@@ -48,10 +51,23 @@ class NavigationBackTest {
 
     @Test
     fun labeledBackButtonFromJoinReturnsHome() {
-        composeRule.onNodeWithText("Join a room  →").performClick()
+        composeRule.onNodeWithText("Menu").performClick()
+        composeRule.onNodeWithText("Join a room").performClick()
 
         composeRule.onNodeWithText("← Home").performClick()
 
         composeRule.onNodeWithText("Everyone’s watching.").assertIsDisplayed()
+    }
+
+    @Test
+    fun colorChoiceOwnsItsLabelAndActionOnOneSemanticNode() {
+        composeRule.onNodeWithText("Start a room  →").performClick()
+
+        composeRule
+            .onNode(
+                hasContentDescription("Fox") and hasClickAction(),
+                useUnmergedTree = true,
+            )
+            .assertExists()
     }
 }

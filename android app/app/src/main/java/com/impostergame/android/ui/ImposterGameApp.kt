@@ -9,7 +9,9 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -17,8 +19,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,7 +31,10 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
@@ -37,7 +44,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -45,7 +51,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -54,6 +59,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -74,6 +80,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.impostergame.android.entry.ConsentKind
 import com.impostergame.android.entry.EntryDestination
@@ -95,17 +102,27 @@ import com.impostergame.designsystem.component.GameBackButton
 import com.impostergame.designsystem.component.GameButton
 import com.impostergame.designsystem.component.GameEyebrow
 import com.impostergame.designsystem.component.GameOutlinedButton
+import com.impostergame.designsystem.component.GameTopBar
 import com.impostergame.designsystem.component.PlayerCard
 import com.impostergame.designsystem.component.SignalBackground
 import com.impostergame.designsystem.component.SignalCard
-import com.impostergame.designsystem.component.SignalChip
+import com.impostergame.designsystem.component.SignalScene
+import com.impostergame.designsystem.component.SignalSceneArt
+import com.impostergame.designsystem.component.WebsiteIcon
+import com.impostergame.designsystem.component.WebsiteIconKind
+import com.impostergame.designsystem.component.WebsiteLoadingPanel
+import com.impostergame.designsystem.component.WebsitePhaseGlyph
+import com.impostergame.designsystem.component.WebsiteTrustItem
 import com.impostergame.designsystem.theme.GameAccessibilityPreferences
 import com.impostergame.designsystem.theme.GameMotion
 import com.impostergame.designsystem.theme.GameShapes
 import com.impostergame.designsystem.theme.GameSpacing
 import com.impostergame.designsystem.theme.ImposterGameTheme
 import com.impostergame.designsystem.theme.LocalGameAccessibilityPreferences
+import com.impostergame.designsystem.theme.WebsiteLayout
+import com.impostergame.designsystem.theme.WebsiteTypeScale
 import com.impostergame.designsystem.theme.gameColors
+import kotlinx.coroutines.launch
 
 @Composable
 fun ImposterGameApp(
@@ -178,6 +195,8 @@ fun ImposterGameApp(
                         viewModel::showSettings,
                         viewModel::bootstrap,
                         onShareDiagnostics,
+                        darkTheme,
+                        onThemeModeChanged,
                     )
                 EntryDestination.SETTINGS ->
                     SettingsScreen(
@@ -191,17 +210,51 @@ fun ImposterGameApp(
                     )
                 EntryDestination.JOIN,
                 EntryDestination.CREATE -> EntryScreen(state, viewModel)
-                EntryDestination.LOBBY -> LobbyScreen(state, viewModel, onCopyCode, onShareCode)
+                EntryDestination.LOBBY ->
+                    LobbyScreen(
+                        state,
+                        viewModel,
+                        onCopyCode,
+                        onShareCode,
+                        onToggleSound = { onSoundChanged(!preferences.soundEnabled) },
+                        onToggleTheme = {
+                            onThemeModeChanged(if (darkTheme) ThemeMode.Light else ThemeMode.Dark)
+                        },
+                    )
                 EntryDestination.GAME ->
-                    GameplayScreen(gameplayViewModel, onMinimizeApp = onMinimizeApp) {
-                        gameplayViewModel.clearForHome()
-                        viewModel.exitResults()
-                    }
+                    GameplayScreen(
+                        viewModel = gameplayViewModel,
+                        onMinimizeApp = onMinimizeApp,
+                        onReplayRoom = { room ->
+                            gameplayViewModel.clearForHome()
+                            viewModel.enterReplayedRoom(room)
+                        },
+                        onReturnHome = {
+                            gameplayViewModel.clearForHome()
+                            viewModel.exitResults()
+                        },
+                        onToggleSound = { onSoundChanged(!preferences.soundEnabled) },
+                        onToggleTheme = {
+                            onThemeModeChanged(if (darkTheme) ThemeMode.Light else ThemeMode.Dark)
+                        },
+                    )
                 EntryDestination.RESULTS ->
-                    GameplayScreen(gameplayViewModel, onMinimizeApp = onMinimizeApp) {
-                        gameplayViewModel.clearForHome()
-                        viewModel.exitResults()
-                    }
+                    GameplayScreen(
+                        viewModel = gameplayViewModel,
+                        onMinimizeApp = onMinimizeApp,
+                        onReplayRoom = { room ->
+                            gameplayViewModel.clearForHome()
+                            viewModel.enterReplayedRoom(room)
+                        },
+                        onReturnHome = {
+                            gameplayViewModel.clearForHome()
+                            viewModel.exitResults()
+                        },
+                        onToggleSound = { onSoundChanged(!preferences.soundEnabled) },
+                        onToggleTheme = {
+                            onThemeModeChanged(if (darkTheme) ThemeMode.Light else ThemeMode.Dark)
+                        },
+                    )
             }
         }
     }
@@ -217,8 +270,19 @@ private fun HomeScreen(
     onSettings: () -> Unit,
     onRetry: () -> Unit,
     onShareDiagnostics: () -> Unit,
+    darkTheme: Boolean,
+    onThemeModeChanged: (ThemeMode) -> Unit,
 ) {
     var confirmDiagnostics by remember { mutableStateOf(false) }
+    var menuOpen by remember { mutableStateOf(false) }
+    val scrollState = rememberScrollState()
+    val scope = rememberCoroutineScope()
+    val reduceMotion = LocalGameAccessibilityPreferences.current.reduceMotion
+    fun scrollHomeTo(target: Int) {
+        scope.launch {
+            if (reduceMotion) scrollState.scrollTo(target) else scrollState.animateScrollTo(target)
+        }
+    }
     if (confirmDiagnostics) {
         AlertDialog(
             onDismissRequest = { confirmDiagnostics = false },
@@ -245,102 +309,482 @@ private fun HomeScreen(
         )
     }
     SignalBackground {
-        Column(
-            modifier =
-                Modifier.fillMaxSize()
-                    .safeDrawingPadding()
-                    .verticalScroll(rememberScrollState())
-                    .padding(GameSpacing.lg)
-                    .widthIn(max = 760.dp)
-                    .align(Alignment.TopCenter),
-            verticalArrangement = Arrangement.spacedBy(GameSpacing.lg),
-        ) {
-            BrandHeader()
-            GameEyebrow("A live social deduction game")
-            Column(verticalArrangement = Arrangement.spacedBy(GameSpacing.xs)) {
-                Text(
-                    "Everyone’s watching.",
-                    modifier = Modifier.semantics { heading() },
-                    style = MaterialTheme.typography.displayMedium,
-                    fontWeight = FontWeight.Black,
-                )
-                Text(
-                    "Someone’s lying.",
-                    style = MaterialTheme.typography.displayMedium,
-                    fontWeight = FontWeight.Black,
-                    color = MaterialTheme.gameColors.accentStrong,
-                )
-            }
-            Text(
-                "Join friends, finish missions, read the room, and expose the imposters before the final vote.",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+        Column(modifier = Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(scrollState)) {
+            Column(
+                modifier =
+                    Modifier.fillMaxWidth()
+                        .padding(
+                            horizontal = WebsiteLayout.headerHorizontal,
+                            vertical = WebsiteLayout.headerVertical,
+                        ),
+                verticalArrangement = Arrangement.spacedBy(GameSpacing.xs),
             ) {
-                SignalChip("18+")
-                SignalChip("Private rooms", Modifier.weight(1f))
-                SignalChip("Photos auto-delete", Modifier.weight(1f))
-            }
-            SignalCard(Modifier.fillMaxWidth(), emphasized = true) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(GameSpacing.lg),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(GameSpacing.lg),
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        PlayerAvatar("wolf", 104.dp, "Crewmate")
-                        SignalChip("LIVE", Modifier.align(Alignment.BottomCenter))
-                    }
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    BrandHeader(
+                        Modifier.fillMaxWidth().padding(end = 60.dp),
+                        compact = maxWidth <= 384.dp,
+                        trailing = {
+                            GameOutlinedButton(
+                                if (menuOpen) "Close" else "Menu",
+                                { menuOpen = !menuOpen },
+                            )
+                        },
+                    )
+                    androidx.compose.material3.IconButton(
+                        onClick = {
+                            onThemeModeChanged(if (darkTheme) ThemeMode.Light else ThemeMode.Dark)
+                        },
+                        modifier =
+                            Modifier.align(Alignment.CenterEnd)
+                                .size(WebsiteLayout.themeControl)
+                                .semantics {
+                                    contentDescription =
+                                        if (darkTheme) "Switch to light theme"
+                                        else "Switch to dark theme"
+                                },
                     ) {
-                        GameEyebrow("No account needed")
-                        Text(
-                            "Your next room is one code away.",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
+                        WebsiteIcon(
+                            if (darkTheme) WebsiteIconKind.Sun else WebsiteIconKind.Moon,
+                            size = 20.dp,
                         )
-                        Text(
-                            "Fast entry, clear phases, private roles, and a decisive result.",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    }
+                }
+                AnimatedVisibility(
+                    visible = menuOpen,
+                    enter =
+                        if (reduceMotion) EnterTransition.None
+                        else fadeIn(tween(GameMotion.StandardMillis)) + expandVertically(),
+                    exit =
+                        if (reduceMotion) ExitTransition.None
+                        else fadeOut(tween(GameMotion.QuickMillis)) + shrinkVertically(),
+                ) {
+                    SignalCard(Modifier.fillMaxWidth()) {
+                        Column(
+                            Modifier.padding(GameSpacing.sm),
+                            verticalArrangement = Arrangement.spacedBy(GameSpacing.xxs),
+                        ) {
+                            GameOutlinedButton(
+                                "How to play",
+                                {
+                                    menuOpen = false
+                                    scrollHomeTo(1050)
+                                },
+                                Modifier.fillMaxWidth(),
+                            )
+                            GameOutlinedButton(
+                                "Privacy & photos",
+                                {
+                                    menuOpen = false
+                                    scrollHomeTo(scrollState.maxValue)
+                                },
+                                Modifier.fillMaxWidth(),
+                            )
+                            GameOutlinedButton("Join a room", onJoin, Modifier.fillMaxWidth())
+                            GameOutlinedButton("App settings", onSettings, Modifier.fillMaxWidth())
+                            GameButton("Start a room  →", onCreate, Modifier.fillMaxWidth())
+                        }
+                    }
+                }
+            }
+            if (message != null || resumeFailed) {
+                Column(
+                    Modifier.fillMaxWidth()
+                        .padding(
+                            horizontal = WebsiteLayout.mobileGutter,
+                            vertical = GameSpacing.sm,
+                        ),
+                    verticalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+                ) {
+                    Message(message)
+                    if (resumeFailed) {
+                        GameButton(
+                            "Retry secure resume",
+                            onRetry,
+                            Modifier.fillMaxWidth(),
+                            loading = loading,
                         )
                     }
                 }
             }
-            Message(message)
-            if (resumeFailed) {
-                GameButton(
-                    "Retry secure resume",
-                    onRetry,
-                    Modifier.fillMaxWidth(),
-                    loading = loading,
+            Column(
+                modifier =
+                    Modifier.fillMaxWidth()
+                        .padding(
+                            start = WebsiteLayout.mobileGutter,
+                            top = WebsiteLayout.heroTop,
+                            end = WebsiteLayout.mobileGutter,
+                            bottom = WebsiteLayout.heroBottom,
+                        ),
+                verticalArrangement = Arrangement.spacedBy(GameSpacing.lg),
+            ) {
+                GameEyebrow("A live social deduction game")
+                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    val headingSize = WebsiteTypeScale.mobileHero(maxWidth.value)
+                    val headingTracking = if (maxWidth <= 420.dp) -0.035f else -0.045f
+                    Column {
+                        Text(
+                            "Everyone’s watching.",
+                            modifier = Modifier.semantics { heading() },
+                            style =
+                                MaterialTheme.typography.displayLarge.copy(
+                                    fontSize = headingSize.sp,
+                                    lineHeight = (headingSize * 0.87f).sp,
+                                    letterSpacing = (headingSize * headingTracking).sp,
+                                ),
+                        )
+                        Text(
+                            "Someone’s lying.",
+                            style =
+                                MaterialTheme.typography.displayLarge.copy(
+                                    fontSize = headingSize.sp,
+                                    lineHeight = (headingSize * 0.87f).sp,
+                                    letterSpacing = (headingSize * headingTracking).sp,
+                                ),
+                            color = MaterialTheme.gameColors.accentStrong,
+                        )
+                    }
+                }
+                Text(
+                    "Turn any hangout into a case of trust, bluffing, and photo-proof tasks. No download. No account required. One room code.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-            }
-            GameButton("Join a room  →", onJoin, Modifier.fillMaxWidth())
-            GameOutlinedButton("Create a private room", onCreate, Modifier.fillMaxWidth())
-            GameOutlinedButton("App settings", onSettings, Modifier.fillMaxWidth())
-            SignalCard(Modifier.fillMaxWidth()) {
-                Column(
-                    Modifier.padding(GameSpacing.md),
-                    verticalArrangement = Arrangement.spacedBy(GameSpacing.xs),
-                ) {
-                    GameEyebrow("Privacy by design")
-                    Text(
-                        "Roles stay private, room access is controlled, and game photos are removed automatically.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                Column(verticalArrangement = Arrangement.spacedBy(GameSpacing.xs)) {
+                    GameButton("Start a room  →", onCreate, Modifier.fillMaxWidth())
+                    TextButton(
+                        onClick = { scrollHomeTo(1050) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("See how it works")
+                        WebsiteIcon(
+                            WebsiteIconKind.Arrow,
+                            Modifier.padding(start = 7.dp),
+                            size = 17.dp,
+                        )
+                    }
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(GameSpacing.xxs)) {
+                    WebsiteTrustItem("18+ private rooms")
+                    WebsiteTrustItem("Up to 12 players")
+                    WebsiteTrustItem("Photos auto-delete")
+                }
+                Box(Modifier.fillMaxWidth()) {
+                    SignalSceneArt(SignalScene.Meeting)
+                    HomeVisualNote(
+                        "ROOM 7X3K9Q",
+                        icon = WebsiteIconKind.Room,
+                        modifier = Modifier.align(Alignment.TopStart).padding(top = GameSpacing.md),
+                    )
+                    HomeVisualNote(
+                        "6 players connected",
+                        live = true,
+                        modifier =
+                            Modifier.align(Alignment.BottomEnd).padding(bottom = GameSpacing.md),
                     )
                 }
             }
-            TextButton(
-                modifier = Modifier.align(Alignment.CenterHorizontally),
-                onClick = { confirmDiagnostics = true },
+            Column(
+                modifier =
+                    Modifier.fillMaxWidth()
+                        .padding(
+                            start = WebsiteLayout.mobileGutter,
+                            top = WebsiteLayout.journeyTop,
+                            end = WebsiteLayout.mobileGutter,
+                            bottom = GameSpacing.lg,
+                        ),
+                verticalArrangement = Arrangement.spacedBy(GameSpacing.lg),
             ) {
-                Text("Share support diagnostics")
+                GameEyebrow("The round, at a glance")
+                BoxWithConstraints {
+                    val headingSize = WebsiteTypeScale.mobileSection(maxWidth.value)
+                    Text(
+                        "Play the room.\nNot the screen.",
+                        modifier = Modifier.semantics { heading() },
+                        style =
+                            MaterialTheme.typography.displayMedium.copy(
+                                fontSize = headingSize.sp,
+                                lineHeight = (headingSize * 0.92f).sp,
+                            ),
+                    )
+                }
+                Text(
+                    "Fast prompts on your phone. The real game happens face to face.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
+            val journeys =
+                listOf(
+                    HomeJourney(
+                        "01",
+                        SignalScene.Lobby,
+                        "Gather the room",
+                        "Create a private room, share one code, and get everyone ready.",
+                    ),
+                    HomeJourney(
+                        "02",
+                        SignalScene.Tasks,
+                        "Prove your work",
+                        "Finish real-world tasks and add private photo evidence.",
+                    ),
+                    HomeJourney(
+                        "03",
+                        SignalScene.Meeting,
+                        "Read the table",
+                        "Challenge suspicious proof and make your case out loud.",
+                    ),
+                    HomeJourney(
+                        "04",
+                        SignalScene.Verdict,
+                        "Cast the verdict",
+                        "Vote in private, reveal the result, and live with the room’s decision.",
+                    ),
+                )
+            LazyRow(
+                contentPadding =
+                    PaddingValues(
+                        start = WebsiteLayout.mobileGutter,
+                        end = WebsiteLayout.mobileGutter,
+                        bottom = WebsiteLayout.privacyPadding,
+                    ),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                items(journeys) { journey -> HomeJourneyCard(journey) }
+            }
+            Text(
+                "Swipe to explore  →",
+                Modifier.fillMaxWidth().padding(bottom = WebsiteLayout.journeyBottom),
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelMedium,
+            )
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.gameColors.surfaceRaised,
+                border =
+                    androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.outlineVariant,
+                    ),
+            ) {
+                Column(
+                    Modifier.padding(
+                        horizontal = WebsiteLayout.mobileGutter,
+                        vertical = WebsiteLayout.bandVertical,
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(GameSpacing.xl),
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(GameSpacing.sm)) {
+                        GameEyebrow("Built for the glance")
+                        Text(
+                            "Look down for two seconds.\nLook back at your friends.",
+                            modifier = Modifier.semantics { heading() },
+                            style = MaterialTheme.typography.displayMedium,
+                        )
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            HomePhaseSwatch("LOBBY", SignalScene.Lobby, Modifier.weight(1f))
+                            HomePhaseSwatch("TASKS", SignalScene.Tasks, Modifier.weight(1f))
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            HomePhaseSwatch("MEETING", SignalScene.Meeting, Modifier.weight(1f))
+                            HomePhaseSwatch("RESULTS", SignalScene.Verdict, Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+            SignalCard(
+                Modifier.fillMaxWidth()
+                    .padding(
+                        horizontal = GameSpacing.md,
+                        vertical = WebsiteLayout.privacyMargin,
+                    )
+            ) {
+                Column(
+                    Modifier.padding(WebsiteLayout.privacyPadding),
+                    verticalArrangement = Arrangement.spacedBy(GameSpacing.md),
+                ) {
+                    Surface(
+                        modifier = Modifier.size(88.dp),
+                        shape = androidx.compose.foundation.shape.CircleShape,
+                        border =
+                            androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                MaterialTheme.gameColors.accentStrong,
+                            ),
+                        color = androidx.compose.ui.graphics.Color.Transparent,
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            WebsiteIcon(
+                                WebsiteIconKind.Eye,
+                                tint = MaterialTheme.gameColors.accentStrong,
+                                size = 34.dp,
+                            )
+                        }
+                    }
+                    GameEyebrow("Your room stays your room")
+                    Text(
+                        "Evidence without the surveillance.",
+                        modifier = Modifier.semantics { heading() },
+                        style = MaterialTheme.typography.headlineLarge,
+                    )
+                    Text(
+                        "Photos are visible only to your game room and are scheduled for deletion after the game. No public profiles, no session replay, no ad trackers on game screens.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    TextButton(
+                        onClick = {
+                            scrollHomeTo(scrollState.maxValue)
+                        }
+                    ) {
+                        Text("Read the photo policy")
+                        WebsiteIcon(
+                            WebsiteIconKind.Arrow,
+                            Modifier.padding(start = 7.dp),
+                            size = 17.dp,
+                        )
+                    }
+                    GameButton("Open a case  →", onCreate, Modifier.fillMaxWidth())
+                }
+            }
+            Column(
+                Modifier.fillMaxWidth()
+                    .padding(
+                        start = WebsiteLayout.headerHorizontal,
+                        end = WebsiteLayout.headerHorizontal,
+                        bottom = WebsiteLayout.footerBottom,
+                    ),
+                verticalArrangement = Arrangement.spacedBy(GameSpacing.md),
+            ) {
+                BrandHeader()
+                Text(
+                    "Trust no one. Prove everything.",
+                    color = MaterialTheme.gameColors.accentStrong,
+                )
+                Text("18+ · Built for private rooms.", style = MaterialTheme.typography.bodySmall)
+                TextButton(onClick = { confirmDiagnostics = true }) {
+                    Text("Share support diagnostics")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomeVisualNote(
+    text: String,
+    modifier: Modifier = Modifier,
+    icon: WebsiteIconKind? = null,
+    live: Boolean = false,
+) {
+    Surface(
+        modifier = modifier,
+        shape = GameShapes.pill,
+        color = androidx.compose.ui.graphics.Color(0xCC0C0F0D),
+        border =
+            androidx.compose.foundation.BorderStroke(
+                1.dp,
+                androidx.compose.ui.graphics.Color.White.copy(alpha = 0.24f),
+            ),
+        shadowElevation = 10.dp,
+    ) {
+        Row(
+            Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+        ) {
+            icon?.let {
+                WebsiteIcon(it, tint = androidx.compose.ui.graphics.Color.White, size = 16.dp)
+            }
+            if (live) {
+                Text(
+                    "LIVE",
+                    color = androidx.compose.ui.graphics.Color(0xFFF7BD62),
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
+            Text(
+                text,
+                color = androidx.compose.ui.graphics.Color.White,
+                style = MaterialTheme.typography.labelSmall,
+            )
+        }
+    }
+}
+
+private data class HomeJourney(
+    val number: String,
+    val scene: SignalScene,
+    val title: String,
+    val body: String,
+)
+
+@Composable
+private fun HomeJourneyCard(journey: HomeJourney) {
+    SignalCard(Modifier.width(WebsiteLayout.journeyCardWidth)) {
+        Column {
+            SignalSceneArt(journey.scene)
+            Box(
+                Modifier.fillMaxWidth()
+                    .height(WebsiteLayout.journeyCardBodyHeight)
+                    .padding(horizontal = GameSpacing.lg, vertical = 22.dp)
+            ) {
+                Text(
+                    journey.number,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.gameColors.textTertiary,
+                )
+                WebsitePhaseGlyph(
+                    journey.scene,
+                    Modifier.align(Alignment.TopEnd).padding(top = 0.dp),
+                )
+                Column(
+                    Modifier.align(Alignment.BottomStart),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Text(journey.title, style = MaterialTheme.typography.titleLarge)
+                    Text(journey.body, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HomePhaseSwatch(label: String, scene: SignalScene, modifier: Modifier = Modifier) {
+    val color =
+        when (scene) {
+            SignalScene.Lobby -> MaterialTheme.gameColors.lobby
+            SignalScene.Tasks -> MaterialTheme.gameColors.tasks
+            SignalScene.Meeting -> MaterialTheme.gameColors.meeting
+            SignalScene.Verdict -> MaterialTheme.gameColors.results
+        }
+    val icon =
+        when (scene) {
+            SignalScene.Lobby -> WebsiteIconKind.Lobby
+            SignalScene.Tasks -> WebsiteIconKind.Tasks
+            SignalScene.Meeting -> WebsiteIconKind.Meeting
+            SignalScene.Verdict -> WebsiteIconKind.Verdict
+        }
+    Surface(
+        modifier.height(WebsiteLayout.phaseSwatchHeight),
+        shape = GameShapes.medium,
+        color = color,
+        shadowElevation = 8.dp,
+    ) {
+        Row(
+            Modifier.fillMaxSize().padding(GameSpacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+        ) {
+            WebsiteIcon(icon, size = 20.dp, tint = androidx.compose.ui.graphics.Color.White)
+            Text(
+                label,
+                Modifier.padding(start = GameSpacing.xs),
+                color = androidx.compose.ui.graphics.Color.White,
+                style = MaterialTheme.typography.labelMedium,
+            )
         }
     }
 }
@@ -397,7 +841,10 @@ private fun SettingsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 SignalCard(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(GameSpacing.md)) {
+                    Column(
+                        Modifier.padding(GameSpacing.sm),
+                        verticalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+                    ) {
                         ThemeMode.entries.forEach { mode ->
                             val label =
                                 when (mode) {
@@ -405,24 +852,11 @@ private fun SettingsScreen(
                                     ThemeMode.Light -> "Light"
                                     ThemeMode.Dark -> "Dark"
                                 }
-                            Row(
-                                modifier =
-                                    Modifier.fillMaxWidth()
-                                        .selectable(
-                                            selected = preferences.themeMode == mode,
-                                            role = Role.RadioButton,
-                                            onClick = { onThemeModeChanged(mode) },
-                                        )
-                                        .padding(vertical = GameSpacing.sm),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(GameSpacing.sm),
-                            ) {
-                                RadioButton(
-                                    selected = preferences.themeMode == mode,
-                                    onClick = null,
-                                )
-                                Text(label, style = MaterialTheme.typography.bodyLarge)
-                            }
+                            ThemeChoiceRow(
+                                label = label,
+                                selected = preferences.themeMode == mode,
+                                onClick = { onThemeModeChanged(mode) },
+                            )
                         }
                     }
                 }
@@ -468,6 +902,53 @@ private fun SettingsScreen(
 }
 
 @Composable
+private fun ThemeChoiceRow(label: String, selected: Boolean, onClick: () -> Unit) {
+    Surface(
+        modifier =
+            Modifier.fillMaxWidth()
+                .selectable(selected = selected, role = Role.RadioButton, onClick = onClick),
+        shape = GameShapes.small,
+        color =
+            if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+            else androidx.compose.ui.graphics.Color.Transparent,
+        border =
+            androidx.compose.foundation.BorderStroke(
+                1.dp,
+                if (selected) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.outlineVariant,
+            ),
+    ) {
+        Row(
+            Modifier.defaultMinSize(minHeight = 48.dp).padding(horizontal = GameSpacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(GameSpacing.sm),
+        ) {
+            Box(
+                Modifier.size(20.dp)
+                    .border(
+                        2.dp,
+                        if (selected) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.outline,
+                        androidx.compose.foundation.shape.CircleShape,
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (selected) {
+                    Box(
+                        Modifier.size(10.dp)
+                            .background(
+                                MaterialTheme.colorScheme.primary,
+                                androidx.compose.foundation.shape.CircleShape,
+                            )
+                    )
+                }
+            }
+            Text(label, style = MaterialTheme.typography.bodyLarge)
+        }
+    }
+}
+
+@Composable
 private fun PreferenceSwitchRow(
     title: String,
     description: String,
@@ -494,7 +975,28 @@ private fun PreferenceSwitchRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Switch(checked = checked, onCheckedChange = null)
+        Box(
+            modifier =
+                Modifier.width(52.dp)
+                    .height(30.dp)
+                    .background(
+                        if (checked) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.gameColors.surfaceHighest,
+                        GameShapes.pill,
+                    )
+                    .border(1.dp, MaterialTheme.colorScheme.outline, GameShapes.pill)
+        ) {
+            Box(
+                Modifier.align(if (checked) Alignment.CenterEnd else Alignment.CenterStart)
+                    .padding(4.dp)
+                    .size(20.dp)
+                    .background(
+                        if (checked) MaterialTheme.colorScheme.onPrimary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        androidx.compose.foundation.shape.CircleShape,
+                    )
+            )
+        }
     }
 }
 
@@ -694,8 +1196,8 @@ private fun ColorPicker(
                                 id,
                                 58.dp,
                                 label,
-                                modifier = Modifier.clearAndSetSemantics {},
                                 selected = id == selectedId,
+                                decorative = true,
                             )
                         }
                     }
@@ -736,6 +1238,8 @@ private fun LobbyScreen(
     viewModel: EntryLobbyViewModel,
     onCopyCode: (String) -> Unit,
     onShareCode: (String) -> Unit,
+    onToggleSound: () -> Unit,
+    onToggleTheme: () -> Unit,
 ) {
     val room = state.room ?: return LoadingScreen("Loading lobby…")
     if (state.confirmLeave) {
@@ -763,11 +1267,24 @@ private fun LobbyScreen(
             viewModel.clearAnnouncement()
         }
     }
-    SignalBackground(accent = MaterialTheme.gameColors.lobby) {
+    SignalBackground(
+        accent = MaterialTheme.gameColors.lobby,
+        watermarkPlayerColorId = room.self.avatarId,
+    ) {
         BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
             val twoPane = maxWidth >= 600.dp || maxHeight < 480.dp
             Column(Modifier.fillMaxSize()) {
-                LobbyHeader(room, onCopyCode, onShareCode, viewModel::requestLeave)
+                GameTopBar(
+                    phase = "Lobby",
+                    timerText = "",
+                    timerDescription = "Lobby",
+                    nickname = room.self.nickname,
+                    playerColorId = room.self.avatarId,
+                    connectionState = state.connectionState,
+                    onToggleSound = onToggleSound,
+                    onToggleTheme = onToggleTheme,
+                )
+                LobbyHeader(room, onCopyCode, onShareCode)
                 if (state.connectionState != ConnectionState.Connected) {
                     Message(
                         if (state.connectionState == ConnectionState.Offline) {
@@ -802,40 +1319,68 @@ private fun LobbyHeader(
     room: RoomSnapshot,
     onCopy: (String) -> Unit,
     onShare: (String) -> Unit,
-    onLeave: () -> Unit,
 ) {
-    SignalCard(
-        modifier = Modifier.fillMaxWidth().padding(GameSpacing.md),
-        accent = MaterialTheme.gameColors.lobby,
-        emphasized = true,
+    Column(
+        Modifier.fillMaxWidth().padding(GameSpacing.md),
+        verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(GameSpacing.md),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+        SignalCard(
+            modifier = Modifier.fillMaxWidth(),
+            accent = MaterialTheme.gameColors.lobby,
+            emphasized = true,
         ) {
-            Text(
-                "LOBBY INVITE",
-                color = MaterialTheme.gameColors.lobby,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-            )
-            Text("Room code", style = MaterialTheme.typography.labelLarge)
-            Text(
-                room.code,
-                modifier = Modifier.semantics { heading() },
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.Black,
-            )
-            Text(
-                "Share this code only with people you want in the game.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(GameSpacing.sm)) {
-                GameOutlinedButton("Copy", { onCopy(room.code) })
-                GameOutlinedButton("Share", { onShare(room.code) })
-                TextButton(onClick = onLeave) { Text("Leave") }
+            Column(
+                Modifier.fillMaxWidth().padding(GameSpacing.md),
+                verticalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+            ) {
+                Text(
+                    "INVITE YOUR CREW",
+                    color = MaterialTheme.gameColors.lobby,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Black,
+                )
+                Text(
+                    room.code,
+                    modifier = Modifier.semantics { heading() },
+                    style = MaterialTheme.typography.displaySmall,
+                    fontWeight = FontWeight.Black,
+                )
+                Text(
+                    "Share this code. Players can join from any phone, tablet, or computer.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+                ) {
+                    GameOutlinedButton("Copy room code", { onCopy(room.code) }, Modifier.weight(1f))
+                    GameOutlinedButton("Share", { onShare(room.code) })
+                }
+            }
+        }
+        val joined = room.participants.size
+        val ready = joined >= room.minPlayers
+        SignalCard(Modifier.fillMaxWidth(), accent = MaterialTheme.gameColors.lobby) {
+            Column(
+                Modifier.padding(GameSpacing.md),
+                verticalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+            ) {
+                Text(
+                    if (ready) "Ready to start" else "${room.minPlayers - joined} more needed",
+                    fontWeight = FontWeight.Black,
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    "$joined joined · minimum ${room.minPlayers} · capacity ${room.maxPlayers}",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                LinearProgressIndicator(
+                    progress = { (joined.toFloat() / room.minPlayers).coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.gameColors.lobby,
+                    trackColor = MaterialTheme.gameColors.lobby.copy(alpha = 0.15f),
+                )
             }
         }
     }
@@ -856,10 +1401,16 @@ private fun Roster(
         val joined = room.participants.size
         val startProgress = (joined.toFloat() / room.minPlayers).coerceIn(0f, 1f)
         Text(
-            "Players ($joined/${room.maxPlayers})",
+            "PLAYERS PRESENT",
+            color = MaterialTheme.gameColors.lobby,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Black,
+        )
+        Text(
+            "Lobby roster",
             modifier = Modifier.semantics { heading() },
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Black,
         )
         Text(
             if (joined >= room.minPlayers) {
@@ -907,12 +1458,17 @@ private fun LobbySettings(
         verticalArrangement = Arrangement.spacedBy(GameSpacing.md),
     ) {
         Text(
-            if (room.self.isHost) "Game setup" else "Waiting for host",
-            modifier = Modifier.semantics { heading() },
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
+            if (room.self.isHost) "HOST SETUP" else "WAITING FOR HOST",
+            color = MaterialTheme.gameColors.lobby,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Black,
         )
-        SetupChecklist(state)
+        Text(
+            if (room.self.isHost) "Game settings" else "Game settings",
+            modifier = Modifier.semantics { heading() },
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Black,
+        )
         if (room.self.isHost) {
             TaskPackPicker(state, viewModel)
             NumberSetting(
@@ -1244,7 +1800,11 @@ private fun ChoiceSetting(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(GameSpacing.xs),
             ) {
-                RadioButton(selected = value == id, onClick = null)
+                RadioButton(
+                    selected = value == id,
+                    onClick = null,
+                    modifier = Modifier.clearAndSetSemantics {},
+                )
                 Text(description, modifier = Modifier.weight(1f))
             }
         }
@@ -1254,10 +1814,17 @@ private fun ChoiceSetting(
 @Composable
 private fun LobbyAction(state: EntryLobbyUiState, viewModel: EntryLobbyViewModel) {
     val host = state.room?.self?.isHost == true
-    Surface(shadowElevation = 8.dp, modifier = Modifier.fillMaxWidth().imePadding()) {
+    Surface(
+        shadowElevation = 18.dp,
+        shape = GameShapes.medium,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier =
+            Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp).imePadding(),
+    ) {
         Column(
-            Modifier.padding(GameSpacing.md),
+            Modifier.padding(GameSpacing.xs),
             horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(GameSpacing.xs),
         ) {
             if (host) {
                 if (state.settings.dirty) {
@@ -1280,15 +1847,31 @@ private fun LobbyAction(state: EntryLobbyUiState, viewModel: EntryLobbyViewModel
                         textAlign = TextAlign.Center,
                     )
                 }
-                GameButton(
-                    "Start game",
-                    viewModel::startGame,
-                    Modifier.fillMaxWidth().widthIn(max = 680.dp),
-                    enabled = state.canStart,
-                    loading = state.loading,
-                )
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+                ) {
+                    GameOutlinedButton("Leave", viewModel::requestLeave, enabled = !state.loading)
+                    GameButton(
+                        "Start game",
+                        viewModel::startGame,
+                        Modifier.weight(1f),
+                        enabled = state.canStart,
+                        loading = state.loading,
+                    )
+                }
             } else {
-                Text("Waiting for host to start", fontWeight = FontWeight.Bold)
+                Text(
+                    "Waiting for the host to start the game.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                GameOutlinedButton(
+                    "Leave room",
+                    viewModel::requestLeave,
+                    Modifier.fillMaxWidth(),
+                    enabled = !state.loading,
+                )
             }
         }
     }
@@ -1312,10 +1895,22 @@ internal fun Message(message: String?, modifier: Modifier = Modifier) {
 
 @Composable
 internal fun LoadingScreen(label: String) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            CircularProgressIndicator(Modifier.size(40.dp))
-            Text(label, Modifier.padding(top = GameSpacing.md))
+    SignalBackground {
+        Column(
+            modifier =
+                Modifier.fillMaxSize()
+                    .safeDrawingPadding()
+                    .padding(horizontal = 20.dp, vertical = GameSpacing.lg),
+            verticalArrangement = Arrangement.spacedBy(GameSpacing.xl, Alignment.CenterVertically),
+        ) {
+            BrandHeader(Modifier.fillMaxWidth())
+            WebsiteLoadingPanel(label)
+            Text(
+                "Your private room details stay sealed while we check for an active seat.",
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
         }
     }
 }
