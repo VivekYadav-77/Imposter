@@ -36,6 +36,8 @@ fun PlayerCard(
     status: PlayerStatus? = null,
     isHost: Boolean = false,
     isSelf: Boolean = false,
+    showSelfBadge: Boolean = true,
+    presenceLabel: String? = null,
     selected: Boolean = false,
     enabled: Boolean = true,
     compact: Boolean = false,
@@ -109,13 +111,16 @@ fun PlayerCard(
                     maxLines = 1,
                 )
                 Text(
-                    text = colorName,
+                    text = presenceLabel?.let { "$colorName · $it" } ?: colorName,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = accent,
+                    color =
+                        if (presenceLabel == null) accent
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             Column(horizontalAlignment = Alignment.End) {
-                if (isSelf) StatusLabel(stringResource(R.string.player_status_self))
+                if (isSelf && showSelfBadge)
+                    StatusLabel(stringResource(R.string.player_status_self))
                 if (isHost) StatusLabel(stringResource(R.string.player_status_host))
                 if (status != null) StatusLabel(stringResource(status.descriptionResource))
             }

@@ -25,6 +25,8 @@ enum class EntryValidationTarget {
 data class EntryForm(
     val roomCode: String = "",
     val nickname: String = "",
+    val minPlayers: Int = 3,
+    val maxPlayers: Int = 15,
     val selectedColorId: String? = null,
     val ageAccepted: Boolean = false,
     val photoAccepted: Boolean = false,

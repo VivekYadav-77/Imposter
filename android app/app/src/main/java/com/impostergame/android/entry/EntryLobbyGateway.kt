@@ -43,6 +43,8 @@ interface EntryLobbyGateway {
     suspend fun create(
         nickname: String,
         colorId: String,
+        minPlayers: Int,
+        maxPlayers: Int,
         idempotencyKey: String,
     ): GatewayResult<RoomSnapshot>
 
@@ -77,6 +79,8 @@ class UnavailableEntryLobbyGateway(private val reason: String) : EntryLobbyGatew
     override suspend fun create(
         nickname: String,
         colorId: String,
+        minPlayers: Int,
+        maxPlayers: Int,
         idempotencyKey: String,
     ): GatewayResult<RoomSnapshot> = failure()
 
@@ -137,10 +141,18 @@ class NetworkEntryLobbyGateway(
 
     override suspend fun joinOptions(code: String) = api.joinOptions(code).toGatewayResult()
 
-    override suspend fun create(nickname: String, colorId: String, idempotencyKey: String) =
-        issueSession {
-            api.createRoom(RoomCreationInput(nickname, colorId), idempotencyKey)
-        }
+    override suspend fun create(
+        nickname: String,
+        colorId: String,
+        minPlayers: Int,
+        maxPlayers: Int,
+        idempotencyKey: String,
+    ) = issueSession {
+        api.createRoom(
+            RoomCreationInput(nickname, colorId, minPlayers, maxPlayers),
+            idempotencyKey,
+        )
+    }
 
     override suspend fun join(
         code: String,

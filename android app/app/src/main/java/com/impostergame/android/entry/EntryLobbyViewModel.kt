@@ -143,6 +143,24 @@ class EntryLobbyViewModel(
         }
     }
 
+    fun setMinimumPlayers(value: Int) {
+        pendingSubmission = null
+        update {
+            val minimum = value.coerceIn(3, it.form.maxPlayers)
+            savedState[KEY_MIN_PLAYERS] = minimum
+            it.copy(form = it.form.copy(minPlayers = minimum), message = null)
+        }
+    }
+
+    fun setMaximumPlayers(value: Int) {
+        pendingSubmission = null
+        update {
+            val maximum = value.coerceIn(it.form.minPlayers, 15)
+            savedState[KEY_MAX_PLAYERS] = maximum
+            it.copy(form = it.form.copy(maxPlayers = maximum), message = null)
+        }
+    }
+
     fun setColor(id: String) {
         pendingSubmission = null
         savedState[KEY_COLOR] = id
@@ -232,7 +250,9 @@ class EntryLobbyViewModel(
             return
         }
         val normalizedName = normalizeNickname(form.nickname)
-        val fingerprint = "${snapshot.destination}|${form.roomCode}|$normalizedName|$color"
+        val fingerprint =
+            "${snapshot.destination}|${form.roomCode}|$normalizedName|$color|" +
+                "${form.minPlayers}|${form.maxPlayers}"
         val pending =
             pendingSubmission?.takeIf { it.fingerprint == fingerprint }
                 ?: PendingSubmission(fingerprint, newIdempotencyKey()).also {
@@ -241,7 +261,13 @@ class EntryLobbyViewModel(
         launchRequest {
             val result =
                 if (snapshot.destination == EntryDestination.CREATE) {
-                    gateway.create(normalizedName, color, pending.key)
+                    gateway.create(
+                        normalizedName,
+                        color,
+                        form.minPlayers,
+                        form.maxPlayers,
+                        pending.key,
+                    )
                 } else {
                     gateway.join(form.roomCode, normalizedName, color, pending.key)
                 }
@@ -666,6 +692,8 @@ class EntryLobbyViewModel(
                 EntryForm(
                     roomCode = savedState[KEY_CODE] ?: "",
                     nickname = savedState[KEY_NICKNAME] ?: "",
+                    minPlayers = savedState[KEY_MIN_PLAYERS] ?: 3,
+                    maxPlayers = savedState[KEY_MAX_PLAYERS] ?: 15,
                     selectedColorId = savedState[KEY_COLOR],
                 )
         )
@@ -676,6 +704,8 @@ class EntryLobbyViewModel(
         private const val KEY_CODE = "entry.roomCode"
         private const val KEY_NICKNAME = "entry.nickname"
         private const val KEY_COLOR = "entry.color"
+        private const val KEY_MIN_PLAYERS = "entry.minPlayers"
+        private const val KEY_MAX_PLAYERS = "entry.maxPlayers"
     }
 }
 

@@ -47,6 +47,7 @@ fun GameButton(
     style: GameButtonStyle = GameButtonStyle.Primary,
     enabled: Boolean = true,
     loading: Boolean = false,
+    retainPrimaryWhenDisabled: Boolean = false,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
@@ -94,6 +95,17 @@ fun GameButton(
                         defaultElevation = 3.dp,
                         pressedElevation = 0.dp,
                     ),
+                colors =
+                    if (retainPrimaryWhenDisabled) {
+                        ButtonDefaults.buttonColors(
+                            disabledContainerColor =
+                                MaterialTheme.colorScheme.primary.copy(alpha = .55f),
+                            disabledContentColor =
+                                MaterialTheme.colorScheme.onPrimary.copy(alpha = .78f),
+                        )
+                    } else {
+                        ButtonDefaults.buttonColors()
+                    },
                 content = { content() },
             )
         GameButtonStyle.Secondary ->

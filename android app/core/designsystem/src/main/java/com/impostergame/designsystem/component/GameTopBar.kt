@@ -76,8 +76,8 @@ fun GameTopBar(
         else Color(0xFF111412)
     Surface(modifier = modifier.fillMaxWidth(), color = command, shadowElevation = 8.dp) {
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-            val showPhaseIcon = maxWidth > 390.dp
-            val showIdentityName = maxWidth >= 430.dp
+            val showPhaseIcon = true
+            val showIdentityName = maxWidth >= 600.dp
             Column {
                 Row(
                     modifier =

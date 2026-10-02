@@ -121,6 +121,29 @@ class EntryLobbyViewModelTest {
             assertEquals(null, viewModel.state.value.form.spotsRemaining)
         }
 
+    @Test
+    fun roomOptionsKeepMinimumAndMaximumWithinValidRange() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val viewModel =
+                EntryLobbyViewModel(
+                    FakeGateway(ArrayDeque(listOf(ResumeTarget.Entry))),
+                    SavedStateHandle(),
+                )
+            runCurrent()
+
+            viewModel.setMaximumPlayers(8)
+            viewModel.setMinimumPlayers(12)
+
+            assertEquals(8, viewModel.state.value.form.minPlayers)
+            assertEquals(8, viewModel.state.value.form.maxPlayers)
+
+            viewModel.setMinimumPlayers(5)
+            viewModel.setMaximumPlayers(3)
+
+            assertEquals(5, viewModel.state.value.form.minPlayers)
+            assertEquals(5, viewModel.state.value.form.maxPlayers)
+        }
+
     private fun room(status: RoomStatus): RoomSnapshot =
         RoomSnapshot(
             id = "room",
@@ -171,6 +194,8 @@ private class FakeGateway(
     override suspend fun create(
         nickname: String,
         colorId: String,
+        minPlayers: Int,
+        maxPlayers: Int,
         idempotencyKey: String,
     ): GatewayResult<RoomSnapshot> = error("Not used")
 
