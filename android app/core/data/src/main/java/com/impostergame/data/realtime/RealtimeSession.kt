@@ -73,7 +73,10 @@ class RealtimeSession(
                             connectivity.update(ConnectionState.CONNECTED)
                             transport.heartbeat()
                         }
-                        is TransportEvent.Payload -> handle(protocol.decode(event.value))
+                        is TransportEvent.Payload ->
+                            runCatching { protocol.decode(event.value) }
+                                .getOrNull()
+                                ?.let { handle(it) }
                         is TransportEvent.Disconnected,
                         is TransportEvent.Failed -> throw ReconnectRequired()
                     }

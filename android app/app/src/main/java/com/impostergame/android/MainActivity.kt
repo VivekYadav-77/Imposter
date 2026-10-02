@@ -37,8 +37,16 @@ import com.impostergame.data.network.ParticipantApi
 import com.impostergame.data.network.SignedUploadClient
 import com.impostergame.data.operations.SafeNetworkState
 import com.impostergame.data.operations.SupportDiagnosticsBuffer
+import com.impostergame.data.realtime.RealtimeProtocol
+import com.impostergame.data.realtime.RealtimeSession
+import com.impostergame.data.realtime.SocketIoRealtimeTransport
+import com.impostergame.data.repository.ConnectivityRepository
+import com.impostergame.data.repository.GameRepository
+import com.impostergame.data.repository.PresenceRepository
+import com.impostergame.data.repository.RoomRepository
 import com.impostergame.data.session.StoredSession
 import com.impostergame.session.AndroidKeystoreSessionStore
+import java.net.URI
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -64,12 +72,41 @@ class MainActivity : ComponentActivity() {
             )
         }
     }
+    private val roomRepository by lazy { participantApi?.let(::RoomRepository) }
+    private val gameRepository by lazy { participantApi?.let(::GameRepository) }
+    private val presenceRepository by lazy { PresenceRepository() }
+    private val connectivityRepository by lazy { ConnectivityRepository() }
+    private val realtimeSession: RealtimeSession? by lazy {
+        val api = participantApi ?: return@lazy null
+        val rooms = roomRepository ?: return@lazy null
+        val games = gameRepository ?: return@lazy null
+        RealtimeSession(
+            scope = lifecycleScope,
+            transport =
+                SocketIoRealtimeTransport(
+                    URI(BuildConfig.API_BASE_URL),
+                    allowInsecureLocalDebug = BuildConfig.DEBUG,
+                ),
+            protocol = RealtimeProtocol(),
+            roomRepository = rooms,
+            gameRepository = games,
+            presenceRepository = presenceRepository,
+            connectivity = connectivityRepository,
+            sessionStore = sessionStore,
+        )
+    }
     private val gateway: EntryLobbyGateway by lazy {
         val api = participantApi
         if (api == null) {
             UnavailableEntryLobbyGateway("API_BASE_URL is not configured for this build")
         } else {
-            NetworkEntryLobbyGateway(api, sessionStore)
+            NetworkEntryLobbyGateway(
+                api = api,
+                sessions = sessionStore,
+                realtime = realtimeSession,
+                roomRepository = roomRepository,
+                connectivityRepository = connectivityRepository,
+            )
         }
     }
     private val gameplayGateway: GameplayGateway by lazy {
@@ -139,16 +176,19 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        entryLobbyViewModel.onAppForegrounded()
         feedbackController.setForeground(true)
     }
 
     override fun onPause() {
         feedbackController.setForeground(false)
+        entryLobbyViewModel.onAppBackgrounded()
         gameplayViewModel.onAppBackgrounded()
         super.onPause()
     }
 
     override fun onDestroy() {
+        realtimeSession?.stop()
         if (isFinishing) feedbackController.close()
         super.onDestroy()
     }

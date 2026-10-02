@@ -28,6 +28,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.impostergame.designsystem.R
 import com.impostergame.designsystem.avatar.PlayerAvatar
 import com.impostergame.designsystem.avatar.PlayerStatus
@@ -72,9 +73,9 @@ fun GameTopBar(
             }
         }
     val command =
-        if (MaterialTheme.colorScheme.background.luminance() > 0.5f) Color(0xFFFDFBF6)
-        else Color(0xFF111412)
-    Surface(modifier = modifier.fillMaxWidth(), color = command, shadowElevation = 8.dp) {
+        if (MaterialTheme.colorScheme.background.luminance() > 0.5f) Color(0xFFFFFDF8)
+        else Color(0xFF0D0F0E)
+    Surface(modifier = modifier.fillMaxWidth(), color = command, shadowElevation = 0.dp) {
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
             val showPhaseIcon = true
             val showIdentityName = maxWidth >= 600.dp
@@ -82,7 +83,7 @@ fun GameTopBar(
                 Row(
                     modifier =
                         Modifier.fillMaxWidth()
-                            .height(68.dp)
+                            .height(WebsiteLayout.phaseBarMinHeight)
                             .background(
                                 Brush.horizontalGradient(
                                     listOf(phaseColor.copy(alpha = .11f), Color.Transparent),
@@ -112,18 +113,23 @@ fun GameTopBar(
                                 else -> WebsiteIconKind.Meeting
                             }
                         Box(
-                            Modifier.size(42.dp)
+                            Modifier.size(40.dp)
                                 .background(phaseColor.copy(alpha = .13f), GameShapes.card)
                                 .border(1.dp, phaseColor.copy(alpha = .55f), GameShapes.card),
                             contentAlignment = Alignment.Center,
                         ) {
-                            WebsiteIcon(icon, tint = phaseColor, size = 23.dp)
+                            WebsiteIcon(icon, tint = phaseColor, size = 22.dp)
                         }
                     }
                     Text(
                         text = phase.uppercase(),
                         modifier = Modifier.semantics { contentDescription = phase },
-                        style = MaterialTheme.typography.labelLarge,
+                        style =
+                            MaterialTheme.typography.headlineSmall.copy(
+                                fontSize = 18.sp,
+                                lineHeight = 20.sp,
+                                letterSpacing = 1.8.sp,
+                            ),
                         color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.Black,
                         maxLines = 1,
@@ -148,7 +154,7 @@ fun GameTopBar(
                     Spacer(Modifier.weight(1f))
                     Row(
                         modifier =
-                            Modifier.height(44.dp)
+                            Modifier.height(WebsiteLayout.phaseControl)
                                 .border(
                                     1.dp,
                                     MaterialTheme.colorScheme.outlineVariant,
@@ -160,7 +166,7 @@ fun GameTopBar(
                     ) {
                         PlayerAvatar(
                             transportId = playerColorId,
-                            size = 36.dp,
+                            size = 34.dp,
                             contentDescription = nickname,
                             status =
                                 if (connectionState == ConnectionState.Connected) null
@@ -214,7 +220,7 @@ fun GameTopBar(
                 }
                 Spacer(
                     Modifier.fillMaxWidth()
-                        .height(3.dp)
+                        .height(2.dp)
                         .background(
                             Brush.horizontalGradient(
                                 listOf(phaseColor, phaseColor.copy(alpha = .35f), Color.Transparent)

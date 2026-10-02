@@ -57,10 +57,10 @@ object WebsiteLayout {
 
     // Frozen mobile game-command-center measurements.
     val gamePageBottom = 92.dp
-    val phaseBarMinHeight = 70.dp
+    val phaseBarMinHeight = 58.dp
     val phaseBarHorizontal = 12.dp
     val phaseBarVertical = 8.dp
-    val phaseControl = 44.dp
+    val phaseControl = 40.dp
     val gameContentGutter = 10.dp
     val lobbyContentGutter = 14.dp
     val lobbyRosterRowHeight = 78.dp
@@ -70,6 +70,10 @@ object WebsiteLayout {
     val taskProofWidth = 76.dp
     val mobileActionHeight = 70.dp
     val mobileActionRadius = 18.dp
+    val lobbyPageBottom = 138.dp
+    val lobbyInviteRadius = 14.dp
+    val lobbySectionRadius = 10.dp
+    val lobbySettingNumber = 30.dp
     val dialogMobileRadius = 22.dp
     val votingOptionRadius = 18.dp
 }

@@ -26,6 +26,36 @@ import org.junit.Test
 
 class RealtimeSessionTest {
     @Test
+    fun malformedPayloadDoesNotEndTheSession() = runTest {
+        val transport = FakeTransport()
+        val connectivity = ConnectivityRepository()
+        val session =
+            RealtimeSession(
+                scope = backgroundScope,
+                transport = transport,
+                protocol = RealtimeProtocol(),
+                roomRepository =
+                    RoomRepository(RoomSnapshotSource { error("unexpected room refresh") }),
+                gameRepository =
+                    GameRepository(GameSnapshotSource { ApiResult.Success(null, null) }),
+                presenceRepository = PresenceRepository(),
+                connectivity = connectivity,
+                sessionStore = FakeSessionStore(StoredSession.Available(credential())),
+                backoff = ReconnectBackoff(jitter = { 0 }),
+            )
+        session.start("secret")
+        testScheduler.runCurrent()
+
+        transport.connectEvent()
+        transport.send("""{"schemaVersion":1,"occurredAt":"2026-09-27T00:00:00Z"}""")
+        transport.send("not-json")
+        testScheduler.runCurrent()
+
+        assertEquals(1, transport.connectCount)
+        assertEquals(ConnectionState.CONNECTED, connectivity.state.value)
+    }
+
+    @Test
     fun gapRequestsOneResyncAndRevocationClearsSessionPermanently() = runTest {
         val transport = FakeTransport()
         val sessions = FakeSessionStore(StoredSession.Available(credential()))
@@ -92,5 +122,9 @@ private class FakeTransport : RealtimeTransport {
 
     fun send(payload: String) {
         check(stream.tryEmit(TransportEvent.Payload(payload)))
+    }
+
+    fun connectEvent() {
+        check(stream.tryEmit(TransportEvent.Connected))
     }
 }

@@ -5,21 +5,31 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.impostergame.designsystem.R
 
 val PublicSans =
     FontFamily(
-        Font(R.font.public_sans_variable, weight = FontWeight.Normal),
-        Font(R.font.public_sans_variable, weight = FontWeight.Medium),
-        Font(R.font.public_sans_variable, weight = FontWeight.SemiBold),
-        Font(R.font.public_sans_variable, weight = FontWeight.Bold),
-        Font(R.font.public_sans_variable, weight = FontWeight.ExtraBold),
-        Font(R.font.public_sans_variable, weight = FontWeight.Black),
+        publicSansFont(FontWeight.Normal, 400),
+        publicSansFont(FontWeight.Medium, 500),
+        publicSansFont(FontWeight.SemiBold, 600),
+        publicSansFont(FontWeight.Bold, 700),
+        publicSansFont(FontWeight.ExtraBold, 800),
+        publicSansFont(FontWeight.Black, 900),
+    )
+
+@OptIn(ExperimentalTextApi::class)
+private fun publicSansFont(weight: FontWeight, variableWeight: Int) =
+    Font(
+        R.font.public_sans_variable,
+        weight = weight,
+        variationSettings = FontVariation.Settings(FontVariation.weight(variableWeight)),
     )
 
 val BarlowCondensed =
@@ -49,6 +59,14 @@ val GameTypography =
                 lineHeight = 53.sp,
                 letterSpacing = (-1.45).sp,
             ),
+        displaySmall =
+            TextStyle(
+                fontFamily = BarlowCondensed,
+                fontWeight = FontWeight.Bold,
+                fontSize = 44.sp,
+                lineHeight = 44.sp,
+                letterSpacing = 1.8.sp,
+            ),
         headlineLarge =
             TextStyle(
                 fontFamily = BarlowCondensed,
@@ -65,6 +83,14 @@ val GameTypography =
                 lineHeight = 34.sp,
                 letterSpacing = (-0.8).sp,
             ),
+        headlineSmall =
+            TextStyle(
+                fontFamily = BarlowCondensed,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 26.sp,
+                lineHeight = 29.sp,
+                letterSpacing = (-0.65).sp,
+            ),
         titleLarge =
             TextStyle(
                 fontFamily = PublicSans,
@@ -78,6 +104,13 @@ val GameTypography =
                 fontWeight = FontWeight.Bold,
                 fontSize = 18.sp,
                 lineHeight = 24.sp,
+            ),
+        titleSmall =
+            TextStyle(
+                fontFamily = PublicSans,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
             ),
         bodyLarge =
             TextStyle(

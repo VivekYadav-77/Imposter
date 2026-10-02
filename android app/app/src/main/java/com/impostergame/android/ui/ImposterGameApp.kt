@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -62,8 +63,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -83,6 +88,7 @@ import com.impostergame.android.entry.EntryDestination
 import com.impostergame.android.entry.EntryLobbyUiState
 import com.impostergame.android.entry.EntryLobbyViewModel
 import com.impostergame.android.entry.EntryValidationTarget
+import com.impostergame.android.entry.SettingsSaveState
 import com.impostergame.android.feedback.GameFeedbackEvent
 import com.impostergame.android.gameplay.GameplayViewModel
 import com.impostergame.android.preferences.AppPreferences
@@ -1565,11 +1571,20 @@ private fun LobbyScreen(
                         LobbySettings(state, viewModel, Modifier.weight(1f).fillMaxHeight())
                     }
                 } else {
-                    Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-                        LobbyHeader(room, onCopyCode)
-                        LobbyMessages(state)
-                        Roster(room, scrollable = false)
-                        LobbySettings(state, viewModel, scrollable = false)
+                    Box(
+                        Modifier.weight(1f).fillMaxWidth(),
+                        contentAlignment = Alignment.TopCenter,
+                    ) {
+                        Column(
+                            Modifier.widthIn(max = 430.dp)
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            LobbyHeader(room, onCopyCode)
+                            LobbyMessages(state)
+                            Roster(room, scrollable = false)
+                            LobbySettings(state, viewModel, scrollable = false)
+                        }
                     }
                 }
                 LobbyAction(state, viewModel)
@@ -1600,15 +1615,29 @@ private fun LobbyHeader(
     onCopy: (String) -> Unit,
 ) {
     Column(
-        Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        WebsiteCard(
+        Surface(
             modifier = Modifier.fillMaxWidth(),
-            accent = MaterialTheme.colorScheme.primary,
+            shape = GameShapes.card,
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = .64f)),
+            shadowElevation = 10.dp,
+            tonalElevation = 0.dp,
         ) {
             Column(
-                Modifier.fillMaxWidth().padding(18.dp),
+                Modifier.fillMaxWidth()
+                    .background(
+                        Brush.linearGradient(
+                            if (MaterialTheme.colorScheme.background.luminance() > .5f) {
+                                listOf(Color(0xFFF5E0BB), Color(0xFFFFFDF8))
+                            } else {
+                                listOf(Color(0xFF3E3014), Color(0xFF191814))
+                            }
+                        )
+                    )
+                    .padding(horizontal = 18.dp, vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
@@ -1628,7 +1657,11 @@ private fun LobbyHeader(
                     "Share this code. Players can join from any phone, tablet, or computer.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                GameOutlinedButton("Copy room code", { onCopy(room.code) }, Modifier.fillMaxWidth())
+                GameOutlinedButton(
+                    "Copy room code",
+                    { onCopy(room.code) },
+                    Modifier.fillMaxWidth().padding(top = 4.dp),
+                )
             }
         }
         val joined = room.participants.size
@@ -1648,18 +1681,36 @@ private fun LobbyHeader(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall,
                 )
+                val progress by
+                    animateFloatAsState(
+                        targetValue = (joined.toFloat() / room.minPlayers).coerceIn(0f, 1f),
+                        animationSpec =
+                            tween(
+                                durationMillis = 240,
+                                easing = GameMotion.EmphasisEasing,
+                            ),
+                        label = "Lobby readiness",
+                    )
                 Box(
                     Modifier.fillMaxWidth()
-                        .height(7.dp)
+                        .height(10.dp)
                         .background(
                             MaterialTheme.colorScheme.outlineVariant.copy(alpha = .45f),
                             GameShapes.pill,
                         )
                 ) {
                     Box(
-                        Modifier.fillMaxWidth((joined.toFloat() / room.minPlayers).coerceIn(0f, 1f))
+                        Modifier.fillMaxWidth(progress)
                             .fillMaxHeight()
-                            .background(MaterialTheme.gameColors.ready, GameShapes.pill)
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(
+                                        MaterialTheme.colorScheme.primary,
+                                        MaterialTheme.gameColors.ready,
+                                    )
+                                ),
+                                GameShapes.pill,
+                            )
                     )
                 }
             }
@@ -1676,7 +1727,7 @@ private fun Roster(
     val contentModifier =
         if (scrollable) modifier.verticalScroll(rememberScrollState()) else modifier
     Column(
-        modifier = contentModifier.padding(GameSpacing.md),
+        modifier = contentModifier.padding(horizontal = 14.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
     ) {
         val joined = room.participants.size
@@ -1712,32 +1763,25 @@ private fun LobbySettings(
     val room = state.room ?: return
     var meetingExpanded by rememberSaveable { mutableStateOf(false) }
     var balanceExpanded by rememberSaveable { mutableStateOf(false) }
-    var tasksExpanded by rememberSaveable { mutableStateOf(true) }
+    var tasksExpanded by rememberSaveable { mutableStateOf(false) }
     var rolesExpanded by rememberSaveable { mutableStateOf(false) }
     val contentModifier =
         if (scrollable) modifier.verticalScroll(rememberScrollState()) else modifier
-    LaunchedEffect(state.settings, room.self.isHost) {
-        if (room.self.isHost && state.settings.dirty && state.settingsValidationErrors.isEmpty()) {
-            kotlinx.coroutines.delay(550)
-            viewModel.applySettings()
-        }
-    }
     Column(
-        modifier = contentModifier.padding(GameSpacing.md),
-        verticalArrangement = Arrangement.spacedBy(GameSpacing.md),
+        modifier = contentModifier.padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         if (room.self.isHost) {
-            WebsiteCard(Modifier.fillMaxWidth()) {
+            WebsiteCard(Modifier.fillMaxWidth(), shadowElevation = 10.dp) {
                 Column(
                     Modifier.padding(horizontal = 14.dp, vertical = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Row(
+                    Column(
                         Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.Top,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Column(Modifier.weight(1f)) {
+                        Column {
                             Text(
                                 "HOST SETUP",
                                 color = MaterialTheme.colorScheme.primary,
@@ -1756,28 +1800,50 @@ private fun LobbySettings(
                             )
                         }
                         Text(
-                            if (state.settings.dirty) "SAVING" else "SAVED",
+                            when (state.settingsSaveState) {
+                                SettingsSaveState.Saving -> "SAVING"
+                                SettingsSaveState.Error -> "RETRY"
+                                SettingsSaveState.Dirty -> "PENDING"
+                                else -> "SAVED"
+                            },
                             modifier =
-                                Modifier.border(
+                                Modifier.clickable(
+                                        enabled =
+                                            state.settingsSaveState == SettingsSaveState.Error,
+                                        onClick = viewModel::applySettings,
+                                    )
+                                    .border(
                                         1.dp,
-                                        if (state.settings.dirty) {
-                                            MaterialTheme.colorScheme.primary
-                                        } else {
-                                            MaterialTheme.gameColors.ready
+                                        when (state.settingsSaveState) {
+                                            SettingsSaveState.Error ->
+                                                MaterialTheme.colorScheme.error
+                                            SettingsSaveState.Dirty,
+                                            SettingsSaveState.Saving ->
+                                                MaterialTheme.colorScheme.primary
+                                            else -> MaterialTheme.gameColors.ready
                                         },
                                         GameShapes.pill,
                                     )
-                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                    .padding(horizontal = 8.dp, vertical = 3.dp),
                             color =
-                                if (state.settings.dirty) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.gameColors.ready,
+                                when (state.settingsSaveState) {
+                                    SettingsSaveState.Error -> MaterialTheme.colorScheme.error
+                                    SettingsSaveState.Dirty,
+                                    SettingsSaveState.Saving -> MaterialTheme.colorScheme.primary
+                                    else -> MaterialTheme.gameColors.ready
+                                },
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Black,
+                        )
+                        Spacer(
+                            Modifier.fillMaxWidth()
+                                .height(1.dp)
+                                .background(MaterialTheme.colorScheme.outlineVariant)
                         )
                     }
                     Surface(
                         shape = GameShapes.small,
-                        color = MaterialTheme.colorScheme.surface,
+                        color = MaterialTheme.colorScheme.background.copy(alpha = .48f),
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                         tonalElevation = 0.dp,
                     ) {
@@ -1831,30 +1897,48 @@ private fun LobbySettings(
 }
 
 @Composable
-private fun NumberedSettingsHeading(number: String, title: String, description: String? = null) {
+private fun NumberedSettingsHeading(
+    number: String,
+    title: String,
+    description: String? = null,
+    modifier: Modifier = Modifier,
+) {
     Row(
+        modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text(
-            number,
-            modifier =
-                Modifier.background(
-                        MaterialTheme.colorScheme.primary.copy(alpha = .10f),
-                        GameShapes.small,
-                    )
-                    .padding(horizontal = 9.dp, vertical = 6.dp),
-            color = MaterialTheme.colorScheme.primary,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Black,
-        )
+        Box(
+            Modifier.size(30.dp)
+                .border(
+                    1.dp,
+                    MaterialTheme.colorScheme.primary,
+                    androidx.compose.foundation.shape.CircleShape,
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                number,
+                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Black,
+            )
+        }
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Black)
+            Text(
+                title,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.ExtraBold,
+            )
             description?.let {
                 Text(
                     it,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall,
+                    style =
+                        MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 12.sp,
+                            lineHeight = 18.sp,
+                        ),
                 )
             }
         }
@@ -1934,7 +2018,11 @@ private fun TaskPackPicker(state: EntryLobbyUiState, viewModel: EntryLobbyViewMo
                         if (selected == null) MaterialTheme.colorScheme.onSurfaceVariant
                         else MaterialTheme.colorScheme.onSurface,
                 )
-                Text(if (expanded) "⌃" else "⌄", fontWeight = FontWeight.Bold)
+                WebsiteIcon(
+                    WebsiteIconKind.Chevron,
+                    Modifier.rotate(if (expanded) 180f else 0f),
+                    size = 17.dp,
+                )
             }
         }
         AnimatedVisibility(
@@ -1980,7 +2068,13 @@ private fun TaskPackPicker(state: EntryLobbyUiState, viewModel: EntryLobbyViewMo
                                     style = MaterialTheme.typography.bodySmall,
                                 )
                             }
-                            if (isSelected) Text("✓", color = MaterialTheme.colorScheme.primary)
+                            if (isSelected) {
+                                WebsiteIcon(
+                                    WebsiteIconKind.Check,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    size = 17.dp,
+                                )
+                            }
                         }
                     }
                 }
@@ -2010,15 +2104,19 @@ private fun NumberSetting(
             tonalElevation = 0.dp,
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(5.dp),
+                modifier = Modifier.fillMaxWidth().height(48.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(GameSpacing.xs),
             ) {
-                GameOutlinedButton(
-                    "−",
-                    { onChange((value - step).coerceAtLeast(minimum)) },
-                    Modifier.size(48.dp),
+                NumberStepButton(
+                    icon = WebsiteIconKind.Minus,
+                    description = "Decrease $label by $step",
+                    onClick = { onChange((value - step).coerceAtLeast(minimum)) },
                     enabled = value > minimum,
+                )
+                Spacer(
+                    Modifier.fillMaxHeight()
+                        .width(1.dp)
+                        .background(MaterialTheme.colorScheme.outlineVariant)
                 )
                 Row(
                     Modifier.weight(1f),
@@ -2034,10 +2132,15 @@ private fun NumberSetting(
                         )
                     }
                 }
-                GameOutlinedButton(
-                    "+",
-                    { onChange((value + step).coerceAtMost(maximum)) },
-                    Modifier.size(48.dp),
+                Spacer(
+                    Modifier.fillMaxHeight()
+                        .width(1.dp)
+                        .background(MaterialTheme.colorScheme.outlineVariant)
+                )
+                NumberStepButton(
+                    icon = WebsiteIconKind.Plus,
+                    description = "Increase $label by $step",
+                    onClick = { onChange((value + step).coerceAtMost(maximum)) },
                     enabled = value < maximum,
                 )
             }
@@ -2049,6 +2152,29 @@ private fun NumberSetting(
                 style = MaterialTheme.typography.bodySmall,
             )
         }
+    }
+}
+
+@Composable
+private fun NumberStepButton(
+    icon: WebsiteIconKind,
+    description: String,
+    onClick: () -> Unit,
+    enabled: Boolean,
+) {
+    Box(
+        Modifier.size(48.dp)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
+    ) {
+        WebsiteIcon(
+            icon,
+            tint =
+                if (enabled) MaterialTheme.colorScheme.onSurface
+                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .45f),
+            size = 18.dp,
+        )
     }
 }
 
@@ -2087,6 +2213,8 @@ private fun AdvancedSettings(
                             "Wait for everyone — Ends when every counting eligible player has voted.",
                     ),
                 onChange = viewModel::updateMeetingVotingMode,
+                horizontal = true,
+                icons = listOf(WebsiteIconKind.Clock, WebsiteIconKind.Check),
             )
             if (settings.meetingVotingMode == "timed") {
                 NumberSetting(
@@ -2108,6 +2236,7 @@ private fun AdvancedSettings(
                         "public" to "Public — Everyone sees who voted for whom.",
                     ),
                 onChange = viewModel::updateVoteVisibility,
+                icons = listOf(WebsiteIconKind.Lock, WebsiteIconKind.Eye),
             )
             ChoiceSetting(
                 label = "Evidence visibility",
@@ -2118,6 +2247,7 @@ private fun AdvancedSettings(
                         "private" to "Private — Players can view only their own task photos.",
                     ),
                 onChange = viewModel::updateEvidenceVisibility,
+                icons = listOf(WebsiteIconKind.Eye, WebsiteIconKind.Lock),
             )
         }
         SettingsDisclosure(
@@ -2254,10 +2384,16 @@ private fun SettingsDisclosure(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val reduceMotion = LocalGameAccessibilityPreferences.current.reduceMotion
+    val chevronRotation by
+        animateFloatAsState(
+            targetValue = if (expanded) 180f else 0f,
+            animationSpec = tween(if (reduceMotion) 0 else 180, easing = GameMotion.EmphasisEasing),
+            label = "$title disclosure",
+        )
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = GameShapes.small,
-        color = MaterialTheme.colorScheme.surface,
+        color = MaterialTheme.colorScheme.background.copy(alpha = .48f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         tonalElevation = 0.dp,
     ) {
@@ -2266,30 +2402,69 @@ private fun SettingsDisclosure(
                 Modifier.fillMaxWidth().clickable { onExpandedChange(!expanded) }.padding(14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                NumberedSettingsHeading(number, title, description)
-                Text(if (expanded) "⌃" else "⌄", fontWeight = FontWeight.Black)
+                NumberedSettingsHeading(number, title, description, Modifier.weight(1f))
+                WebsiteIcon(
+                    WebsiteIconKind.Chevron,
+                    Modifier.rotate(chevronRotation),
+                    size = 17.dp,
+                )
             }
             AnimatedVisibility(
                 visible = expanded,
                 enter =
                     if (reduceMotion) EnterTransition.None
-                    else fadeIn(tween(GameMotion.StandardMillis)) + expandVertically(),
+                    else
+                        fadeIn(tween(180, easing = GameMotion.EmphasisEasing)) +
+                            expandVertically(
+                                animationSpec = tween(180, easing = GameMotion.EmphasisEasing),
+                                expandFrom = Alignment.Top,
+                            ),
                 exit =
                     if (reduceMotion) ExitTransition.None
-                    else fadeOut(tween(GameMotion.QuickMillis)) + shrinkVertically(),
+                    else
+                        fadeOut(tween(120, easing = GameMotion.EmphasisEasing)) +
+                            shrinkVertically(
+                                animationSpec = tween(180, easing = GameMotion.EmphasisEasing),
+                                shrinkTowards = Alignment.Top,
+                            ),
             ) {
                 Column(
                     Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = 14.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
-                    content = content,
-                )
-            }
-            if (expanded) {
-                GameOutlinedButton(
-                    text = "Close $title  ⌃",
-                    onClick = { onExpandedChange(false) },
-                    modifier = Modifier.fillMaxWidth().padding(14.dp),
-                )
+                ) {
+                    content()
+                    Surface(
+                        modifier =
+                            Modifier.fillMaxWidth().padding(top = 14.dp).clickable(
+                                role = Role.Button
+                            ) {
+                                onExpandedChange(false)
+                            },
+                        shape = GameShapes.small,
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = .84f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                        tonalElevation = 0.dp,
+                    ) {
+                        Row(
+                            Modifier.fillMaxWidth()
+                                .heightIn(min = 46.dp)
+                                .padding(horizontal = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                        ) {
+                            Text(
+                                "Close $title",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            WebsiteIcon(
+                                WebsiteIconKind.Chevron,
+                                Modifier.padding(start = 7.dp).rotate(180f),
+                                size = 16.dp,
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -2331,52 +2506,118 @@ private fun ChoiceSetting(
     value: String,
     choices: List<Pair<String, String>>,
     onChange: (String) -> Unit,
+    horizontal: Boolean = false,
+    icons: List<WebsiteIconKind> = emptyList(),
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(GameSpacing.xs)) {
         Text(label, fontWeight = FontWeight.Bold)
-        choices.forEach { (id, description) ->
-            val selected = value == id
-            val title = description.substringBefore(" — ")
-            val detail = description.substringAfter(" — ", "")
-            Surface(
-                modifier =
-                    Modifier.fillMaxWidth()
-                        .selectable(
-                            selected = selected,
-                            role = Role.RadioButton,
-                            onClick = { onChange(id) },
-                        ),
-                shape = GameShapes.small,
-                color =
-                    if (selected) MaterialTheme.colorScheme.primary.copy(alpha = .12f)
-                    else MaterialTheme.colorScheme.surface,
-                border =
-                    BorderStroke(
-                        if (selected) 2.dp else 1.dp,
-                        if (selected) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.outlineVariant,
-                    ),
-                tonalElevation = 0.dp,
+        if (horizontal) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                choices.forEachIndexed { index, choice ->
+                    ChoiceOption(
+                        choice = choice,
+                        selected = value == choice.first,
+                        onClick = { onChange(choice.first) },
+                        icon = icons.getOrNull(index),
+                        modifier = Modifier.weight(1f).heightIn(min = 112.dp),
+                        stacked = true,
+                    )
+                }
+            }
+        } else {
+            choices.forEachIndexed { index, choice ->
+                ChoiceOption(
+                    choice = choice,
+                    selected = value == choice.first,
+                    onClick = { onChange(choice.first) },
+                    icon = icons.getOrNull(index),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChoiceOption(
+    choice: Pair<String, String>,
+    selected: Boolean,
+    onClick: () -> Unit,
+    icon: WebsiteIconKind?,
+    modifier: Modifier,
+    stacked: Boolean = false,
+) {
+    val title = choice.second.substringBefore(" — ")
+    val detail = choice.second.substringAfter(" — ", "")
+    Surface(
+        modifier =
+            modifier.selectable(
+                selected = selected,
+                role = Role.RadioButton,
+                onClick = onClick,
+            ),
+        shape = GameShapes.xSmall,
+        color =
+            if (selected) MaterialTheme.colorScheme.primary.copy(alpha = .14f)
+            else MaterialTheme.gameColors.surfaceRaised.copy(alpha = .34f),
+        border =
+            BorderStroke(
+                1.dp,
+                if (selected) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.outlineVariant,
+            ),
+        tonalElevation = 0.dp,
+    ) {
+        if (stacked) {
+            Column(
+                Modifier.fillMaxSize().padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(7.dp),
             ) {
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 13.dp, vertical = 11.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(GameSpacing.xs),
-                ) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(title, fontWeight = FontWeight.Black)
-                        if (detail.isNotEmpty()) {
-                            Text(
-                                detail,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
+                icon?.let {
+                    Box(
+                        Modifier.size(28.dp)
+                            .background(
+                                MaterialTheme.colorScheme.primary.copy(alpha = .12f),
+                                androidx.compose.foundation.shape.CircleShape,
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        WebsiteIcon(it, tint = MaterialTheme.colorScheme.primary, size = 16.dp)
                     }
+                }
+                Text(title, fontWeight = FontWeight.Black)
+                if (detail.isNotEmpty()) {
                     Text(
-                        if (selected) "✓" else "",
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Black,
+                        detail,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        } else {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 11.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                icon?.let {
+                    WebsiteIcon(it, tint = MaterialTheme.colorScheme.onSurface, size = 18.dp)
+                }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(title, fontWeight = FontWeight.Black)
+                    if (detail.isNotEmpty()) {
+                        Text(
+                            detail,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+                if (selected) {
+                    WebsiteIcon(
+                        WebsiteIconKind.Check,
+                        tint = MaterialTheme.colorScheme.primary,
+                        size = 17.dp,
                     )
                 }
             }
@@ -2387,65 +2628,75 @@ private fun ChoiceSetting(
 @Composable
 private fun LobbyAction(state: EntryLobbyUiState, viewModel: EntryLobbyViewModel) {
     val host = state.room?.self?.isHost == true
-    Surface(
-        shadowElevation = 18.dp,
-        shape = GameShapes.medium,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        modifier =
-            Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp).imePadding(),
-    ) {
-        Column(
-            Modifier.padding(GameSpacing.xs),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        Surface(
+            shadowElevation = 18.dp,
+            shape = GameShapes.medium,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            modifier =
+                Modifier.widthIn(max = 430.dp)
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
+                    .imePadding(),
         ) {
-            if (host) {
-                if (state.settings.dirty) {
+            Column(
+                Modifier.padding(GameSpacing.xs),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+            ) {
+                if (host) {
+                    val statusText =
+                        when (state.settingsSaveState) {
+                            SettingsSaveState.Saving -> "Saving settings…"
+                            SettingsSaveState.Error ->
+                                "Settings could not be saved. Tap Retry above."
+                            else -> state.startBlockingReasons.firstOrNull()
+                        }
+                    if (statusText != null) {
+                        Text(
+                            statusText,
+                            color =
+                                if (state.settingsSaveState == SettingsSaveState.Saving) {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                } else {
+                                    MaterialTheme.colorScheme.error
+                                },
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+                    ) {
+                        GameButton(
+                            "Start game",
+                            viewModel::startGame,
+                            Modifier.weight(1f),
+                            enabled = state.canStart,
+                            loading = state.loading,
+                            retainPrimaryWhenDisabled = true,
+                        )
+                        GameOutlinedButton(
+                            "Leave room",
+                            viewModel::requestLeave,
+                            Modifier.weight(.62f),
+                            enabled = !state.loading,
+                        )
+                    }
+                } else {
                     Text(
-                        "Saving settings…",
-                        color = MaterialTheme.colorScheme.primary,
-                        textAlign = TextAlign.Center,
-                    )
-                }
-                if (state.startBlockingReasons.isNotEmpty()) {
-                    Text(
-                        state.startBlockingReasons.first(),
-                        color = MaterialTheme.colorScheme.error,
-                        textAlign = TextAlign.Center,
+                        "Waiting for the host to start the game.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(GameSpacing.xs),
-                ) {
-                    GameButton(
-                        "Start game",
-                        viewModel::startGame,
-                        Modifier.weight(1f),
-                        enabled = state.canStart,
-                        loading = state.loading,
-                        retainPrimaryWhenDisabled = true,
                     )
                     GameOutlinedButton(
                         "Leave room",
                         viewModel::requestLeave,
-                        Modifier.weight(.62f),
+                        Modifier.fillMaxWidth(),
                         enabled = !state.loading,
                     )
                 }
-            } else {
-                Text(
-                    "Waiting for the host to start the game.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                GameOutlinedButton(
-                    "Leave room",
-                    viewModel::requestLeave,
-                    Modifier.fillMaxWidth(),
-                    enabled = !state.loading,
-                )
             }
         }
     }

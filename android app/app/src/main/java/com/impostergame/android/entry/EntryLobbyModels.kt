@@ -54,9 +54,16 @@ data class LobbySettingsDraft(
     val imposterCount: Int = 1,
     val taskCounts: Map<String, Int> = mapOf("easy" to 1, "medium" to 1, "hard" to 1),
     val roleCounts: Map<String, Int> = emptyMap(),
-    val advancedExpanded: Boolean = false,
     val dirty: Boolean = false,
 )
+
+enum class SettingsSaveState {
+    Clean,
+    Dirty,
+    Saving,
+    Saved,
+    Error,
+}
 
 data class EntryLobbyUiState(
     val destination: EntryDestination = EntryDestination.BOOTSTRAP,
@@ -64,6 +71,7 @@ data class EntryLobbyUiState(
     val room: RoomSnapshot? = null,
     val taskPacks: List<PublicTaskPack> = emptyList(),
     val settings: LobbySettingsDraft = LobbySettingsDraft(),
+    val settingsSaveState: SettingsSaveState = SettingsSaveState.Clean,
     val loading: Boolean = false,
     val message: String? = null,
     val announce: String? = null,

@@ -12,10 +12,18 @@ import com.impostergame.data.model.RoomStatus
 import com.impostergame.data.network.ApiFailure
 import com.impostergame.data.network.ApiResult
 import com.impostergame.data.network.ParticipantApi
+import com.impostergame.data.realtime.RealtimeSession
+import com.impostergame.data.repository.ConnectivityRepository
+import com.impostergame.data.repository.RoomRepository
 import com.impostergame.data.session.ParticipantCredential
 import com.impostergame.data.session.SessionStore
 import com.impostergame.data.session.StoredSession
 import java.time.Instant
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapNotNull
 
 sealed interface GatewayResult<out T> {
     data class Success<T>(val value: T) : GatewayResult<T>
@@ -36,6 +44,15 @@ sealed interface ResumeTarget {
 }
 
 interface EntryLobbyGateway {
+    val supportsRealtime: Boolean
+        get() = false
+
+    val roomUpdates: Flow<RoomSnapshot>
+        get() = emptyFlow()
+
+    val connectionUpdates: Flow<com.impostergame.designsystem.component.ConnectionState>
+        get() = emptyFlow()
+
     suspend fun resume(): ResumeTarget
 
     suspend fun joinOptions(code: String): GatewayResult<RoomJoinOptions>
@@ -108,16 +125,41 @@ class UnavailableEntryLobbyGateway(private val reason: String) : EntryLobbyGatew
 class NetworkEntryLobbyGateway(
     private val api: ParticipantApi,
     private val sessions: SessionStore,
+    private val realtime: RealtimeSession? = null,
+    roomRepository: RoomRepository? = null,
+    connectivityRepository: ConnectivityRepository? = null,
 ) : EntryLobbyGateway {
+    override val supportsRealtime: Boolean = realtime != null
+    override val roomUpdates: Flow<RoomSnapshot> =
+        roomRepository
+            ?.state
+            ?.mapNotNull { it.snapshot?.sanitizedForDisplay() }
+            ?.distinctUntilChanged() ?: emptyFlow()
+    override val connectionUpdates: Flow<com.impostergame.designsystem.component.ConnectionState> =
+        connectivityRepository?.state?.map { state ->
+            when (state) {
+                com.impostergame.data.repository.ConnectionState.CONNECTED ->
+                    com.impostergame.designsystem.component.ConnectionState.Connected
+                com.impostergame.data.repository.ConnectionState.DISCONNECTED,
+                com.impostergame.data.repository.ConnectionState.REVOKED ->
+                    com.impostergame.designsystem.component.ConnectionState.Offline
+                com.impostergame.data.repository.ConnectionState.CONNECTING,
+                com.impostergame.data.repository.ConnectionState.BACKING_OFF ->
+                    com.impostergame.designsystem.component.ConnectionState.Reconnecting
+            }
+        } ?: emptyFlow()
+
     override suspend fun resume(): ResumeTarget =
-        when (sessions.restore()) {
+        when (val stored = sessions.restore()) {
             StoredSession.None,
             is StoredSession.Unavailable -> ResumeTarget.Entry
-            is StoredSession.Available ->
+            is StoredSession.Available -> {
+                realtime?.start(stored.credential.token)
                 when (val result = api.fetch()) {
                     is ApiResult.Failure -> {
                         val error = result.error
                         if (error is ApiFailure.Http && error.status in listOf(401, 404)) {
+                            realtime?.stop()
                             sessions.clear()
                             ResumeTarget.Entry
                         } else {
@@ -137,6 +179,7 @@ class NetworkEntryLobbyGateway(
                             }
                         }
                 }
+            }
         }
 
     override suspend fun joinOptions(code: String) = api.joinOptions(code).toGatewayResult()
@@ -181,6 +224,7 @@ class NetworkEntryLobbyGateway(
         when (val result = api.leaveRoom()) {
             is ApiResult.Failure -> GatewayResult.Failure(result.error)
             is ApiResult.Success -> {
+                realtime?.stop()
                 sessions.clear()
                 GatewayResult.Success(Unit)
             }
@@ -191,6 +235,7 @@ class NetworkEntryLobbyGateway(
             is ApiResult.Failure -> {
                 val error = result.error
                 if (error is ApiFailure.Http && error.status in listOf(401, 404)) {
+                    realtime?.stop()
                     sessions.clear()
                     GatewayResult.Success(Unit)
                 } else {
@@ -198,6 +243,7 @@ class NetworkEntryLobbyGateway(
                 }
             }
             is ApiResult.Success -> {
+                realtime?.stop()
                 sessions.clear()
                 GatewayResult.Success(Unit)
             }
@@ -213,6 +259,7 @@ class NetworkEntryLobbyGateway(
                 sessions.save(
                     ParticipantCredential(issue.sessionToken, Instant.parse(issue.sessionExpiresAt))
                 )
+                realtime?.start(issue.sessionToken)
                 GatewayResult.Success(issue.room.sanitizedForDisplay())
             }
         }

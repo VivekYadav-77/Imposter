@@ -11,6 +11,8 @@ import com.impostergame.data.model.RoomSettingsInput
 import com.impostergame.data.model.RoomSnapshot
 import com.impostergame.data.model.RoomStatus
 import com.impostergame.data.network.ApiFailure
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -92,11 +94,119 @@ class EntryLobbyViewModelTest {
             runCurrent()
 
             assertEquals(EntryDestination.LOBBY, viewModel.state.value.destination)
-            advanceTimeBy(5_000)
+            advanceTimeBy(15_000)
             runCurrent()
 
             assertEquals(EntryDestination.GAME, viewModel.state.value.destination)
             assertEquals(1, gateway.refreshCalls)
+        }
+
+    @Test
+    fun connectedRealtimeUsesSnapshotsWithoutPeriodicRoomFetches() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val lobby = room(RoomStatus.LOBBY)
+            val gateway =
+                FakeGateway(
+                    resumeTargets = ArrayDeque(listOf(ResumeTarget.Lobby(lobby))),
+                    realtimeEnabled = true,
+                )
+            val viewModel = EntryLobbyViewModel(gateway, SavedStateHandle())
+            runCurrent()
+            gateway.connections.emit(
+                com.impostergame.designsystem.component.ConnectionState.Connected
+            )
+            runCurrent()
+
+            advanceTimeBy(120_000)
+            runCurrent()
+            assertEquals(0, gateway.refreshCalls)
+
+            gateway.rooms.emit(room(RoomStatus.ACTIVE))
+            runCurrent()
+            assertEquals(EntryDestination.GAME, viewModel.state.value.destination)
+        }
+
+    @Test
+    fun rapidLobbySettingChangesAreDebouncedIntoOneRequest() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val lobby = room(RoomStatus.LOBBY, isHost = true)
+            val gateway =
+                FakeGateway(
+                    resumeTargets = ArrayDeque(listOf(ResumeTarget.Lobby(lobby))),
+                    settingsRoom = lobby,
+                )
+            val viewModel = EntryLobbyViewModel(gateway, SavedStateHandle())
+            runCurrent()
+
+            viewModel.updateTaskMinutes(20)
+            viewModel.updateTaskMinutes(25)
+            viewModel.updateTaskMinutes(30)
+            advanceTimeBy(549)
+            runCurrent()
+            assertEquals(0, gateway.updateSettingsCalls)
+
+            advanceTimeBy(1)
+            runCurrent()
+
+            assertEquals(1, gateway.updateSettingsCalls)
+            assertEquals(30 * 60, gateway.lastSettingsInput?.taskPhaseSeconds)
+            assertEquals(SettingsSaveState.Saved, viewModel.state.value.settingsSaveState)
+            assertFalse(viewModel.state.value.settings.dirty)
+            viewModel.showHome()
+        }
+
+    @Test
+    fun selectingTheCurrentLobbyValueDoesNotCallSettingsApi() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val lobby = room(RoomStatus.LOBBY, isHost = true)
+            val gateway =
+                FakeGateway(
+                    resumeTargets = ArrayDeque(listOf(ResumeTarget.Lobby(lobby))),
+                    settingsRoom = lobby,
+                )
+            val viewModel = EntryLobbyViewModel(gateway, SavedStateHandle())
+            runCurrent()
+
+            viewModel.updateTaskMinutes(lobby.settings.taskPhaseSeconds / 60)
+            advanceTimeBy(1_000)
+            runCurrent()
+
+            assertEquals(0, gateway.updateSettingsCalls)
+            viewModel.showHome()
+        }
+
+    @Test
+    fun editsDuringSettingsSaveQueueOnlyTheLatestPayload() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val lobby = room(RoomStatus.LOBBY, isHost = true)
+            val gate = CompletableDeferred<Unit>()
+            val gateway =
+                FakeGateway(
+                    resumeTargets = ArrayDeque(listOf(ResumeTarget.Lobby(lobby))),
+                    settingsRoom = lobby,
+                    firstSettingsGate = gate,
+                )
+            val viewModel = EntryLobbyViewModel(gateway, SavedStateHandle())
+            runCurrent()
+
+            viewModel.updateTaskMinutes(20)
+            advanceTimeBy(550)
+            runCurrent()
+            assertEquals(1, gateway.updateSettingsCalls)
+
+            viewModel.updateTaskMinutes(25)
+            viewModel.updateTaskMinutes(30)
+            advanceTimeBy(550)
+            runCurrent()
+            assertEquals(1, gateway.updateSettingsCalls)
+
+            gate.complete(Unit)
+            runCurrent()
+
+            assertEquals(2, gateway.updateSettingsCalls)
+            assertEquals(30 * 60, gateway.lastSettingsInput?.taskPhaseSeconds)
+            assertEquals(SettingsSaveState.Saved, viewModel.state.value.settingsSaveState)
+            viewModel.showHome()
         }
 
     @Test
@@ -144,7 +254,7 @@ class EntryLobbyViewModelTest {
             assertEquals(5, viewModel.state.value.form.maxPlayers)
         }
 
-    private fun room(status: RoomStatus): RoomSnapshot =
+    private fun room(status: RoomStatus, isHost: Boolean = false): RoomSnapshot =
         RoomSnapshot(
             id = "room",
             code = "ABC123",
@@ -170,7 +280,7 @@ class EntryLobbyViewModelTest {
                     roleCounts = emptyMap(),
                 ),
             participants = emptyList(),
-            self = ParticipantSelf("player", "Player", "fox", false, emptyList()),
+            self = ParticipantSelf("player", "Player", "fox", isHost, emptyList()),
             expiresAt = "2026-09-29T00:00:00Z",
             gameId = if (status == RoomStatus.ACTIVE) "game" else null,
         )
@@ -179,9 +289,22 @@ class EntryLobbyViewModelTest {
 private class FakeGateway(
     private val resumeTargets: ArrayDeque<ResumeTarget>,
     private val refreshRooms: ArrayDeque<GatewayResult<RoomSnapshot>> = ArrayDeque(),
+    private val settingsRoom: RoomSnapshot? = null,
+    private var firstSettingsGate: CompletableDeferred<Unit>? = null,
+    private val realtimeEnabled: Boolean = false,
 ) : EntryLobbyGateway {
+    val rooms = MutableSharedFlow<RoomSnapshot>(extraBufferCapacity = 4)
+    val connections =
+        MutableSharedFlow<com.impostergame.designsystem.component.ConnectionState>(
+            extraBufferCapacity = 4
+        )
+    override val supportsRealtime: Boolean = realtimeEnabled
+    override val roomUpdates = rooms
+    override val connectionUpdates = connections
     var resumeCalls = 0
     var refreshCalls = 0
+    var updateSettingsCalls = 0
+    var lastSettingsInput: RoomSettingsInput? = null
 
     override suspend fun resume(): ResumeTarget {
         resumeCalls += 1
@@ -214,8 +337,42 @@ private class FakeGateway(
     override suspend fun taskPacks(): GatewayResult<List<PublicTaskPack>> =
         GatewayResult.Success(emptyList())
 
-    override suspend fun updateSettings(input: RoomSettingsInput): GatewayResult<RoomSnapshot> =
-        error("Not used")
+    override suspend fun updateSettings(input: RoomSettingsInput): GatewayResult<RoomSnapshot> {
+        updateSettingsCalls += 1
+        lastSettingsInput = input
+        firstSettingsGate?.also {
+            firstSettingsGate = null
+            it.await()
+        }
+        val room = checkNotNull(settingsRoom)
+        return GatewayResult.Success(
+            room.copy(
+                settings =
+                    room.settings.copy(
+                        taskPhaseSeconds = input.taskPhaseSeconds ?: room.settings.taskPhaseSeconds,
+                        meetingsPerPlayer =
+                            input.meetingsPerPlayer ?: room.settings.meetingsPerPlayer,
+                        meetingDurationSeconds =
+                            input.meetingDurationSeconds ?: room.settings.meetingDurationSeconds,
+                        meetingVotingMode =
+                            input.meetingVotingMode ?: room.settings.meetingVotingMode,
+                        voteVisibility = input.voteVisibility ?: room.settings.voteVisibility,
+                        evidenceVisibility =
+                            input.evidenceVisibility ?: room.settings.evidenceVisibility,
+                        imposterMeetingTaskRequirement =
+                            input.imposterMeetingTaskRequirement
+                                ?: room.settings.imposterMeetingTaskRequirement,
+                        meetingCooldownSeconds =
+                            input.meetingCooldownSeconds ?: room.settings.meetingCooldownSeconds,
+                        imposterCooldownSeconds =
+                            input.imposterCooldownSeconds ?: room.settings.imposterCooldownSeconds,
+                        imposterCount = input.imposterCount ?: room.settings.imposterCount,
+                        taskCounts = input.taskCounts ?: room.settings.taskCounts,
+                        roleCounts = input.roleCounts ?: room.settings.roleCounts,
+                    )
+            )
+        )
+    }
 
     override suspend fun start(): GatewayResult<GameSnapshot> = error("Not used")
 

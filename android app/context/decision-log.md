@@ -251,6 +251,15 @@ Use IDs `ADR-A-###`. Status is `proposed`, `approved`, `superseded`, or `rejecte
 - **Consequences:** Private role, ballot, room, and evidence content can appear in user-initiated captures, screen recordings, recent-task thumbnails, or overlays. Store/privacy disclosures and the hardening checklist must describe this accurately. Synthetic data remains mandatory for committed or published comparison images.
 - **Supersedes:** The screenshot/recent-task and overlay-blocking portion of ADR-A-019 and the secure-capture limitation in ADR-A-029. All other security controls in those decisions remain active.
 
+### ADR-A-031 — Non-blocking deduplicated lobby settings autosave
+
+- **Status:** approved by host-lobby parity correction request
+- **Date:** 2026-10-02
+- **Approver:** product owner
+- **Decision:** Own lobby settings autosave in `EntryLobbyViewModel` with a 550ms trailing debounce, immutable request comparison, one in-flight update, and one latest-value follow-up. Expose clean, dirty, saving, saved, and error presentation states without using the screen-wide loading flag. Consume existing `room.snapshot` and connectivity repository flows as the primary lobby transport; use foreground-only HTTP fallback at 15/30/60 seconds only while realtime is unavailable.
+- **Reason:** Compose-owned side effects caused duplicate settings calls and froze unrelated lobby controls, while frequent HTTP refreshes generated avoidable traffic.
+- **Consequences:** Screen recomposition cannot initiate API work, unchanged values do not send requests, late responses cannot replace newer drafts, and Start remains blocked until the authoritative save succeeds. API paths, DTOs, authorization, and gameplay rules are unchanged.
+
 ## Adding a decision
 
 Copy this structure:

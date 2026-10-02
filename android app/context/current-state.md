@@ -54,6 +54,7 @@
 - [x] Rebuilt Create/Join as the website's single mobile mode-card flow, including lookup-before-identity Join behavior, compact room options, a named three-column operative picker, combined consent presentation, and in-card primary action.
 - [x] Restored the Create screen's Room options disclosure with animated minimum/maximum player controls, valid-range enforcement, state restoration, and propagation through the existing room-creation request.
 - [x] Rebuilt the mobile host lobby from the supplied seven-state website reference: one continuous scrolling body beneath the fixed phase bar, compact map selector, independently collapsible 02–05 settings, website copy/order/colors, operative-presence roster rows, Ready Check card, and Start/Leave action dock.
+- [x] Corrected the host-lobby command-bar height, amber invite gradient, 10dp readiness track, circular section numbers, segmented steppers, website SVG-path chevrons/check/lock/eye/timer controls, two-column meeting modes, and single sticky status message. Settings autosave is now ViewModel-owned, deduplicated, non-blocking, and exposes explicit clean/dirty/saving/saved/error presentation states. Existing realtime room/connectivity flows are now primary; HTTP refresh runs only as a foreground 15/30/60-second fallback while disconnected.
 - [x] Replaced approximate phase/semantic colors with the exact frozen website CSS values, aligned task badge/proof geometry, and corrected the role page so only the briefing card uses the private surface.
 - [x] Removed `FLAG_SECURE`, overlay hiding, the unused secure-surface API, and the stale all-gameplay-sensitive model contract from debug, staging, and release. Private roles still reseal on pause/focus loss.
 - [x] Added server-authoritative same-room replay from results through `POST /api/v1/rooms/current/replay`; the returned room snapshot resets gameplay state and restores lobby polling/settings under ADR-A-027.
@@ -85,6 +86,7 @@
 - 2026-10-02 capture-enabled parity correction — physical Acer/API 33 screenshots successfully captured Create, Lobby, sealed/revealed Role, and Tasks from one authoritative three-player local-backend game. Android no longer emitted protected/blank gameplay captures; lifecycle role resealing remained active.
 - 2026-10-02 final capture-enabled gate — `gradlew spotlessCheck quality connectedQuality :app:installDebug -PDEBUG_API_BASE_URL=http://127.0.0.1:3000 --no-parallel --max-workers=1` passed all 232 tasks on Acer/API 33. The freshly installed app launched and produced an unrestricted screenshot; `npm run check` passed formatting, lint, typecheck, 21 files/120 tests, OpenAPI, and realtime fixture checks; `git diff --check` passed.
 - 2026-10-02 supplied-reference host-lobby correction — compared seven website captures against the physical Android host lobby, corrected the pinned-body defect and host settings composition, exercised Meeting voting disclosure on Acer/API 33, and captured top/settings states. `gradlew spotlessCheck quality :app:installDebug -PDEBUG_API_BASE_URL=http://127.0.0.1:3000 --no-parallel --max-workers=1` passed 166 tasks; the final amber-role refinement compiled, installed, and passed `git diff --check`.
+- 2026-10-02 host-lobby parity follow-up — corrected command-bar/content geometry, invite/readiness styling, setting controls/icons/disclosures, meeting-mode layout, and sticky status presentation. Added non-blocking deduplicated autosave plus realtime-primary room updates with foreground-only disconnected fallback. `gradlew spotlessCheck quality :app:assembleDebug` passed 165 tasks; `connectedQuality :app:installDebug` passed 144 tasks on Acer/API 33; `npm run check` passed 21 files/120 tests plus OpenAPI/realtime fixtures.
 - The temporary local backend used for the physical path was stopped after verification; port 3000 is not left running.
 - The debug APK was installed, launched, and visually checked in both themes, including light-theme persistence after force-stop/relaunch; the final APK was reinstalled with the app returned to its default Follow device preference.
 - `npm run check` — formatting, lint, typecheck, 21 files/120 unit tests, OpenAPI, and realtime fixtures passed; the database-backed `tests/integration/task-packs.test.ts` also passed (3 tests).
@@ -100,7 +102,7 @@
 
 ## Next action
 
-Run the remaining independently controlled multi-client meeting, evidence, elimination, result, and replay acceptance path on approved staging and record website/Android reference comparisons at the three frozen target viewports.
+Capture the corrected host lobby in both themes at 320dp, 390dp, and 430dp, then run the remaining independently controlled multi-client meeting, evidence, elimination, result, and replay acceptance path on approved staging.
 
 ## Session handoff
 

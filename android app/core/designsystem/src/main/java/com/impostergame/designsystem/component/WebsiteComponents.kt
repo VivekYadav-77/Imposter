@@ -52,7 +52,12 @@ import com.impostergame.designsystem.theme.gameColors
 
 enum class WebsiteIconKind {
     Arrow,
+    Check,
+    Chevron,
+    Clock,
     Eye,
+    Lock,
+    Minus,
     Lobby,
     Tasks,
     Meeting,
@@ -60,6 +65,7 @@ enum class WebsiteIconKind {
     Room,
     Sun,
     Moon,
+    Plus,
 }
 
 /** Flat website card: exact border/surface output with no Material tonal color mutation. */
@@ -67,6 +73,7 @@ enum class WebsiteIconKind {
 fun WebsiteCard(
     modifier: Modifier = Modifier,
     accent: Color? = null,
+    shadowElevation: Dp = 0.dp,
     content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
 ) {
     Surface(
@@ -74,7 +81,7 @@ fun WebsiteCard(
         shape = GameShapes.card,
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp,
-        shadowElevation = 0.dp,
+        shadowElevation = shadowElevation,
         border =
             BorderStroke(
                 1.dp,
@@ -247,6 +254,12 @@ fun WebsiteIcon(
             }
             when (kind) {
                 WebsiteIconKind.Arrow -> path("M5 12h14m-5-5 5 5-5 5")
+                WebsiteIconKind.Check -> path("m5 12 4.2 4.2L19 6.8")
+                WebsiteIconKind.Chevron -> path("m8 10 4 4 4-4")
+                WebsiteIconKind.Clock -> {
+                    drawCircle(tint, 8f, Offset(12f, 13f), style = stroke)
+                    path("M9 3h6M12 9v4l3 2")
+                }
                 WebsiteIconKind.Eye -> {
                     path("M2.8 12s3.3-5.2 9.2-5.2S21.2 12 21.2 12s-3.3 5.2-9.2 5.2S2.8 12 2.8 12Z")
                     drawCircle(tint, 2.35f, Offset(12f, 12f), style = stroke)
@@ -256,6 +269,17 @@ fun WebsiteIcon(
                     drawCircle(tint, 2.4f, Offset(17f, 10f), style = stroke)
                     path("M3.8 19c.4-3.3 2.1-5 5.2-5s4.8 1.7 5.2 5M14 15c3.7-.8 5.8.6 6.2 3.5")
                 }
+                WebsiteIconKind.Lock -> {
+                    drawRoundRect(
+                        tint,
+                        Offset(5f, 10f),
+                        Size(14f, 11f),
+                        CornerRadius(2.5f),
+                        style = stroke,
+                    )
+                    path("M8 10V7a4 4 0 0 1 8 0v3M12 14v3")
+                }
+                WebsiteIconKind.Minus -> path("M6 12h12")
                 WebsiteIconKind.Tasks ->
                     path("M5 4h14v16H5zM8 9l1.5 1.5L12 8m1.5 2H16m-8 5 1.5 1.5L12 14m1.5 2H16")
                 WebsiteIconKind.Meeting ->
@@ -271,6 +295,7 @@ fun WebsiteIcon(
                     )
                 }
                 WebsiteIconKind.Moon -> path("M20 15.5A8.2 8.2 0 0 1 8.5 4 8.5 8.5 0 1 0 20 15.5Z")
+                WebsiteIconKind.Plus -> path("M12 6v12M6 12h12")
             }
         }
     }

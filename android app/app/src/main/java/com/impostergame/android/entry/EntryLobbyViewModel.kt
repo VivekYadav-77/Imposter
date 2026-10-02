@@ -15,6 +15,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -28,11 +29,31 @@ class EntryLobbyViewModel(
     private val _feedback = MutableSharedFlow<GameFeedbackEvent>(extraBufferCapacity = 16)
     val feedback = _feedback.asSharedFlow()
     private var lobbyRefresh: Job? = null
+    private var settingsDebounce: Job? = null
+    private var settingsSaveInFlight = false
+    private var settingsSaveQueued = false
     private var bootstrapRetry: Job? = null
     private var pendingSubmission: PendingSubmission? = null
     private var requestInFlight = false
+    private var taskPacksRoomId: String? = null
 
     init {
+        if (gateway.supportsRealtime) {
+            viewModelScope.launch {
+                gateway.roomUpdates.collectLatest { snapshot -> acceptRoomSnapshot(snapshot) }
+            }
+            viewModelScope.launch {
+                gateway.connectionUpdates.collectLatest { connection ->
+                    update { it.copy(connectionState = connection) }
+                    if (connection == ConnectionState.Connected) {
+                        lobbyRefresh?.cancel()
+                        lobbyRefresh = null
+                    } else {
+                        startLobbyFallbackRefresh()
+                    }
+                }
+            }
+        }
         bootstrap(manual = false)
     }
 
@@ -70,6 +91,8 @@ class EntryLobbyViewModel(
 
     fun showHome() {
         lobbyRefresh?.cancel()
+        settingsDebounce?.cancel()
+        settingsDebounce = null
         cancelBootstrapRetry()
         setDestination(EntryDestination.HOME)
     }
@@ -281,11 +304,7 @@ class EntryLobbyViewModel(
         }
     }
 
-    fun toggleAdvanced() = update {
-        it.copy(settings = it.settings.copy(advancedExpanded = !it.settings.advancedExpanded))
-    }
-
-    fun selectTaskPack(id: String) = update { state ->
+    fun selectTaskPack(id: String) = updateSetting { state ->
         val pack = state.taskPacks.firstOrNull { it.id == id }
         state.copy(
             settings =
@@ -301,41 +320,41 @@ class EntryLobbyViewModel(
         )
     }
 
-    fun updateTaskMinutes(value: Int) = update {
+    fun updateTaskMinutes(value: Int) = updateSetting {
         it.copy(
             settings = it.settings.copy(taskPhaseMinutes = value.coerceIn(5, 240), dirty = true)
         )
     }
 
-    fun updateMeetingSeconds(value: Int) = update {
+    fun updateMeetingSeconds(value: Int) = updateSetting {
         it.copy(
             settings =
                 it.settings.copy(meetingDurationSeconds = value.coerceIn(30, 1800), dirty = true)
         )
     }
 
-    fun updateMeetingsPerPlayer(value: Int) = update {
+    fun updateMeetingsPerPlayer(value: Int) = updateSetting {
         it.copy(
             settings = it.settings.copy(meetingsPerPlayer = value.coerceIn(0, 10), dirty = true)
         )
     }
 
-    fun updateMeetingVotingMode(value: String) = update {
+    fun updateMeetingVotingMode(value: String) = updateSetting {
         if (value !in setOf("timed", "all_voted")) it
         else it.copy(settings = it.settings.copy(meetingVotingMode = value, dirty = true))
     }
 
-    fun updateVoteVisibility(value: String) = update {
+    fun updateVoteVisibility(value: String) = updateSetting {
         if (value !in setOf("private", "public")) it
         else it.copy(settings = it.settings.copy(voteVisibility = value, dirty = true))
     }
 
-    fun updateEvidenceVisibility(value: String) = update {
+    fun updateEvidenceVisibility(value: String) = updateSetting {
         if (value !in setOf("private", "public")) it
         else it.copy(settings = it.settings.copy(evidenceVisibility = value, dirty = true))
     }
 
-    fun updateImposterMeetingTaskRequirement(value: String) = update {
+    fun updateImposterMeetingTaskRequirement(value: String) = updateSetting {
         if (value !in setOf("none", "one")) it
         else
             it.copy(
@@ -343,21 +362,21 @@ class EntryLobbyViewModel(
             )
     }
 
-    fun updateMeetingCooldown(value: Int) = update {
+    fun updateMeetingCooldown(value: Int) = updateSetting {
         it.copy(
             settings =
                 it.settings.copy(meetingCooldownSeconds = value.coerceIn(10, 1800), dirty = true)
         )
     }
 
-    fun updateImposterCooldown(value: Int) = update {
+    fun updateImposterCooldown(value: Int) = updateSetting {
         it.copy(
             settings =
                 it.settings.copy(imposterCooldownSeconds = value.coerceIn(10, 300), dirty = true)
         )
     }
 
-    fun updateImposterCount(value: Int) = update { state ->
+    fun updateImposterCount(value: Int) = updateSetting { state ->
         val allowed = state.room?.settings?.allowedImposterCounts.orEmpty()
         val next =
             if (allowed.isEmpty()) value.coerceIn(1, 7)
@@ -373,8 +392,8 @@ class EntryLobbyViewModel(
         )
     }
 
-    fun updateTaskCount(difficulty: String, value: Int) = update { state ->
-        if (difficulty !in setOf("easy", "medium", "hard")) return@update state
+    fun updateTaskCount(difficulty: String, value: Int) = updateSetting { state ->
+        if (difficulty !in setOf("easy", "medium", "hard")) return@updateSetting state
         val pack = state.taskPacks.firstOrNull { it.id == state.settings.selectedTaskPackId }
         val available =
             when (difficulty) {
@@ -394,13 +413,13 @@ class EntryLobbyViewModel(
         )
     }
 
-    fun updateRoleCount(role: String, value: Int) = update { state ->
+    fun updateRoleCount(role: String, value: Int) = updateSetting { state ->
         val roles =
             state.taskPacks
                 .firstOrNull { it.id == state.settings.selectedTaskPackId }
                 ?.roles
                 .orEmpty()
-        if (roles.none { it.name == role }) return@update state
+        if (roles.none { it.name == role }) return@updateSetting state
         val maximumCrew =
             ((state.room?.participants?.size ?: 1) - state.settings.imposterCount).coerceAtLeast(0)
         val otherTotal = state.settings.roleCounts.filterKeys { it != role }.values.sum()
@@ -422,42 +441,9 @@ class EntryLobbyViewModel(
             update { it.copy(message = snapshot.settingsValidationErrors.joinToString(" ")) }
             return
         }
-        val draft = snapshot.settings
-        launchRequest {
-            val result =
-                gateway.updateSettings(
-                    RoomSettingsInput(
-                        selectedTaskPackId = draft.selectedTaskPackId,
-                        taskPhaseSeconds = draft.taskPhaseMinutes * 60,
-                        meetingsPerPlayer = draft.meetingsPerPlayer,
-                        meetingDurationSeconds = draft.meetingDurationSeconds,
-                        meetingVotingMode = draft.meetingVotingMode,
-                        voteVisibility = draft.voteVisibility,
-                        evidenceVisibility = draft.evidenceVisibility,
-                        imposterMeetingTaskRequirement = draft.imposterMeetingTaskRequirement,
-                        meetingCooldownSeconds = draft.meetingCooldownSeconds,
-                        imposterCooldownSeconds = draft.imposterCooldownSeconds,
-                        imposterCount = draft.imposterCount,
-                        taskCounts = draft.taskCounts,
-                        roleCounts = draft.roleCounts,
-                    )
-                )
-            when (result) {
-                is GatewayResult.Success ->
-                    update {
-                        it.copy(
-                            room = result.value,
-                            settings = draftFrom(result.value).copy(dirty = false),
-                            message = "Settings applied.",
-                        )
-                    }
-                is GatewayResult.Failure -> {
-                    if (result.error is ApiFailure.Http && result.error.status == 409)
-                        refreshLobby()
-                    update { it.copy(message = messageFor(result.error)) }
-                }
-            }
-        }
+        settingsDebounce?.cancel()
+        settingsDebounce = null
+        viewModelScope.launch { requestSettingsSave() }
     }
 
     fun startGame() {
@@ -466,6 +452,7 @@ class EntryLobbyViewModel(
             when (val result = gateway.start()) {
                 is GatewayResult.Success -> {
                     lobbyRefresh?.cancel()
+                    settingsDebounce?.cancel()
                     _feedback.tryEmit(
                         GameFeedbackEvent(
                             GameFeedbackKind.GameStart,
@@ -491,6 +478,7 @@ class EntryLobbyViewModel(
             when (val result = gateway.leave()) {
                 is GatewayResult.Success -> {
                     lobbyRefresh?.cancel()
+                    settingsDebounce?.cancel()
                     savedState.remove<String>(KEY_CODE)
                     savedState.remove<String>(KEY_NICKNAME)
                     savedState.remove<String>(KEY_COLOR)
@@ -509,6 +497,7 @@ class EntryLobbyViewModel(
             when (val result = gateway.endSession()) {
                 is GatewayResult.Success -> {
                     lobbyRefresh?.cancel()
+                    settingsDebounce?.cancel()
                     _state.value = EntryLobbyUiState(destination = EntryDestination.HOME)
                 }
                 is GatewayResult.Failure -> update { it.copy(message = messageFor(result.error)) }
@@ -523,6 +512,17 @@ class EntryLobbyViewModel(
 
     fun clearAnnouncement() = update { it.copy(announce = null) }
 
+    fun onAppBackgrounded() {
+        lobbyRefresh?.cancel()
+        lobbyRefresh = null
+    }
+
+    fun onAppForegrounded() {
+        if (_state.value.destination == EntryDestination.LOBBY) {
+            startLobbyFallbackRefresh(force = !gateway.supportsRealtime)
+        }
+    }
+
     private fun enterLobby(room: RoomSnapshot, announcement: String?) {
         cancelBootstrapRetry()
         update {
@@ -530,24 +530,39 @@ class EntryLobbyViewModel(
                 destination = EntryDestination.LOBBY,
                 room = room,
                 settings = draftFrom(room),
+                settingsSaveState = SettingsSaveState.Clean,
                 loading = false,
                 message = null,
                 announce = announcement,
-                connectionState = ConnectionState.Connected,
+                connectionState =
+                    if (gateway.supportsRealtime) ConnectionState.Reconnecting
+                    else ConnectionState.Connected,
                 resumeFailed = false,
             )
         }
-        viewModelScope.launch {
-            when (val packs = gateway.taskPacks()) {
-                is GatewayResult.Success -> update { it.copy(taskPacks = packs.value) }
-                is GatewayResult.Failure -> Unit
+        if (taskPacksRoomId != room.id || _state.value.taskPacks.isEmpty()) {
+            taskPacksRoomId = room.id
+            viewModelScope.launch {
+                when (val packs = gateway.taskPacks()) {
+                    is GatewayResult.Success -> update { it.copy(taskPacks = packs.value) }
+                    is GatewayResult.Failure -> taskPacksRoomId = null
+                }
             }
         }
-        lobbyRefresh?.cancel()
+        startLobbyFallbackRefresh(force = !gateway.supportsRealtime)
+    }
+
+    private fun startLobbyFallbackRefresh(force: Boolean = false) {
+        if (_state.value.destination != EntryDestination.LOBBY) return
+        if (!force && _state.value.connectionState == ConnectionState.Connected) return
+        if (lobbyRefresh?.isActive == true) return
         lobbyRefresh = viewModelScope.launch {
+            val fallbackDelays = listOf(15_000L, 30_000L, 60_000L)
+            var attempt = 0
             while (isActive) {
-                delay(5_000)
+                delay(fallbackDelays[attempt.coerceAtMost(fallbackDelays.lastIndex)])
                 if (!_state.value.loading) refreshLobby(silent = true)
+                if (force) attempt = 0 else attempt++
             }
         }
     }
@@ -565,49 +580,49 @@ class EntryLobbyViewModel(
                         )
                     }
                 is GatewayResult.Success -> {
-                    val old = _state.value.room
-                    val new = result.value
-                    when (new.status) {
-                        RoomStatus.ACTIVE -> {
-                            lobbyRefresh?.cancel()
-                            _feedback.tryEmit(
-                                GameFeedbackEvent(
-                                    GameFeedbackKind.GameStart,
-                                    new.gameId ?: new.id,
-                                )
-                            )
-                            setDestination(EntryDestination.GAME)
-                            return@launch
-                        }
-                        RoomStatus.COMPLETED -> {
-                            lobbyRefresh?.cancel()
-                            setDestination(EntryDestination.RESULTS)
-                            return@launch
-                        }
-                        else -> Unit
-                    }
-                    val announcement = rosterAnnouncement(old, new)
-                    if (old != null && new.participants.size > old.participants.size) {
-                        val joined =
-                            new.participants.map { it.id }.toSet() -
-                                old.participants.map { it.id }.toSet()
-                        _feedback.tryEmit(
-                            GameFeedbackEvent(
-                                GameFeedbackKind.PlayerJoin,
-                                joined.sorted().joinToString(","),
-                            )
-                        )
-                    }
-                    update {
-                        it.copy(
-                            room = new,
-                            settings = if (it.settings.dirty) it.settings else draftFrom(new),
-                            announce = announcement,
-                            connectionState = ConnectionState.Connected,
-                        )
-                    }
+                    acceptRoomSnapshot(result.value)
                 }
             }
+        }
+    }
+
+    private fun acceptRoomSnapshot(new: RoomSnapshot) {
+        if (_state.value.destination != EntryDestination.LOBBY) return
+        val old = _state.value.room
+        when (new.status) {
+            RoomStatus.ACTIVE -> {
+                lobbyRefresh?.cancel()
+                _feedback.tryEmit(
+                    GameFeedbackEvent(GameFeedbackKind.GameStart, new.gameId ?: new.id)
+                )
+                setDestination(EntryDestination.GAME)
+                return
+            }
+            RoomStatus.COMPLETED -> {
+                lobbyRefresh?.cancel()
+                setDestination(EntryDestination.RESULTS)
+                return
+            }
+            else -> Unit
+        }
+        val announcement = rosterAnnouncement(old, new)
+        if (old != null && new.participants.size > old.participants.size) {
+            val joined =
+                new.participants.map { it.id }.toSet() - old.participants.map { it.id }.toSet()
+            _feedback.tryEmit(
+                GameFeedbackEvent(GameFeedbackKind.PlayerJoin, joined.sorted().joinToString(","))
+            )
+        }
+        update {
+            it.copy(
+                room = new,
+                settings = if (it.settings.dirty) it.settings else draftFrom(new),
+                settingsSaveState =
+                    if (it.settings.dirty) it.settingsSaveState else SettingsSaveState.Clean,
+                announce = announcement,
+                connectionState =
+                    if (gateway.supportsRealtime) it.connectionState else ConnectionState.Connected,
+            )
         }
     }
 
@@ -686,6 +701,84 @@ class EntryLobbyViewModel(
         _state.value = transform(_state.value)
     }
 
+    private fun updateSetting(transform: (EntryLobbyUiState) -> EntryLobbyUiState) {
+        val before = _state.value.settings
+        val transformed = transform(_state.value)
+        if (transformed.settings.toInput() == before.toInput()) return
+        _state.value = transformed.copy(settingsSaveState = SettingsSaveState.Dirty)
+        scheduleSettingsSave()
+    }
+
+    private fun scheduleSettingsSave() {
+        settingsDebounce?.cancel()
+        val snapshot = _state.value
+        if (
+            snapshot.room?.self?.isHost != true ||
+                !snapshot.settings.dirty ||
+                snapshot.settingsValidationErrors.isNotEmpty()
+        )
+            return
+        settingsDebounce = viewModelScope.launch {
+            delay(SETTINGS_SAVE_DEBOUNCE_MILLIS)
+            settingsDebounce = null
+            requestSettingsSave()
+        }
+    }
+
+    private suspend fun requestSettingsSave() {
+        val snapshot = _state.value
+        if (
+            snapshot.room?.self?.isHost != true ||
+                !snapshot.settings.dirty ||
+                snapshot.settingsValidationErrors.isNotEmpty()
+        )
+            return
+        if (settingsSaveInFlight) {
+            settingsSaveQueued = true
+            return
+        }
+        settingsSaveInFlight = true
+        try {
+            do {
+                settingsSaveQueued = false
+                val draft = _state.value.settings
+                val submitted = draft.toInput()
+                update { it.copy(settingsSaveState = SettingsSaveState.Saving, message = null) }
+                when (val result = gateway.updateSettings(submitted)) {
+                    is GatewayResult.Success ->
+                        update { current ->
+                            val unchanged = current.settings.toInput() == submitted
+                            current.copy(
+                                room = result.value,
+                                settings =
+                                    if (unchanged) draftFrom(result.value).copy(dirty = false)
+                                    else current.settings,
+                                settingsSaveState =
+                                    if (unchanged) SettingsSaveState.Saved
+                                    else SettingsSaveState.Dirty,
+                            )
+                        }
+                    is GatewayResult.Failure -> {
+                        if (result.error is ApiFailure.Http && result.error.status == 409) {
+                            refreshLobby()
+                        }
+                        update {
+                            it.copy(
+                                settingsSaveState = SettingsSaveState.Error,
+                                message = messageFor(result.error),
+                            )
+                        }
+                    }
+                }
+                if (_state.value.settings.dirty && _state.value.settings.toInput() != submitted) {
+                    settingsSaveQueued = true
+                }
+            } while (settingsSaveQueued && _state.value.settingsValidationErrors.isEmpty())
+        } finally {
+            settingsSaveInFlight = false
+        }
+    }
+
     private fun restoredState(): EntryLobbyUiState =
         EntryLobbyUiState(
             form =
@@ -706,6 +799,7 @@ class EntryLobbyViewModel(
         private const val KEY_COLOR = "entry.color"
         private const val KEY_MIN_PLAYERS = "entry.minPlayers"
         private const val KEY_MAX_PLAYERS = "entry.maxPlayers"
+        private const val SETTINGS_SAVE_DEBOUNCE_MILLIS = 550L
     }
 }
 
@@ -730,6 +824,23 @@ private fun draftFrom(room: RoomSnapshot): LobbySettingsDraft =
         imposterCount = room.settings.imposterCount,
         taskCounts = room.settings.taskCounts,
         roleCounts = room.settings.roleCounts,
+    )
+
+private fun LobbySettingsDraft.toInput(): RoomSettingsInput =
+    RoomSettingsInput(
+        selectedTaskPackId = selectedTaskPackId,
+        taskPhaseSeconds = taskPhaseMinutes * 60,
+        meetingsPerPlayer = meetingsPerPlayer,
+        meetingDurationSeconds = meetingDurationSeconds,
+        meetingVotingMode = meetingVotingMode,
+        voteVisibility = voteVisibility,
+        evidenceVisibility = evidenceVisibility,
+        imposterMeetingTaskRequirement = imposterMeetingTaskRequirement,
+        meetingCooldownSeconds = meetingCooldownSeconds,
+        imposterCooldownSeconds = imposterCooldownSeconds,
+        imposterCount = imposterCount,
+        taskCounts = taskCounts,
+        roleCounts = roleCounts,
     )
 
 private fun initialTaskDistribution(

@@ -1,11 +1,14 @@
 package com.impostergame.designsystem.component
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -74,57 +77,62 @@ fun PlayerCard(
             Modifier
         }
 
-    Surface(
+    Box(
         modifier =
             modifier.fillMaxWidth().then(selectionModifier).then(semanticModifier).semantics(
                 mergeDescendants = true
-            ) {},
-        shape = GameShapes.card,
-        color = if (selected) accent.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surface,
-        tonalElevation = 0.dp,
-        border =
-            androidx.compose.foundation.BorderStroke(if (selected) 3.dp else 1.dp, borderColor),
+            ) {}
     ) {
-        Row(
-            modifier =
-                Modifier.heightIn(min = if (compact) 64.dp else 78.dp)
-                    .padding(horizontal = 14.dp, vertical = if (compact) 8.dp else 10.dp),
-            horizontalArrangement =
-                Arrangement.spacedBy(if (compact) GameSpacing.sm else GameSpacing.md),
-            verticalAlignment = Alignment.CenterVertically,
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = GameShapes.small,
+            color = if (selected) accent.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surface,
+            tonalElevation = 0.dp,
+            border =
+                androidx.compose.foundation.BorderStroke(if (selected) 2.dp else 1.dp, borderColor),
         ) {
-            PlayerAvatar(
-                transportId = playerColorId,
-                size = if (compact) 42.dp else 56.dp,
-                contentDescription = nickname,
-                status = status,
-                selected = selected,
-                decorative = true,
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = nickname,
-                    style =
-                        if (compact) MaterialTheme.typography.titleMedium
-                        else MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
+            Row(
+                modifier =
+                    Modifier.heightIn(min = 78.dp).padding(horizontal = 16.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(GameSpacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                PlayerAvatar(
+                    transportId = playerColorId,
+                    size = 42.dp,
+                    contentDescription = nickname,
+                    status = status,
+                    selected = selected,
+                    decorative = true,
                 )
-                Text(
-                    text = presenceLabel?.let { "$colorName · $it" } ?: colorName,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color =
-                        if (presenceLabel == null) accent
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Column(horizontalAlignment = Alignment.End) {
-                if (isSelf && showSelfBadge)
-                    StatusLabel(stringResource(R.string.player_status_self))
-                if (isHost) StatusLabel(stringResource(R.string.player_status_host))
-                if (status != null) StatusLabel(stringResource(status.descriptionResource))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = nickname,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                    )
+                    Text(
+                        text = presenceLabel?.let { "$colorName · $it" } ?: colorName,
+                        style = MaterialTheme.typography.bodySmall,
+                        color =
+                            if (presenceLabel == null) accent
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    if (isSelf && showSelfBadge)
+                        StatusLabel(stringResource(R.string.player_status_self))
+                    if (isHost) StatusLabel(stringResource(R.string.player_status_host))
+                    if (status != null) StatusLabel(stringResource(status.descriptionResource))
+                }
             }
         }
+        androidx.compose.foundation.layout.Spacer(
+            Modifier.align(Alignment.CenterStart)
+                .size(width = 3.dp, height = 44.dp)
+                .background(accent, GameShapes.pill)
+        )
     }
 }
 
