@@ -11,15 +11,15 @@ import org.junit.Test
 class BrandThemeTest {
     @Test
     fun coreBrandTokensMatchWebsitePaletteExactly() {
-        assertEquals(Color(0xFF0D0F0E), DarkColorScheme.background)
-        assertEquals(Color(0xFFEF9C3D), DarkColorScheme.primary)
-        assertEquals(Color(0xFFF5F2EB), LightColorScheme.background)
-        assertEquals(Color(0xFFAE550B), LightColorScheme.primary)
+        assertEquals(Color(0xFF14130F), DarkColorScheme.background)
+        assertEquals(Color(0xFFD98E3B), DarkColorScheme.primary)
+        assertEquals(Color(0xFFF4F0E6), LightColorScheme.background)
+        assertEquals(Color(0xFFA6530B), LightColorScheme.primary)
         assertEquals(Color(0xFF27B8C8), DarkBrandColors.lobby)
         assertEquals(Color(0xFF36C889), DarkBrandColors.results)
-        assertEquals(Color(0xFFF5F2E9), DarkColorScheme.onBackground)
-        assertEquals(Color(0xFFFFFDF8), LightColorScheme.surface)
-        assertEquals(Color(0xFF8F4207), LightBrandColors.accentStrong)
+        assertEquals(Color(0xFFEDE7D8), DarkColorScheme.onBackground)
+        assertEquals(Color(0xFFFFFDF7), LightColorScheme.surface)
+        assertEquals(Color(0xFF843E06), LightBrandColors.accentStrong)
         assertEquals(Color(0xFF5B4BC4), LightBrandColors.voting)
     }
 

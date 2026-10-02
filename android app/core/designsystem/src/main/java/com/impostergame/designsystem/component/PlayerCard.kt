@@ -1,14 +1,11 @@
 package com.impostergame.designsystem.component
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -80,23 +77,20 @@ fun PlayerCard(
             modifier.fillMaxWidth().then(selectionModifier).then(semanticModifier).semantics(
                 mergeDescendants = true
             ) {},
-        shape = GameShapes.medium,
+        shape = GameShapes.card,
         color = if (selected) accent.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surface,
-        tonalElevation = if (selected) 3.dp else 1.dp,
+        tonalElevation = 0.dp,
         border =
             androidx.compose.foundation.BorderStroke(if (selected) 3.dp else 1.dp, borderColor),
     ) {
         Row(
-            modifier = Modifier.padding(if (compact) GameSpacing.sm else GameSpacing.md),
+            modifier =
+                Modifier.heightIn(min = if (compact) 64.dp else 78.dp)
+                    .padding(horizontal = 14.dp, vertical = if (compact) 8.dp else 10.dp),
             horizontalArrangement =
                 Arrangement.spacedBy(if (compact) GameSpacing.sm else GameSpacing.md),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                Modifier.width(4.dp)
-                    .height(if (compact) 38.dp else 48.dp)
-                    .background(accent, GameShapes.pill)
-            )
             PlayerAvatar(
                 transportId = playerColorId,
                 size = if (compact) 42.dp else 56.dp,

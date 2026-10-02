@@ -18,8 +18,13 @@ object GameSpacing {
 }
 
 object GameShapes {
+    val xSmall = RoundedCornerShape(8.dp)
     val small = RoundedCornerShape(10.dp)
+    val card = RoundedCornerShape(14.dp)
+    val task = RoundedCornerShape(16.dp)
     val medium = RoundedCornerShape(18.dp)
+    val dialog = RoundedCornerShape(22.dp)
+    val panel = RoundedCornerShape(24.dp)
     val large = RoundedCornerShape(30.dp)
     val pill = RoundedCornerShape(50)
 }
@@ -57,6 +62,8 @@ object WebsiteLayout {
     val phaseBarVertical = 8.dp
     val phaseControl = 44.dp
     val gameContentGutter = 10.dp
+    val lobbyContentGutter = 14.dp
+    val lobbyRosterRowHeight = 78.dp
     val taskCardMinHeight = 104.dp
     val taskCardRadius = 16.dp
     val taskNumber = 36.dp

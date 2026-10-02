@@ -45,7 +45,7 @@
 - [x] Replaced the former blue/cyan Material brand roles with semantic charcoal/amber light and dark schemes, phase colors, private surfaces, result colors, 10/18/30dp shape roles, and 120/200/480ms motion roles.
 - [x] Added persistent System/Light/Dark, sound, haptics, reduced-motion, and high-contrast app settings; system bars track the resolved theme.
 - [x] Added typed, deduplicated, rate-limited, foreground-only sound/haptic feedback for role, task, evidence, elimination, meeting, vote, result, and game lifecycle events without licensed-asset risk.
-- [x] Completed the server-supported host settings editor for voting/evidence visibility, meeting behavior, cooldowns, imposter count, task distribution, and specialist roles with local validation and authoritative Apply.
+- [x] Completed the server-supported host settings editor for voting/evidence visibility, meeting behavior, cooldowns, imposter count, task distribution, and specialist roles with local validation and website-equivalent debounced Saving/Saved feedback through the existing authoritative settings operation.
 - [x] Added branded lobby invitation/readiness treatment, phase-aware top bars, private role styling, bounded evidence zoom, and website-equivalent terminal-result hierarchy and metrics.
 - [x] Verified core token contrast in unit tests and verified the current APK plus preference persistence in light and dark modes on the physical Acer device.
 - [x] Added a reusable native signal-room layer (atmospheric canvas, brand mark/header, editorial eyebrow, signal cards/chips, pill controls, player accent rails, and phase-aware task/evidence/meeting/result surfaces) and applied it across home, settings, create/join, lobby, and gameplay without changing authoritative commands.
@@ -74,6 +74,9 @@
 - 2026-10-01 lobby/gameplay website-parity pass — imported the website operative artwork and palette, rebuilt the lobby phase/invite/readiness/roster/settings/action hierarchy, compact role/task/vote/result surfaces, website motion timings, and deterministic PCM feedback recipes under ADR-A-029.
 - 2026-10-01 `gradlew spotlessApply quality` passed after the parity pass; `gradlew spotlessCheck connectedQuality :app:installDebug -PDEBUG_API_BASE_URL=http://127.0.0.1:3000` then passed all app/design-system connected tests and installed the APK on Acer One 8 T4-82L/API 33.
 - 2026-10-01 physical backend-connected path — created a host room, joined two independent participants, selected/applied a published task pack, started the authoritative game, revealed and acknowledged the private role, and reached the task command center. Lobby was captured at 800×1280; gameplay capture is intentionally blocked by the active secure-window privacy policy and was verified through rendered semantics and interaction.
+- 2026-10-02 parity correction — replaced the remaining approximate lobby/gameplay chrome with the exact website base palette, responsive 70dp command bar, amber invite hierarchy, single readiness block, 78dp roster rows, numbered settings sections with debounced save presentation, dedicated ballot rows, evidence grid/empty state, website modal geometry, double-border role card, floating task rail, and terminal result card/case stamp. PCM output now applies a website-equivalent -14dB/18dB-knee/8:1 compressor envelope and transient Android audio focus.
+- 2026-10-02 physical Acer/API 33 correction path — installed against the temporary local backend, replayed the existing terminal game into the corrected lobby, started it, revealed/acknowledged the private role, and reached the task command center. The lobby was visually captured at 800×1280; secure gameplay was verified through accessibility geometry and live actions.
+- 2026-10-02 `gradlew spotlessCheck quality --no-parallel --max-workers=1` passed 142 tasks and `gradlew connectedQuality --no-parallel --max-workers=1 -PDEBUG_API_BASE_URL=http://127.0.0.1:3000` passed 143 tasks on Acer/API 33.
 - The temporary local backend used for the physical path was stopped after verification; port 3000 is not left running.
 - The debug APK was installed, launched, and visually checked in both themes, including light-theme persistence after force-stop/relaunch; the final APK was reinstalled with the app returned to its default Follow device preference.
 - `npm run check` — formatting, lint, typecheck, 21 files/120 unit tests, OpenAPI, and realtime fixtures passed; the database-backed `tests/integration/task-packs.test.ts` also passed (3 tests).
@@ -93,11 +96,11 @@ Run the remaining independently controlled multi-client meeting, evidence, elimi
 
 ## Session handoff
 
-**Date/time:** 2026-10-01 Asia/Calcutta
+**Date/time:** 2026-10-02 Asia/Calcutta
 **Agent/session:** Codex
 **Active phase:** Phase 8 — end-to-end quality, release, and operations
-**Milestone:** complete lobby and gameplay website-parity pass
-**Status:** implementation, host/device gates, and lobby-to-task physical flow complete; production-like multi-client terminal-flow acceptance remains open
+**Milestone:** lobby and gameplay parity correction pass
+**Status:** correction implementation, host/device gates, and results-to-lobby-to-task physical flow complete; production-like multi-client terminal-flow acceptance remains open
 
 ### Changed
 

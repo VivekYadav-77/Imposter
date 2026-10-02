@@ -2,6 +2,7 @@ package com.impostergame.android.feedback
 
 import android.content.Context
 import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
@@ -17,8 +18,9 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.PI
 import kotlin.math.exp
+import kotlin.math.log10
+import kotlin.math.pow
 import kotlin.math.sin
-import kotlin.math.tanh
 
 enum class GameFeedbackKind {
     Ui,
@@ -55,7 +57,7 @@ class GameFeedbackController(context: Context) : Closeable {
             @Suppress("DEPRECATION") applicationContext.getSystemService(Vibrator::class.java)
         }
     private val gate = GameFeedbackGate(android.os.SystemClock::elapsedRealtime)
-    private val soundPlayer = WebsiteSoundPlayer()
+    private val soundPlayer = WebsiteSoundPlayer(audioManager)
     private var foreground = false
 
     fun setForeground(value: Boolean) {
@@ -128,17 +130,30 @@ private data class NoiseSpec(
 )
 
 /** PCM port of src/client/audio/game-sounds.ts. */
-internal class WebsiteSoundPlayer : Closeable {
+internal class WebsiteSoundPlayer(private val audioManager: AudioManager? = null) : Closeable {
     private val running = AtomicBoolean(true)
     private val executor = Executors.newSingleThreadExecutor { task ->
         Thread(task, "game-sound").apply { isDaemon = true }
     }
     private val cache = mutableMapOf<GameFeedbackKind, ShortArray>()
+    private val focusListener = AudioManager.OnAudioFocusChangeListener {}
+    private val focusRequest by lazy {
+        AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_GAME)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+            )
+            .setOnAudioFocusChangeListener(focusListener)
+            .build()
+    }
 
     fun play(kind: GameFeedbackKind) {
         if (!running.get()) return
         executor.execute {
             if (!running.get()) return@execute
+            if (!requestAudioFocus()) return@execute
             val samples = cache.getOrPut(kind) { synthesize(kind) }
             val track =
                 AudioTrack.Builder()
@@ -165,6 +180,7 @@ internal class WebsiteSoundPlayer : Closeable {
             } finally {
                 track.stop()
                 track.release()
+                abandonAudioFocus()
             }
         }
     }
@@ -187,10 +203,51 @@ internal class WebsiteSoundPlayer : Closeable {
         val mix = DoubleArray((duration * SAMPLE_RATE).toInt())
         tones.forEach { tone -> mixTone(mix, tone) }
         noises.forEachIndexed { index, noise -> mixNoise(mix, noise, kind.ordinal * 31 + index) }
-        return ShortArray(mix.size) { index ->
-            val limited = tanh(mix[index] * 1.45) * MASTER_GAIN
+        val compressed = compressLikeWebsiteLimiter(mix)
+        return ShortArray(compressed.size) { index ->
+            val limited = compressed[index] * MASTER_GAIN
             (limited.coerceIn(-1.0, 1.0) * Short.MAX_VALUE).toInt().toShort()
         }
+    }
+
+    /** Mirrors the website DynamicsCompressor settings: -14dB, 18dB knee, 8:1, 3ms/220ms. */
+    private fun compressLikeWebsiteLimiter(input: DoubleArray): DoubleArray {
+        var envelope = 0.0
+        val attack = exp(-1.0 / (SAMPLE_RATE * 0.003))
+        val release = exp(-1.0 / (SAMPLE_RATE * 0.22))
+        return DoubleArray(input.size) { index ->
+            val level = kotlin.math.abs(input[index])
+            val coefficient = if (level > envelope) attack else release
+            envelope = coefficient * envelope + (1.0 - coefficient) * level
+            val inputDb = 20.0 * log10(envelope.coerceAtLeast(1e-9))
+            val lower = COMPRESSOR_THRESHOLD_DB - COMPRESSOR_KNEE_DB / 2.0
+            val upper = COMPRESSOR_THRESHOLD_DB + COMPRESSOR_KNEE_DB / 2.0
+            val outputDb =
+                when {
+                    inputDb <= lower -> inputDb
+                    inputDb >= upper ->
+                        COMPRESSOR_THRESHOLD_DB +
+                            (inputDb - COMPRESSOR_THRESHOLD_DB) / COMPRESSOR_RATIO
+                    else -> {
+                        val distance = inputDb - lower
+                        inputDb +
+                            (1.0 / COMPRESSOR_RATIO - 1.0) * distance * distance /
+                                (2.0 * COMPRESSOR_KNEE_DB)
+                    }
+                }
+            input[index] * 10.0.pow((outputDb - inputDb) / 20.0)
+        }
+    }
+
+    private fun requestAudioFocus(): Boolean {
+        val manager = audioManager ?: return true
+        val result = manager.requestAudioFocus(focusRequest)
+        return result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+    }
+
+    private fun abandonAudioFocus() {
+        val manager = audioManager ?: return
+        manager.abandonAudioFocusRequest(focusRequest)
     }
 
     private fun mixTone(output: DoubleArray, spec: ToneSpec) {
@@ -347,5 +404,8 @@ internal class WebsiteSoundPlayer : Closeable {
     private companion object {
         const val SAMPLE_RATE = 44_100
         const val MASTER_GAIN = 0.76
+        const val COMPRESSOR_THRESHOLD_DB = -14.0
+        const val COMPRESSOR_KNEE_DB = 18.0
+        const val COMPRESSOR_RATIO = 8.0
     }
 }

@@ -3,6 +3,7 @@ package com.impostergame.designsystem.component
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,13 +12,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -66,23 +70,29 @@ fun GameTopBar(
                 else -> MaterialTheme.colorScheme.primary
             }
         }
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        color = phaseColor.copy(alpha = 0.14f).compositeOver(MaterialTheme.colorScheme.surface),
-        shadowElevation = 12.dp,
-    ) {
+    val command =
+        if (MaterialTheme.colorScheme.background.luminance() > 0.5f) Color(0xFFFDFBF6)
+        else Color(0xFF111412)
+    Surface(modifier = modifier.fillMaxWidth(), color = command, shadowElevation = 8.dp) {
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-            val compact = maxWidth < 600.dp
+            val showPhaseIcon = maxWidth > 390.dp
+            val showIdentityName = maxWidth >= 430.dp
             Column {
                 Row(
                     modifier =
                         Modifier.fillMaxWidth()
+                            .height(68.dp)
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(phaseColor.copy(alpha = .11f), Color.Transparent),
+                                    endX = 560f,
+                                )
+                            )
                             .padding(
                                 horizontal = WebsiteLayout.phaseBarHorizontal,
                                 vertical = WebsiteLayout.phaseBarVertical,
                             ),
-                    horizontalArrangement =
-                        Arrangement.spacedBy(if (compact) 6.dp else GameSpacing.sm),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (navigationLabel != null && onNavigationClick != null) {
@@ -90,37 +100,80 @@ fun GameTopBar(
                             Text("←", style = MaterialTheme.typography.titleLarge)
                         }
                     }
+                    if (showPhaseIcon) {
+                        val icon =
+                            when {
+                                phase.contains("lobby", true) -> WebsiteIconKind.Lobby
+                                phase.contains("task", true) || phase.contains("evidence", true) ->
+                                    WebsiteIconKind.Tasks
+                                phase.contains("result", true) -> WebsiteIconKind.Verdict
+                                else -> WebsiteIconKind.Meeting
+                            }
+                        Box(
+                            Modifier.size(42.dp)
+                                .background(phaseColor.copy(alpha = .13f), GameShapes.card)
+                                .border(1.dp, phaseColor.copy(alpha = .55f), GameShapes.card),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            WebsiteIcon(icon, tint = phaseColor, size = 23.dp)
+                        }
+                    }
                     Text(
                         text = phase.uppercase(),
                         modifier = Modifier.semantics { contentDescription = phase },
-                        style = MaterialTheme.typography.labelSmall,
+                        style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.Black,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                     if (timerText.isNotBlank()) {
+                        Spacer(
+                            Modifier.height(34.dp)
+                                .width(1.dp)
+                                .background(MaterialTheme.colorScheme.outlineVariant)
+                        )
                         Text(
                             text = timerText,
                             modifier =
                                 Modifier.border(0.dp, MaterialTheme.colorScheme.outlineVariant)
                                     .semantics { contentDescription = timerDescription },
-                            style =
-                                if (compact) MaterialTheme.typography.titleLarge
-                                else MaterialTheme.typography.headlineSmall,
+                            style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Black,
                             maxLines = 1,
                         )
                     }
                     Spacer(Modifier.weight(1f))
-                    PlayerAvatar(
-                        transportId = playerColorId,
-                        size = WebsiteLayout.phaseControl,
-                        contentDescription = nickname,
-                        status =
-                            if (connectionState == ConnectionState.Connected) null
-                            else PlayerStatus.Disconnected,
-                    )
+                    Row(
+                        modifier =
+                            Modifier.height(44.dp)
+                                .border(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.outlineVariant,
+                                    GameShapes.pill,
+                                )
+                                .padding(start = 4.dp, end = if (showIdentityName) 10.dp else 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        PlayerAvatar(
+                            transportId = playerColorId,
+                            size = 36.dp,
+                            contentDescription = nickname,
+                            status =
+                                if (connectionState == ConnectionState.Connected) null
+                                else PlayerStatus.Disconnected,
+                        )
+                        if (showIdentityName) {
+                            Text(
+                                nickname,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.ExtraBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
                     onToggleSound?.let { toggle ->
                         val soundEnabled = LocalGameAccessibilityPreferences.current.soundEnabled
                         GameIconButton(
@@ -157,7 +210,15 @@ fun GameTopBar(
                         }
                     }
                 }
-                Spacer(Modifier.fillMaxWidth().height(2.dp).background(phaseColor))
+                Spacer(
+                    Modifier.fillMaxWidth()
+                        .height(3.dp)
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(phaseColor, phaseColor.copy(alpha = .35f), Color.Transparent)
+                            )
+                        )
+                )
             }
         }
     }

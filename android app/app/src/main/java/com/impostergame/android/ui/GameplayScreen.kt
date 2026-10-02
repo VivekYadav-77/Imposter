@@ -20,6 +20,8 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
@@ -28,9 +30,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
@@ -39,10 +43,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -59,6 +61,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
@@ -107,6 +110,12 @@ import com.impostergame.designsystem.component.SignalBackground
 import com.impostergame.designsystem.component.SignalCard
 import com.impostergame.designsystem.component.TaskCard
 import com.impostergame.designsystem.component.UploadState
+import com.impostergame.designsystem.component.WebsiteBallotRow
+import com.impostergame.designsystem.component.WebsiteCard
+import com.impostergame.designsystem.component.WebsiteDialog
+import com.impostergame.designsystem.component.WebsiteIcon
+import com.impostergame.designsystem.component.WebsiteIconKind
+import com.impostergame.designsystem.component.WebsiteSectionHeading
 import com.impostergame.designsystem.theme.GameMotion
 import com.impostergame.designsystem.theme.GameSpacing
 import com.impostergame.designsystem.theme.LocalGameAccessibilityPreferences
@@ -147,27 +156,25 @@ fun GameplayScreen(
         }
     }
     if (confirmMinimize) {
-        AlertDialog(
+        WebsiteDialog(
+            title = "Keep the game running?",
             onDismissRequest = { confirmMinimize = false },
-            title = { Text("Keep the game running?") },
-            text = {
+            content = {
                 Text(
                     "You are still in an active room. Going back will not leave the game. " +
                         "You can minimize the app and return to the same phase."
                 )
             },
-            confirmButton = {
-                TextButton(
+            actions = {
+                GameOutlinedButton("Stay in game", { confirmMinimize = false }, Modifier.weight(1f))
+                GameButton(
+                    "Minimize app",
                     onClick = {
                         confirmMinimize = false
                         onMinimizeApp()
-                    }
-                ) {
-                    Text("Minimize app")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmMinimize = false }) { Text("Stay in game") }
+                    },
+                    modifier = Modifier.weight(1f),
+                )
             },
         )
     }
@@ -217,12 +224,12 @@ private fun MeetingScreen(
     val snapshot = state.snapshot ?: return LoadingScreen("Loading meeting…")
     val meeting = snapshot.meeting ?: return LoadingScreen("Waiting for meeting details…")
     state.meetingAlertId?.let {
-        AlertDialog(
+        WebsiteDialog(
+            title = "Meeting started",
             onDismissRequest = viewModel::dismissMeetingAlert,
-            title = { Text("Meeting started") },
-            text = { Text(snapshot.meetingReason()) },
-            confirmButton = {
-                TextButton(onClick = viewModel::dismissMeetingAlert) { Text("View meeting") }
+            content = { Text(snapshot.meetingReason()) },
+            actions = {
+                GameButton("View meeting", viewModel::dismissMeetingAlert, Modifier.fillMaxWidth())
             },
         )
     }
@@ -255,6 +262,13 @@ private fun MeetingScreen(
                 .padding(GameSpacing.md),
             verticalArrangement = Arrangement.spacedBy(GameSpacing.md),
         ) {
+            Text(
+                if (meeting.phase == "resolved") "MEETING VERDICT" else "EMERGENCY MEETING",
+                color = MaterialTheme.gameColors.meeting,
+                style = MaterialTheme.typography.displaySmall,
+                fontWeight = FontWeight.Black,
+                modifier = Modifier.semantics { heading() },
+            )
             MeetingProgress(meeting.phase)
             Text(
                 snapshot.meetingReason(),
@@ -446,22 +460,24 @@ private fun EjectionVotingPanel(state: GameplayUiState, viewModel: GameplayViewM
             Text("Your vote: $name — locked")
         } else if (state.mayEjectionVote()) {
             meeting.eligibleParticipants.forEach { participant ->
-                PlayerCard(
+                WebsiteBallotRow(
                     nickname = participant.nickname,
                     playerColorId = participant.avatarId,
-                    compact = true,
                     selected =
                         state.hasEjectionSelection &&
                             state.selectedEjectionTargetId == participant.id,
-                    onSelected = { viewModel.selectEjectionTarget(participant.id) },
+                    enabled = !state.loading,
+                    onClick = { viewModel.selectEjectionTarget(participant.id) },
                 )
             }
-            VoteChoice(
-                "Skip",
-                state.hasEjectionSelection && state.selectedEjectionTargetId == null,
-            ) {
-                viewModel.selectEjectionTarget(null)
-            }
+            WebsiteBallotRow(
+                nickname = "Skip vote",
+                playerColorId = "red",
+                selected = state.hasEjectionSelection && state.selectedEjectionTargetId == null,
+                enabled = !state.loading,
+                isSkip = true,
+                onClick = { viewModel.selectEjectionTarget(null) },
+            )
             GameButton(
                 "Review vote",
                 viewModel::requestEjectionVoteConfirmation,
@@ -532,18 +548,18 @@ private fun VoteChoice(label: String, selected: Boolean, onClick: () -> Unit) {
 @Composable
 private fun ReviewVoteConfirmation(state: GameplayUiState, viewModel: GameplayViewModel) {
     val decision = state.selectedReviewDecision ?: return
-    AlertDialog(
+    WebsiteDialog(
+        title = "Confirm review vote",
         onDismissRequest = viewModel::dismissReviewVote,
-        title = { Text("Confirm review vote") },
-        text = {
+        content = {
             Text(
                 "Mark this evidence ${decision.uppercase()}? Your accepted vote cannot be changed."
             )
         },
-        confirmButton = {
-            TextButton(onClick = viewModel::confirmReviewVote) { Text("Submit vote") }
+        actions = {
+            GameOutlinedButton("Cancel", viewModel::dismissReviewVote, Modifier.weight(1f))
+            GameButton("Submit vote", viewModel::confirmReviewVote, Modifier.weight(1f))
         },
-        dismissButton = { TextButton(onClick = viewModel::dismissReviewVote) { Text("Cancel") } },
     )
 }
 
@@ -554,20 +570,20 @@ private fun EjectionVoteConfirmation(state: GameplayUiState, viewModel: Gameplay
         state.selectedEjectionTargetId?.let { id ->
             meeting.eligibleParticipants.firstOrNull { it.id == id }
         }
-    AlertDialog(
+    WebsiteDialog(
+        title = "Confirm ejection vote",
         onDismissRequest = viewModel::dismissEjectionVote,
-        title = { Text("Confirm ejection vote") },
-        text = {
+        content = {
             Column(verticalArrangement = Arrangement.spacedBy(GameSpacing.sm)) {
                 if (target != null) PlayerCard(target.nickname, target.avatarId)
                 else Text("Skip — eject no one", fontWeight = FontWeight.Bold)
                 Text("Your accepted vote cannot be changed.")
             }
         },
-        confirmButton = {
-            TextButton(onClick = viewModel::confirmEjectionVote) { Text("Submit vote") }
+        actions = {
+            GameOutlinedButton("Cancel", viewModel::dismissEjectionVote, Modifier.weight(1f))
+            GameButton("Submit vote", viewModel::confirmEjectionVote, Modifier.weight(1f))
         },
-        dismissButton = { TextButton(onClick = viewModel::dismissEjectionVote) { Text("Cancel") } },
     )
 }
 
@@ -644,43 +660,76 @@ private fun FinalResultScreen(
             onToggleTheme = onToggleTheme,
         )
         Column(
-            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(GameSpacing.xl),
+            Modifier.weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 14.dp, vertical = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(GameSpacing.md),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text(
-                "CASE CLOSED",
-                color = MaterialTheme.gameColors.results,
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Black,
-            )
-            Text(
-                snapshot.winnerLabel(),
-                modifier = Modifier.semantics { heading() },
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.Black,
-                textAlign = TextAlign.Center,
-            )
-            Text(snapshot.endReasonLabel(), textAlign = TextAlign.Center)
-            Text(
-                "You finished as ${snapshot.self.role.replaceFirstChar(Char::uppercase)} • ${snapshot.self.lifeStatus}"
-            )
-            if (summary != null) {
-                Row(
-                    Modifier.fillMaxWidth().widthIn(max = 720.dp),
-                    horizontalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+            WebsiteCard(
+                Modifier.fillMaxWidth().widthIn(max = 720.dp),
+                accent = MaterialTheme.gameColors.results,
+            ) {
+                Column(
+                    Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    ResultMetric("Players", summary.players.size.toString(), Modifier.weight(1f))
-                    ResultMetric(
-                        "Crew tasks",
-                        "${summary.completedTasks}/${summary.totalTasks}",
-                        Modifier.weight(1f),
+                    Surface(
+                        modifier = Modifier.rotate(-4f),
+                        color = MaterialTheme.gameColors.results.copy(alpha = .10f),
+                        border = BorderStroke(2.dp, MaterialTheme.gameColors.results),
+                        shape = RoundedCornerShape(4.dp),
+                    ) {
+                        Text(
+                            "CASE CLOSED",
+                            Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
+                            color = MaterialTheme.gameColors.results,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Black,
+                        )
+                    }
+                    Text(
+                        "FINAL OUTCOME",
+                        color = MaterialTheme.gameColors.results,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Black,
                     )
-                    ResultMetric(
-                        "Duration",
-                        formatDuration(summary.durationSeconds),
-                        Modifier.weight(1f),
+                    Text(
+                        snapshot.winnerLabel(),
+                        modifier = Modifier.semantics { heading() },
+                        style = MaterialTheme.typography.displaySmall,
+                        fontWeight = FontWeight.Black,
+                        textAlign = TextAlign.Center,
                     )
+                    Text(snapshot.endReasonLabel(), textAlign = TextAlign.Center)
+                    Text(
+                        "You finished as ${snapshot.self.role.replaceFirstChar(Char::uppercase)} • ${snapshot.self.lifeStatus}",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                    )
+                    if (summary != null) {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            ResultMetric(
+                                "Players",
+                                summary.players.size.toString(),
+                                Modifier.weight(1f),
+                            )
+                            ResultMetric(
+                                "Crew tasks",
+                                "${summary.completedTasks}/${summary.totalTasks}",
+                                Modifier.weight(1f),
+                            )
+                            ResultMetric(
+                                "Duration",
+                                formatDuration(summary.durationSeconds),
+                                Modifier.weight(1f),
+                            )
+                        }
+                    }
                 }
             }
             Message(state.message)
@@ -710,7 +759,7 @@ private fun FinalResultScreen(
                             shrinkVertically(tween(GameMotion.StandardMillis)),
             ) {
                 if (summary != null)
-                    SignalCard(
+                    WebsiteCard(
                         Modifier.fillMaxWidth().widthIn(max = 720.dp),
                         accent = MaterialTheme.gameColors.results,
                     ) {
@@ -769,10 +818,9 @@ private fun FinalResultScreen(
                     else "◉"
                 )
             }
-            SignalCard(
+            WebsiteCard(
                 Modifier.fillMaxWidth().widthIn(max = 720.dp),
                 accent = MaterialTheme.gameColors.results,
-                emphasized = true,
             ) {
                 Column(
                     Modifier.padding(GameSpacing.lg),
@@ -922,6 +970,12 @@ private fun RoleRevealScreen(
                         modifier =
                             Modifier.fillMaxWidth()
                                 .height(334.dp)
+                                .border(
+                                    1.dp,
+                                    MaterialTheme.gameColors.accentStrong.copy(alpha = .55f),
+                                    RoundedCornerShape(30.dp),
+                                )
+                                .padding(6.dp)
                                 .then(if (state.roleRevealed) Modifier else holdModifier)
                                 .semantics {
                                     contentDescription =
@@ -932,8 +986,8 @@ private fun RoleRevealScreen(
                                 },
                         shape = RoundedCornerShape(30.dp),
                         color = MaterialTheme.gameColors.privateSurface,
-                        border = BorderStroke(2.dp, MaterialTheme.gameColors.accentStrong),
-                        shadowElevation = 18.dp,
+                        border = BorderStroke(1.dp, MaterialTheme.gameColors.accentStrong),
+                        shadowElevation = 0.dp,
                     ) {
                         Column(
                             Modifier.padding(GameSpacing.lg),
@@ -941,8 +995,8 @@ private fun RoleRevealScreen(
                             verticalArrangement =
                                 Arrangement.spacedBy(GameSpacing.md, Alignment.CenterVertically),
                         ) {
-                            GameGlyph(
-                                GameGlyphKind.Status,
+                            WebsiteIcon(
+                                WebsiteIconKind.Eye,
                                 tint = MaterialTheme.gameColors.accentStrong,
                                 size = 30.dp,
                             )
@@ -1063,8 +1117,11 @@ private fun TaskList(
 ) {
     val sorted = snapshot.assignments.incompleteFirst()
     Column(
-        modifier = modifier.verticalScroll(rememberScrollState()).padding(GameSpacing.md),
-        verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
+        modifier =
+            modifier
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 10.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(
             Modifier.fillMaxWidth(),
@@ -1098,12 +1155,20 @@ private fun TaskList(
                 )
             }
         }
-        LinearProgressIndicator(
-            progress = { snapshot.progress.percent / 100f },
-            modifier = Modifier.fillMaxWidth(),
-            color = MaterialTheme.gameColors.tasks,
-            trackColor = MaterialTheme.gameColors.tasks.copy(alpha = 0.16f),
-        )
+        Box(
+            Modifier.fillMaxWidth()
+                .height(7.dp)
+                .background(
+                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = .45f),
+                    RoundedCornerShape(50),
+                )
+        ) {
+            Box(
+                Modifier.fillMaxWidth(snapshot.progress.percent / 100f)
+                    .fillMaxHeight()
+                    .background(MaterialTheme.gameColors.tasks, RoundedCornerShape(50))
+            )
+        }
         Message(state.message)
         if (showKill && state.canKill) KillControl(snapshot, state, viewModel)
         if (sorted.isEmpty()) Text("You have no assigned tasks.")
@@ -1193,10 +1258,12 @@ private fun GameActionBar(
     viewModel: GameplayViewModel,
 ) {
     Surface(
-        modifier = Modifier.fillMaxWidth(),
-        tonalElevation = 8.dp,
-        shadowElevation = 10.dp,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(18.dp),
+        tonalElevation = 0.dp,
+        shadowElevation = 14.dp,
         color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Column {
             LinearProgressIndicator(
@@ -1206,8 +1273,8 @@ private fun GameActionBar(
                 trackColor = MaterialTheme.gameColors.tasks.copy(alpha = 0.16f),
             )
             Row(
-                modifier = Modifier.fillMaxWidth().padding(GameSpacing.sm),
-                horizontalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+                modifier = Modifier.fillMaxWidth().padding(7.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 GameActionButton(
                     icon = GameGlyphKind.Status,
@@ -1251,24 +1318,32 @@ private fun GameActionButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    OutlinedButton(onClick = onClick, modifier = modifier.height(72.dp)) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(GameSpacing.xs),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                GameGlyph(icon)
+    Surface(
+        modifier = modifier.height(66.dp).clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    GameGlyph(icon)
+                    Text(
+                        label,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                    )
+                }
                 Text(
-                    label,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.ExtraBold,
+                    detail,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Text(
-                detail,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }
@@ -1284,12 +1359,13 @@ private fun StatusPanel(
         snapshot.self.knownEliminatedParticipantIds.mapNotNull { id ->
             snapshot.participants.firstOrNull { it.id == id }
         }
-    AlertDialog(
+    WebsiteDialog(
+        title = "Game status",
         onDismissRequest = viewModel::dismissStatus,
-        title = { Text("Game status", fontWeight = FontWeight.Black) },
-        text = {
+        modifier = Modifier.heightIn(max = 720.dp),
+        content = {
             Column(
-                Modifier.verticalScroll(rememberScrollState()),
+                Modifier.weight(1f).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(GameSpacing.md),
             ) {
                 self?.let { PlayerCard(it.nickname, it.avatarId) }
@@ -1359,7 +1435,9 @@ private fun StatusPanel(
                 )
             }
         },
-        confirmButton = { GameBackButton("Game", viewModel::dismissStatus) },
+        actions = {
+            GameBackButton("Game", viewModel::dismissStatus, Modifier.fillMaxWidth())
+        },
     )
 }
 
@@ -1378,20 +1456,18 @@ private fun meetingAvailabilityLabel(snapshot: GameSnapshot, state: GameplayUiSt
 
 @Composable
 private fun MeetingCallConfirmation(snapshot: GameSnapshot, viewModel: GameplayViewModel) {
-    AlertDialog(
+    WebsiteDialog(
+        title = "Call emergency meeting?",
         onDismissRequest = viewModel::dismissMeetingConfirmation,
-        title = { Text("Call emergency meeting?") },
-        text = {
+        content = {
             Text(
                 "The task phase will pause and the room will gather to review evidence and vote. " +
                     "You will have ${snapshot.meetingRules.remainingForSelf - 1} calls left."
             )
         },
-        confirmButton = {
-            TextButton(onClick = viewModel::confirmMeetingCall) { Text("Call meeting") }
-        },
-        dismissButton = {
-            TextButton(onClick = viewModel::dismissMeetingConfirmation) { Text("Cancel") }
+        actions = {
+            GameOutlinedButton("Cancel", viewModel::dismissMeetingConfirmation, Modifier.weight(1f))
+            GameButton("Call meeting", viewModel::confirmMeetingCall, Modifier.weight(1f))
         },
     )
 }
@@ -1442,46 +1518,40 @@ private fun KillTargetPicker(
     viewModel: GameplayViewModel,
 ) {
     val targets = snapshot.participants.filter { it.id in snapshot.self.killableParticipantIds }
-    AlertDialog(
+    WebsiteDialog(
+        title = "Choose a target",
         onDismissRequest = viewModel::dismissKillPicker,
-        title = { Text("Choose a target", fontWeight = FontWeight.Black) },
-        text = {
+        modifier = Modifier.heightIn(max = 720.dp),
+        content = {
             Column(
-                Modifier.verticalScroll(rememberScrollState()),
+                Modifier.weight(1f).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(GameSpacing.xs),
             ) {
                 Text("Only currently eligible living players are shown.")
                 targets.forEach { target ->
-                    SignalCard(Modifier.fillMaxWidth(), accent = MaterialTheme.colorScheme.error) {
-                        Row(
-                            Modifier.padding(GameSpacing.sm),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            RadioButton(
-                                selected = state.selectedKillTargetId == target.id,
-                                onClick = { viewModel.selectKillTarget(target.id) },
-                            )
-                            Column(Modifier.weight(1f)) {
-                                Text(target.nickname, fontWeight = FontWeight.Bold)
-                                Text(
-                                    "Living crew member",
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            }
-                        }
-                    }
+                    WebsiteBallotRow(
+                        nickname = target.nickname,
+                        playerColorId = target.avatarId,
+                        selected = state.selectedKillTargetId == target.id,
+                        enabled = !state.loading,
+                        trailingText =
+                            if (state.selectedKillTargetId == target.id) "Target selected"
+                            else "Select target",
+                        onClick = { viewModel.selectKillTarget(target.id) },
+                    )
                 }
             }
         },
-        confirmButton = {
-            TextButton(
-                onClick = viewModel::requestKillConfirmation,
+        actions = {
+            GameOutlinedButton("Cancel", viewModel::dismissKillPicker, Modifier.weight(1f))
+            GameButton(
+                "Review",
+                viewModel::requestKillConfirmation,
+                Modifier.weight(1f),
                 enabled = state.selectedKillTargetId != null,
-            ) {
-                Text("Review elimination")
-            }
+                style = GameButtonStyle.Destructive,
+            )
         },
-        dismissButton = { TextButton(onClick = viewModel::dismissKillPicker) { Text("Cancel") } },
     )
 }
 
@@ -1489,19 +1559,24 @@ private fun KillTargetPicker(
 private fun KillConfirmation(state: GameplayUiState, viewModel: GameplayViewModel) {
     val target =
         state.snapshot?.participants?.firstOrNull { it.id == state.selectedKillTargetId } ?: return
-    AlertDialog(
+    WebsiteDialog(
+        title = "Confirm elimination",
         onDismissRequest = viewModel::dismissKill,
-        title = { Text("Confirm elimination") },
-        text = {
+        content = {
             Column(verticalArrangement = Arrangement.spacedBy(GameSpacing.sm)) {
                 PlayerCard(target.nickname, target.avatarId)
                 Text("This immediately changes the game and may trigger a meeting.")
             }
         },
-        confirmButton = {
-            TextButton(onClick = viewModel::confirmKill) { Text("Confirm elimination") }
+        actions = {
+            GameOutlinedButton("Cancel", viewModel::dismissKill, Modifier.weight(1f))
+            GameButton(
+                "Eliminate",
+                viewModel::confirmKill,
+                Modifier.weight(1f),
+                style = GameButtonStyle.Destructive,
+            )
         },
-        dismissButton = { TextButton(onClick = viewModel::dismissKill) { Text("Cancel") } },
     )
 }
 
@@ -1524,12 +1599,13 @@ private fun TaskEvidenceDialog(
         rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
             uri?.let(viewModel::prepareEvidence)
         }
-    AlertDialog(
+    WebsiteDialog(
+        title = assignment.description,
         onDismissRequest = viewModel::dismissTaskDetail,
-        title = { Text(assignment.description) },
-        text = {
+        modifier = Modifier.heightIn(max = 720.dp),
+        content = {
             Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
+                modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
             ) {
                 Text("Difficulty: ${assignment.difficulty}")
@@ -1579,8 +1655,8 @@ private fun TaskEvidenceDialog(
                 }
             }
         },
-        confirmButton = {
-            GameBackButton("Tasks", viewModel::dismissTaskDetail)
+        actions = {
+            GameBackButton("Tasks", viewModel::dismissTaskDetail, Modifier.fillMaxWidth())
         },
     )
 }
@@ -1597,14 +1673,21 @@ private fun EvidenceGalleryScreen(
         EvidencePreviewDialog(state, viewModel)
     }
     if (state.confirmFlag) {
-        AlertDialog(
+        WebsiteDialog(
+            title = "Flag this evidence?",
             onDismissRequest = viewModel::dismissFlag,
-            title = { Text("Flag this evidence?") },
-            text = { Text("The evidence will be queued for review. Misuse may disrupt the game.") },
-            confirmButton = {
-                TextButton(onClick = viewModel::confirmFlag) { Text("Flag evidence") }
+            content = {
+                Text("The evidence will be queued for review. Misuse may disrupt the game.")
             },
-            dismissButton = { TextButton(onClick = viewModel::dismissFlag) { Text("Cancel") } },
+            actions = {
+                GameOutlinedButton("Cancel", viewModel::dismissFlag, Modifier.weight(1f))
+                GameButton(
+                    "Flag evidence",
+                    viewModel::confirmFlag,
+                    Modifier.weight(1f),
+                    style = GameButtonStyle.Destructive,
+                )
+            },
         )
     }
     Column(Modifier.fillMaxSize().safeDrawingPadding()) {
@@ -1623,17 +1706,51 @@ private fun EvidenceGalleryScreen(
             onToggleTheme = onToggleTheme,
         )
         Column(
-            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(GameSpacing.md),
-            verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
+            Modifier.weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 14.dp, vertical = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text(
-                "Permitted evidence",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
+            WebsiteSectionHeading(
+                eyebrow = "Case file",
+                title = "Permitted evidence",
+                count = state.submissions.size.toString(),
+                accent = MaterialTheme.gameColors.tasks,
             )
             Message(state.message)
-            if (state.submissions.isEmpty()) Text("No evidence is visible right now.")
-            state.submissions.forEach { submission -> EvidenceCard(submission, viewModel) }
+            if (state.submissions.isEmpty()) {
+                WebsiteCard(Modifier.fillMaxWidth()) {
+                    Column(
+                        Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        GameGlyph(
+                            GameGlyphKind.Evidence,
+                            tint = MaterialTheme.gameColors.tasks,
+                            size = 32.dp,
+                        )
+                        Text(
+                            "No evidence yet",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Black,
+                        )
+                        Text(
+                            "Accepted task photos will appear here when they are available to you.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                }
+            }
+            state.submissions.chunked(2).forEach { row ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    row.forEach { submission ->
+                        EvidenceCard(submission, viewModel, Modifier.weight(1f))
+                    }
+                    if (row.size == 1) Box(Modifier.weight(1f))
+                }
+            }
         }
         GameBackButton(
             "Tasks",
@@ -1644,17 +1761,30 @@ private fun EvidenceGalleryScreen(
 }
 
 @Composable
-private fun EvidenceCard(submission: Submission, viewModel: GameplayViewModel) {
-    SignalCard(Modifier.fillMaxWidth(), accent = MaterialTheme.gameColors.tasks) {
+private fun EvidenceCard(
+    submission: Submission,
+    viewModel: GameplayViewModel,
+    modifier: Modifier = Modifier,
+) {
+    WebsiteCard(modifier, accent = MaterialTheme.gameColors.tasks) {
         Column(
-            Modifier.padding(GameSpacing.md),
+            Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(GameSpacing.xs),
         ) {
             Text(submission.uploader.nickname, fontWeight = FontWeight.Bold)
-            Text("Processing: ${submission.processingStatus}")
-            Text("Review: ${submission.reviewStatus}")
+            Text(
+                submission.processingStatus.uppercase(),
+                color = MaterialTheme.gameColors.tasks,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Black,
+            )
+            Text("Review · ${submission.reviewStatus}", style = MaterialTheme.typography.bodySmall)
             if (submission.flaggedBySelf) Text("Flagged by you")
-            GameOutlinedButton("View evidence", { viewModel.selectEvidence(submission.id) })
+            GameOutlinedButton(
+                "View",
+                { viewModel.selectEvidence(submission.id) },
+                Modifier.fillMaxWidth(),
+            )
         }
     }
 }

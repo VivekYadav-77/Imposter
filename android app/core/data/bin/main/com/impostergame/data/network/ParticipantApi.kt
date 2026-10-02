@@ -1,6 +1,7 @@
 package com.impostergame.data.network
 
 import com.impostergame.data.model.ApiEnvelope
+import com.impostergame.data.model.CallMeetingInput
 import com.impostergame.data.model.ConfirmSubmissionInput
 import com.impostergame.data.model.EjectionVoteInput
 import com.impostergame.data.model.FlagAcknowledgement
@@ -118,6 +119,19 @@ class ParticipantApi(
             )
             .map { it.data }
 
+    suspend fun replayRoom(idempotencyKey: String): ApiResult<RoomSnapshot> =
+        client
+            .command(
+                CommandRequest(
+                    routeTemplate = "/api/v1/rooms/current/replay",
+                    encodedPath = "/api/v1/rooms/current/replay",
+                    body = EMPTY_JSON,
+                    idempotencyKey = idempotencyKey,
+                ),
+                ApiEnvelope.serializer(RoomSnapshot.serializer()),
+            )
+            .map { it.data }
+
     suspend fun taskPacks(): ApiResult<List<PublicTaskPack>> =
         client
             .get(
@@ -195,6 +209,22 @@ class ParticipantApi(
                 CommandRequest(
                     routeTemplate = "/api/v1/games/current/kills",
                     encodedPath = "/api/v1/games/current/kills",
+                    body = json.encodeToString(input).encodeToByteArray(),
+                    idempotencyKey = idempotencyKey,
+                ),
+                ApiEnvelope.serializer(GameSnapshot.serializer()),
+            )
+            .map { it.data }
+
+    suspend fun callMeeting(
+        input: CallMeetingInput,
+        idempotencyKey: String,
+    ): ApiResult<GameSnapshot> =
+        client
+            .command(
+                CommandRequest(
+                    routeTemplate = "/api/v1/games/current/meetings",
+                    encodedPath = "/api/v1/games/current/meetings",
                     body = json.encodeToString(input).encodeToByteArray(),
                     idempotencyKey = idempotencyKey,
                 ),

@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,8 +14,10 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -31,10 +34,18 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.vector.PathParser
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.impostergame.designsystem.avatar.PlayerAvatar
+import com.impostergame.designsystem.theme.GameShapes
 import com.impostergame.designsystem.theme.GameSpacing
 import com.impostergame.designsystem.theme.GameTouchTarget
 import com.impostergame.designsystem.theme.gameColors
@@ -49,6 +60,174 @@ enum class WebsiteIconKind {
     Room,
     Sun,
     Moon,
+}
+
+/** Flat website card: exact border/surface output with no Material tonal color mutation. */
+@Composable
+fun WebsiteCard(
+    modifier: Modifier = Modifier,
+    accent: Color? = null,
+    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
+) {
+    Surface(
+        modifier = modifier,
+        shape = GameShapes.card,
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
+        border =
+            BorderStroke(
+                1.dp,
+                accent?.copy(alpha = .48f) ?: MaterialTheme.colorScheme.outlineVariant,
+            ),
+    ) {
+        Column(content = content)
+    }
+}
+
+@Composable
+fun WebsiteSectionHeading(
+    eyebrow: String,
+    title: String,
+    modifier: Modifier = Modifier,
+    count: String? = null,
+    accent: Color = MaterialTheme.colorScheme.primary,
+) {
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(
+                eyebrow.uppercase(),
+                color = accent,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Black,
+            )
+            Text(
+                title,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Black,
+            )
+        }
+        count?.let {
+            Text(
+                it,
+                modifier =
+                    Modifier.background(accent.copy(alpha = .12f), GameShapes.pill)
+                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                color = accent,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Black,
+            )
+        }
+    }
+}
+
+/** Dedicated website ballot row. It intentionally omits operative/color labels. */
+@Composable
+fun WebsiteBallotRow(
+    nickname: String,
+    playerColorId: String,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    isSkip: Boolean = false,
+    trailingText: String = if (selected) "Selected" else "Tap to select",
+) {
+    val accent = MaterialTheme.gameColors.voting
+    Surface(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .heightIn(min = 72.dp)
+                .clickable(enabled = enabled, role = Role.RadioButton, onClick = onClick)
+                .semantics { this.selected = selected },
+        shape = GameShapes.medium,
+        color = if (selected) accent.copy(alpha = .12f) else MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp,
+        border =
+            BorderStroke(
+                if (selected) 2.dp else 1.dp,
+                if (selected) accent else MaterialTheme.colorScheme.outlineVariant,
+            ),
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            if (isSkip) {
+                Box(
+                    Modifier.size(48.dp).background(accent.copy(alpha = .12f), CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        "—",
+                        color = accent,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Black,
+                    )
+                }
+            } else {
+                PlayerAvatar(playerColorId, 48.dp, nickname, decorative = true, selected = selected)
+            }
+            Text(
+                nickname,
+                Modifier.weight(1f),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.ExtraBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                trailingText,
+                color = if (selected) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+    }
+}
+
+/** Full-width mobile modal matching the website overlay rather than Material AlertDialog chrome. */
+@Composable
+fun WebsiteDialog(
+    title: String,
+    onDismissRequest: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
+    actions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit,
+) {
+    Dialog(
+        onDismissRequest = onDismissRequest,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Surface(
+            modifier = modifier.fillMaxWidth().padding(horizontal = 14.dp).widthIn(max = 520.dp),
+            shape = GameShapes.dialog,
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 0.dp,
+            shadowElevation = 18.dp,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        ) {
+            Column(
+                Modifier.fillMaxWidth().padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Black,
+                )
+                content()
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    content = actions,
+                )
+            }
+        }
+    }
 }
 
 /** The website's 24px, 1.75px round-cap icon family. */

@@ -261,6 +261,11 @@ data class ReviewVoteInput(val expectedStateVersion: Long, val decision: String)
 }
 
 @Serializable
+data class CallMeetingInput(val expectedStateVersion: Long) {
+    override fun toString(): String = "CallMeetingInput(expectedStateVersion=$expectedStateVersion)"
+}
+
+@Serializable
 data class EjectionVoteInput(
     val expectedStateVersion: Long,
     val targetParticipantId: String?,
