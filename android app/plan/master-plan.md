@@ -36,7 +36,7 @@ Not in Android v1 unless separately approved:
 
 1. **The server is authoritative.** Never infer roles, winners, hidden totals, eligibility, deadlines, or phase changes locally.
 2. **Snapshots replace state.** A room/game snapshot replaces the corresponding local in-memory model. Realtime messages are hints and delivery mechanisms, not a separate truth.
-3. **Privacy by default.** Role, ballot, kill, and private evidence information must never leak through notifications, logs, analytics, screenshots, recent-app previews, accessibility text on unrelated screens, or cached previews.
+3. **Privacy by default.** Role, ballot, kill, and private evidence information must never leak through notifications, logs, analytics, accessibility text on unrelated screens, or cached app-owned previews. Screenshots, screen recording, recent-task previews, and ordinary overlays are an explicit product-owner exception under ADR-A-030.
 4. **No accidental departure.** Back, rotation, backgrounding, socket loss, or activity destruction is a soft disconnect. Only an explicit eligible leave command removes a lobby seat.
 5. **One obvious primary action.** Each screen communicates what is happening, what the player should do, and how much time remains.
 6. **Accessibility is functional correctness.** Color, animation, sound, and gesture-only cues always have semantic alternatives.

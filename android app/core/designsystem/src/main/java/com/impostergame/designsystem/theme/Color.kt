@@ -15,7 +15,7 @@ internal val BrandDarkTextTertiary = Color(0xFF8C846F)
 internal val BrandDarkBorder = Color(0xFF3A3627)
 internal val BrandDarkBorderStrong = Color(0xFF554E38)
 internal val BrandDarkAccent = Color(0xFFD98E3B)
-internal val BrandDarkAccentStrong = Color(0xFFF0A957)
+internal val BrandDarkAccentStrong = Color(0xFFD98E3B)
 internal val BrandDarkAccentInk = Color(0xFF211307)
 
 internal val BrandLightCanvas = Color(0xFFF4F0E6)
@@ -29,15 +29,15 @@ internal val BrandLightTextTertiary = Color(0xFF817765)
 internal val BrandLightBorder = Color(0xFFC9BEA8)
 internal val BrandLightBorderStrong = Color(0xFFA99B80)
 internal val BrandLightAccent = Color(0xFFA6530B)
-internal val BrandLightAccentStrong = Color(0xFF843E06)
+internal val BrandLightAccentStrong = Color(0xFFA6530B)
 internal val BrandLightAccentInk = Color(0xFFFFFAF1)
 
-private val DangerDark = Color(0xFFFF6555)
-private val DangerLight = Color(0xFFB73229)
-private val SuccessDark = Color(0xFF39C77F)
-private val SuccessLight = Color(0xFF14794E)
-private val WarningDark = Color(0xFFF0B63F)
-private val WarningLight = Color(0xFF9A5B00)
+private val DangerDark = Color(0xFFE06B51)
+private val DangerLight = Color(0xFF982F1F)
+private val SuccessDark = Color(0xFF5C8A5C)
+private val SuccessLight = Color(0xFF3F7448)
+private val WarningDark = Color(0xFFC9A227)
+private val WarningLight = Color(0xFF9A7710)
 
 internal val DarkColorScheme =
     darkColorScheme(
@@ -140,11 +140,11 @@ internal val DarkBrandColors =
         privateCanvas = Color(0xFF0B0C0B),
         privateSurface = Color(0xFF171411),
         privateText = Color(0xFFF5EEE4),
-        lobby = Color(0xFF27B8C8),
-        tasks = Color(0xFFF0B63F),
-        meeting = Color(0xFFFF6A5D),
+        lobby = Color(0xFF4A6878),
+        tasks = Color(0xFFC9A227),
+        meeting = Color(0xFFA63F2B),
         voting = Color(0xFF8C7CFF),
-        results = Color(0xFF36C889),
+        results = Color(0xFF426D48),
         ready = SuccessDark,
         pending = WarningDark,
     )
@@ -160,11 +160,11 @@ internal val LightBrandColors =
         privateCanvas = Color(0xFF0B0C0B),
         privateSurface = Color(0xFF171411),
         privateText = Color(0xFFF5EEE4),
-        lobby = Color(0xFF087F91),
-        tasks = Color(0xFFA86100),
-        meeting = Color(0xFFBF3D35),
+        lobby = Color(0xFF3D6578),
+        tasks = Color(0xFFC19A1C),
+        meeting = Color(0xFF9C3928),
         voting = Color(0xFF5B4BC4),
-        results = Color(0xFF14794E),
+        results = Color(0xFF3E7047),
         ready = SuccessLight,
         pending = WarningLight,
     )

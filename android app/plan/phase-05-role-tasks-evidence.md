@@ -11,7 +11,7 @@ Implement the high-frequency gameplay loop with strong privacy, safe media handl
 - Use an accessible press-and-hold reveal with a clearly available alternative for users unable to hold.
 - Show role, optional crew specialization, objective, and one acknowledgement action.
 - Reseal immediately on background, loss of window focus, screen lock, screen capture attempt where supported, and return from system UI.
-- Use secure-window behavior for role and other approved sensitive screens.
+- Do not apply secure-window or overlay blocking; capture is explicitly allowed under ADR-A-030. Keep lifecycle role resealing.
 - Do not persist revealed state across process death.
 
 ## Task screen
@@ -72,7 +72,7 @@ Pipeline requirements:
 
 ## Required tests
 
-- Role never appears in recent-app preview/screenshot where platform policy allows protection.
+- Role capture/recent-preview disclosure is an accepted ADR-A-030 tradeoff; committed comparison captures use synthetic data.
 - Role reseals on all lifecycle/privacy events and orientation changes.
 - Crew, imposter, alive, killed, and ejected variants.
 - Every upload state and failure, including process/background transitions.

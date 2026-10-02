@@ -157,9 +157,6 @@ data class GameplayUiState(
     val message: String? = null,
     val connectionState: ConnectionState = ConnectionState.Connected,
 ) {
-    val isSensitive: Boolean
-        get() = destination != GameplayDestination.LOADING
-
     val canKill: Boolean
         get() = snapshot?.self?.capabilities?.contains("kill") == true
 

@@ -58,7 +58,7 @@ Low-volume windows do not page; they create a review signal. Never segment by ro
 
 - Permission declaration: internet and camera only. Camera is requested just in time; existing photos use the system picker; there is no broad storage, contacts, location, microphone, notification, or background-location permission.
 - Photo disclosure: selected/captured evidence is orientation-normalized, metadata-stripped, JPEG re-encoded, uploaded for game review, and governed by server-returned retention policy.
-- Backups/device transfer are disabled; gameplay windows are screenshot/recent-preview protected; participant credentials are Keystore-protected.
+- Backups/device transfer are disabled and participant credentials are Keystore-protected. Gameplay screenshots, recording, recent-task previews, and overlays are intentionally allowed under ADR-A-030 and must be disclosed accurately.
 - Privacy policy URL, data-safety answers, content rating, store copy, support contact, release countries, localized listing, and final screenshots require owner/legal approval in Play Console.
 - Screenshots use synthetic data and never show a private role, ballot, room code, request ID, evidence image, real nickname, or production endpoint.
 - Play Integrity is not included. Add it only after a threat-model decision and server verification contract.

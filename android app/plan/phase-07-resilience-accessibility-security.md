@@ -29,7 +29,7 @@ Turn feature-complete behavior into a trustworthy mobile experience under real d
 ## Security and privacy review
 
 - Threat-model token theft, role leakage, ballot leakage, signed evidence URL leakage, malicious images, replayed commands, overlay/tapjacking, rooted-device limitations, clipboard exposure, and backup extraction.
-- Apply secure-window protection to approved sensitive surfaces and recent-app previews.
+- Keep screenshot, screen-recording, recent-task, and overlay blocking disabled under ADR-A-030; verify lifecycle resealing and explicit destructive confirmations instead.
 - Validate TLS/network security configuration and production cleartext prohibition.
 - Verify secure session storage and deliberate backup rules.
 - Redact all sensitive headers, request bodies, DTO fields, URLs, file paths, and image metadata.

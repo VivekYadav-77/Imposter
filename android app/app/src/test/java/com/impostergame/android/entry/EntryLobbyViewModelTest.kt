@@ -99,6 +99,28 @@ class EntryLobbyViewModelTest {
             assertEquals(1, gateway.refreshCalls)
         }
 
+    @Test
+    fun switchingFromCreateToJoinRequiresRoomLookupBeforeIdentity() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val viewModel =
+                EntryLobbyViewModel(
+                    FakeGateway(ArrayDeque(listOf(ResumeTarget.Entry))),
+                    SavedStateHandle(),
+                )
+            runCurrent()
+
+            viewModel.showCreate()
+            viewModel.setColor("fox")
+            assertTrue(viewModel.state.value.form.availableColorIds.isNotEmpty())
+
+            viewModel.showJoin()
+
+            assertEquals(EntryDestination.JOIN, viewModel.state.value.destination)
+            assertTrue(viewModel.state.value.form.availableColorIds.isEmpty())
+            assertEquals(null, viewModel.state.value.form.selectedColorId)
+            assertEquals(null, viewModel.state.value.form.spotsRemaining)
+        }
+
     private fun room(status: RoomStatus): RoomSnapshot =
         RoomSnapshot(
             id = "room",

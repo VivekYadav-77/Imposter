@@ -42,7 +42,7 @@ class NavigationBackTest {
     fun deviceBackFromJoinReturnsHomeWithoutClosingActivity() {
         composeRule.onNodeWithText("Menu").performClick()
         composeRule.onNodeWithText("Join a room").performClick()
-        composeRule.onNodeWithText("← Home").assertIsDisplayed()
+        composeRule.onNodeWithText("←  Back home").assertIsDisplayed()
 
         pressBack()
 
@@ -54,7 +54,7 @@ class NavigationBackTest {
         composeRule.onNodeWithText("Menu").performClick()
         composeRule.onNodeWithText("Join a room").performClick()
 
-        composeRule.onNodeWithText("← Home").performClick()
+        composeRule.onNodeWithText("←  Back home").performClick()
 
         composeRule.onNodeWithText("Everyone’s watching.").assertIsDisplayed()
     }
@@ -62,6 +62,7 @@ class NavigationBackTest {
     @Test
     fun colorChoiceOwnsItsLabelAndActionOnOneSemanticNode() {
         composeRule.onNodeWithText("Start a room  →").performClick()
+        composeRule.onNodeWithText("Choose an operative").performClick()
 
         composeRule
             .onNode(

@@ -80,7 +80,20 @@ class EntryLobbyViewModel(
 
     fun showJoin() {
         cancelBootstrapRetry()
-        setDestination(EntryDestination.JOIN)
+        update {
+            it.copy(
+                destination = EntryDestination.JOIN,
+                resumeFailed = false,
+                form =
+                    it.form.copy(
+                        availableColorIds = emptyList(),
+                        selectedColorId = null,
+                        spotsRemaining = null,
+                    ),
+                message = null,
+                validationTarget = null,
+            )
+        }
     }
 
     fun showCreate() {

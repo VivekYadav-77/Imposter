@@ -12,7 +12,6 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,6 +26,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -57,13 +57,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -74,7 +73,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -209,7 +207,14 @@ fun ImposterGameApp(
                         onHighContrastChanged = onHighContrastChanged,
                     )
                 EntryDestination.JOIN,
-                EntryDestination.CREATE -> EntryScreen(state, viewModel)
+                EntryDestination.CREATE ->
+                    EntryScreen(
+                        state = state,
+                        viewModel = viewModel,
+                        onToggleTheme = {
+                            onThemeModeChanged(if (darkTheme) ThemeMode.Light else ThemeMode.Dark)
+                        },
+                    )
                 EntryDestination.LOBBY ->
                     LobbyScreen(
                         state,
@@ -999,15 +1004,18 @@ private fun PreferenceSwitchRow(
 }
 
 @Composable
-private fun EntryScreen(state: EntryLobbyUiState, viewModel: EntryLobbyViewModel) {
+private fun EntryScreen(
+    state: EntryLobbyUiState,
+    viewModel: EntryLobbyViewModel,
+    onToggleTheme: () -> Unit,
+) {
     val joining = state.destination == EntryDestination.JOIN
-    val focusManager = LocalFocusManager.current
     val scrollState = rememberScrollState()
     val codeFocus = remember { FocusRequester() }
     val nicknameFocus = remember { FocusRequester() }
-    val colorFocus = remember { FocusRequester() }
+    var colorPickerVisible by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(state.focusColorPicker) {
-        if (state.focusColorPicker) colorFocus.requestFocus()
+        if (state.focusColorPicker) colorPickerVisible = true
     }
     LaunchedEffect(state.validationTarget) {
         when (state.validationTarget) {
@@ -1021,134 +1029,334 @@ private fun EntryScreen(state: EntryLobbyUiState, viewModel: EntryLobbyViewModel
             }
             EntryValidationTarget.COLOR -> {
                 scrollState.animateScrollTo(scrollState.maxValue / 2)
-                colorFocus.requestFocus()
+                colorPickerVisible = true
             }
             EntryValidationTarget.CONSENTS -> scrollState.animateScrollTo(scrollState.maxValue)
             null -> Unit
         }
     }
-    SignalBackground {
-        Scaffold(
-            modifier = Modifier.fillMaxSize().safeDrawingPadding().imePadding(),
-            containerColor = androidx.compose.ui.graphics.Color.Transparent,
-            topBar = {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(GameSpacing.md),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    GameBackButton("Home", viewModel::showHome)
-                    Text(
-                        if (joining) "Join room" else "Create room",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-            },
-            bottomBar = {
-                Surface(shadowElevation = 8.dp, color = MaterialTheme.gameColors.surfaceHighest) {
-                    GameButton(
-                        if (joining) "Join room" else "Create room",
-                        viewModel::submitEntry,
-                        Modifier.fillMaxWidth().padding(GameSpacing.md),
-                        loading = state.loading,
-                    )
-                }
-            },
-        ) { padding ->
-            Column(
-                modifier =
-                    Modifier.padding(padding)
-                        .verticalScroll(scrollState)
-                        .padding(GameSpacing.lg)
-                        .widthIn(max = 680.dp)
-                        .fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(GameSpacing.md),
-            ) {
-                BrandHeader()
-                GameEyebrow(if (joining) "Enter a private room" else "Host a private room")
+    if (colorPickerVisible) {
+        WebsiteDialog(
+            title = "Choose your operative",
+            onDismissRequest = { colorPickerVisible = false },
+            content = {
                 Text(
-                    if (joining) "Step into the room." else "Set the stage.",
-                    style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.Black,
-                )
-                Text(
-                    if (joining) "Use the invite code, choose your identity, and join the crew."
-                    else "Choose your identity now. You can tune the game once the lobby opens.",
+                    "One operative per player in this room.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                if (joining) {
-                    OutlinedTextField(
-                        value = state.form.roomCode,
-                        onValueChange = viewModel::setCode,
-                        modifier = Modifier.fillMaxWidth().focusRequester(codeFocus),
-                        label = { Text("Room code") },
-                        supportingText = { Text(state.form.codeError ?: "Six letters or numbers") },
-                        isError = state.form.codeError != null,
-                        singleLine = true,
-                        keyboardOptions =
-                            KeyboardOptions(
-                                capitalization = KeyboardCapitalization.Characters,
-                                imeAction = ImeAction.Next,
-                            ),
-                        keyboardActions =
-                            KeyboardActions(onNext = { viewModel.fetchJoinOptions() }),
+                Box(
+                    Modifier.fillMaxWidth()
+                        .heightIn(max = 540.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    ColorPicker(
+                        ids = state.form.availableColorIds,
+                        selectedId = state.form.selectedColorId,
+                        onSelect = {
+                            viewModel.setColor(it)
+                            colorPickerVisible = false
+                        },
+                        modifier = Modifier.fillMaxWidth(),
                     )
-                    GameOutlinedButton(
-                        "Check room",
-                        viewModel::fetchJoinOptions,
-                        Modifier.fillMaxWidth(),
-                        enabled = !state.loading,
-                    )
-                    state.form.spotsRemaining?.let {
-                        Text("$it ${if (it == 1) "spot" else "spots"} remaining")
+                }
+            },
+            actions = {
+                GameOutlinedButton(
+                    "Close",
+                    { colorPickerVisible = false },
+                    Modifier.fillMaxWidth(),
+                )
+            },
+        )
+    }
+    val identityVisible = !joining || state.form.availableColorIds.isNotEmpty()
+    SignalBackground {
+        Column(
+            modifier =
+                Modifier.fillMaxSize()
+                    .safeDrawingPadding()
+                    .imePadding()
+                    .verticalScroll(scrollState)
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                BrandHeader(modifier = Modifier.weight(1f))
+                TextButton(onClick = viewModel::showHome) { Text("←  Back home") }
+                Surface(
+                    onClick = onToggleTheme,
+                    modifier = Modifier.size(46.dp),
+                    shape = androidx.compose.foundation.shape.CircleShape,
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    tonalElevation = 0.dp,
+                    shadowElevation = 8.dp,
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        WebsiteIcon(WebsiteIconKind.Moon, size = 21.dp)
                     }
                 }
-                OutlinedTextField(
-                    value = state.form.nickname,
-                    onValueChange = viewModel::setNickname,
-                    modifier = Modifier.fillMaxWidth().focusRequester(nicknameFocus),
-                    label = { Text("Nickname") },
-                    supportingText = { Text(state.form.nicknameError ?: "1–24 characters") },
-                    isError = state.form.nicknameError != null,
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                    keyboardActions =
-                        KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) }),
+            }
+            Spacer(Modifier.height(22.dp))
+            Column(
+                Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(5.dp),
+            ) {
+                GameEyebrow("Enter the room")
+                Text(
+                    "How are you playing?",
+                    modifier = Modifier.semantics { heading() },
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.Black,
+                    textAlign = TextAlign.Center,
                 )
-                SignalCard(Modifier.fillMaxWidth()) {
-                    ColorPicker(
-                        state.form.availableColorIds,
-                        state.form.selectedColorId,
-                        viewModel::setColor,
-                        Modifier.focusRequester(colorFocus).focusable().padding(GameSpacing.md),
+                Text(
+                    "It takes one code. Accounts are optional.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+            }
+            WebsiteCard(Modifier.fillMaxWidth()) {
+                Column(
+                    Modifier.fillMaxWidth().padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    EntryModePicker(
+                        joining = joining,
+                        onCreate = viewModel::showCreate,
+                        onJoin = viewModel::showJoin,
                     )
-                }
-                GameEyebrow("Consent and privacy")
-                SignalCard(Modifier.fillMaxWidth()) {
-                    Column(
-                        Modifier.padding(GameSpacing.md),
-                        verticalArrangement = Arrangement.spacedBy(GameSpacing.xs),
-                    ) {
-                        ConsentRow("I meet the age requirement.", state.form.ageAccepted) {
-                            viewModel.setConsent(ConsentKind.AGE, it)
+                    if (joining) {
+                        Text("Room code", fontWeight = FontWeight.Bold)
+                        OutlinedTextField(
+                            value = state.form.roomCode,
+                            onValueChange = viewModel::setCode,
+                            modifier = Modifier.fillMaxWidth().focusRequester(codeFocus),
+                            placeholder = {
+                                Text(
+                                    "A B C 1 2 3",
+                                    Modifier.fillMaxWidth(),
+                                    textAlign = TextAlign.Center,
+                                    fontWeight = FontWeight.Black,
+                                    letterSpacing = 4.sp,
+                                )
+                            },
+                            supportingText = state.form.codeError?.let { error -> { Text(error) } },
+                            isError = state.form.codeError != null,
+                            singleLine = true,
+                            keyboardOptions =
+                                KeyboardOptions(
+                                    capitalization = KeyboardCapitalization.Characters,
+                                    imeAction = ImeAction.Next,
+                                ),
+                            keyboardActions =
+                                KeyboardActions(onNext = { viewModel.fetchJoinOptions() }),
+                        )
+                        GameOutlinedButton(
+                            "Find room",
+                            viewModel::fetchJoinOptions,
+                            Modifier.fillMaxWidth(),
+                            enabled = !state.loading && state.form.roomCode.length == 6,
+                        )
+                    }
+                    if (identityVisible) {
+                        Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                            Text("Your nickname", fontWeight = FontWeight.Bold)
+                            OutlinedTextField(
+                                value = state.form.nickname,
+                                onValueChange = viewModel::setNickname,
+                                modifier = Modifier.fillMaxWidth().focusRequester(nicknameFocus),
+                                placeholder = { Text("What should the room call you?") },
+                                supportingText = {
+                                    Text(
+                                        state.form.nicknameError
+                                            ?: "${state.form.nickname.length}/24 characters"
+                                    )
+                                },
+                                isError = state.form.nicknameError != null,
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            )
                         }
+                        if (!joining) {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = GameShapes.small,
+                                color = MaterialTheme.gameColors.surfaceHighest,
+                                border =
+                                    BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                                tonalElevation = 0.dp,
+                            ) {
+                                Row(
+                                    Modifier.padding(horizontal = 14.dp, vertical = 13.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text("Room options", fontWeight = FontWeight.Bold)
+                                        Text(
+                                            "3 minimum · 15 maximum",
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
+                                    }
+                                    Text("∨", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        } else {
+                            state.form.spotsRemaining?.let {
+                                Text(
+                                    "$it ${if (it == 1) "spot" else "spots"} remaining",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                        Text("Your operative", fontWeight = FontWeight.Bold)
+                        OperativeSelect(
+                            selectedId = state.form.selectedColorId,
+                            onClick = { colorPickerVisible = true },
+                        )
                         ConsentRow(
-                            "I have permission to capture and share game photos.",
-                            state.form.photoAccepted,
+                            "I’m 18 or older and agree to the photo and privacy notice.",
+                            state.form.consentsAccepted,
                         ) {
+                            viewModel.setConsent(ConsentKind.AGE, it)
                             viewModel.setConsent(ConsentKind.PHOTO, it)
-                        }
-                        ConsentRow("I accept the privacy notice.", state.form.privacyAccepted) {
                             viewModel.setConsent(ConsentKind.PRIVACY, it)
                         }
+                        GameButton(
+                            if (joining) "Join room" else "Create room",
+                            viewModel::submitEntry,
+                            Modifier.fillMaxWidth(),
+                            enabled =
+                                state.form.nickname.trim().isNotEmpty() &&
+                                    state.form.selectedColorId != null &&
+                                    state.form.consentsAccepted,
+                            loading = state.loading,
+                        )
                     }
+                    Message(
+                        state.message,
+                        Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
+                    )
                 }
-                Message(
-                    state.message,
-                    Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
-                )
-                Spacer(Modifier.height(GameSpacing.xl))
             }
+            Spacer(Modifier.height(GameSpacing.xl))
+        }
+    }
+}
+
+@Composable
+private fun EntryModePicker(joining: Boolean, onCreate: () -> Unit, onJoin: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth()
+            .background(MaterialTheme.gameColors.surfaceHighest, GameShapes.medium)
+            .padding(5.dp),
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        EntryModeChoice(
+            title = "Start a room",
+            detail = "Host a new game",
+            selected = !joining,
+            onClick = onCreate,
+            modifier = Modifier.weight(1f),
+        )
+        EntryModeChoice(
+            title = "Join a room",
+            detail = "Use a 6-letter code",
+            selected = joining,
+            onClick = onJoin,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Composable
+private fun EntryModeChoice(
+    title: String,
+    detail: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.heightIn(min = 66.dp),
+        shape = GameShapes.small,
+        color =
+            if (selected) MaterialTheme.colorScheme.primary.copy(alpha = .12f)
+            else MaterialTheme.colorScheme.surface,
+        border =
+            BorderStroke(
+                1.dp,
+                if (selected) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.outlineVariant,
+            ),
+        tonalElevation = 0.dp,
+    ) {
+        Column(
+            Modifier.padding(horizontal = 11.dp, vertical = 9.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(title, fontWeight = FontWeight.Black)
+            Text(
+                detail,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+    }
+}
+
+@Composable
+private fun OperativeSelect(selectedId: String?, onClick: () -> Unit) {
+    val selected = selectedId?.let(PlayerColors::fromTransportId)
+    val selectedName = selected?.let { androidx.compose.ui.res.stringResource(it.nameResource) }
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 92.dp),
+        shape = GameShapes.small,
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        tonalElevation = 0.dp,
+    ) {
+        Row(
+            Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            if (selectedId == null) {
+                Box(
+                    Modifier.size(54.dp)
+                        .border(
+                            1.dp,
+                            MaterialTheme.colorScheme.outline,
+                            androidx.compose.foundation.shape.CircleShape,
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("?", fontWeight = FontWeight.Black)
+                }
+            } else {
+                PlayerAvatar(selectedId, 54.dp, selectedName ?: "Operative", decorative = true)
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(selectedName ?: "Choose an operative", fontWeight = FontWeight.Black)
+                Text(
+                    "One unique identity per player",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            Text(
+                if (selectedId == null) "Choose" else "Change",
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Black,
+                style = MaterialTheme.typography.labelLarge,
+            )
         }
     }
 }
@@ -1161,16 +1369,10 @@ private fun ColorPicker(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(GameSpacing.sm)) {
-        Text(
-            "Player color",
-            modifier = Modifier.semantics { heading() },
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-        )
         if (ids.isEmpty()) {
             Text("Check the room to see available colors.")
         } else {
-            ids.chunked(4).forEach { rowIds ->
+            ids.chunked(3).forEach { rowIds ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly,
@@ -1178,9 +1380,10 @@ private fun ColorPicker(
                     rowIds.forEach { id ->
                         val color = PlayerColors.fromTransportId(id)
                         val label = androidx.compose.ui.res.stringResource(color.nameResource)
-                        Box(
+                        Column(
                             modifier =
-                                Modifier.selectable(
+                                Modifier.weight(1f)
+                                    .selectable(
                                         selected = id == selectedId,
                                         role = Role.RadioButton,
                                         onClick = { onSelect(id) },
@@ -1188,17 +1391,25 @@ private fun ColorPicker(
                                     .semantics(mergeDescendants = true) {
                                         contentDescription = label
                                     }
-                                    .padding(GameSpacing.xs)
+                                    .padding(vertical = GameSpacing.xs),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(5.dp),
                         ) {
                             PlayerAvatar(
                                 id,
-                                58.dp,
+                                62.dp,
                                 label,
                                 selected = id == selectedId,
                                 decorative = true,
                             )
+                            Text(
+                                label.uppercase(),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Black,
+                            )
                         }
                     }
+                    repeat(3 - rowIds.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
         }
@@ -1567,25 +1778,45 @@ private fun TaskPackPicker(state: EntryLobbyUiState, viewModel: EntryLobbyViewMo
         Text("Task pack", fontWeight = FontWeight.Bold)
         if (state.taskPacks.isEmpty()) Text("No published task packs available.")
         state.taskPacks.forEach { pack ->
-            Row(
-                Modifier.fillMaxWidth()
-                    .selectable(
-                        selected = state.settings.selectedTaskPackId == pack.id,
-                        onClick = { viewModel.selectTaskPack(pack.id) },
-                        role = Role.RadioButton,
+            val selected = state.settings.selectedTaskPackId == pack.id
+            Surface(
+                modifier =
+                    Modifier.fillMaxWidth()
+                        .selectable(
+                            selected = selected,
+                            onClick = { viewModel.selectTaskPack(pack.id) },
+                            role = Role.RadioButton,
+                        ),
+                shape = GameShapes.small,
+                color =
+                    if (selected) MaterialTheme.gameColors.lobby.copy(alpha = .12f)
+                    else MaterialTheme.colorScheme.surface,
+                border =
+                    BorderStroke(
+                        if (selected) 2.dp else 1.dp,
+                        if (selected) MaterialTheme.gameColors.lobby
+                        else MaterialTheme.colorScheme.outlineVariant,
                     ),
-                verticalAlignment = Alignment.CenterVertically,
+                tonalElevation = 0.dp,
             ) {
-                RadioButton(
-                    selected = state.settings.selectedTaskPackId == pack.id,
-                    onClick = null,
-                    modifier = Modifier.clearAndSetSemantics {},
-                )
-                Column {
-                    Text(pack.name)
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 13.dp, vertical = 11.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(pack.name, fontWeight = FontWeight.Black)
+                        Text(
+                            "${pack.activeTaskCount} tasks",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
                     Text(
-                        "${pack.activeTaskCount} tasks",
-                        style = MaterialTheme.typography.bodySmall,
+                        if (selected) "SELECTED" else "CHOOSE",
+                        color = MaterialTheme.gameColors.lobby,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Black,
                     )
                 }
             }
@@ -1603,33 +1834,43 @@ private fun NumberSetting(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(GameSpacing.xs)) {
         Text(label, fontWeight = FontWeight.Bold)
-        Row(
+        Surface(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+            shape = GameShapes.small,
+            color = MaterialTheme.gameColors.surfaceHighest,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            tonalElevation = 0.dp,
         ) {
-            GameOutlinedButton(
-                "−",
-                { onChange((value - 1).coerceAtLeast(minimum)) },
-                Modifier.size(52.dp),
-                enabled = value > minimum,
-            )
-            OutlinedTextField(
-                value = value.toString(),
-                onValueChange = { text ->
-                    text.toIntOrNull()?.let { onChange(it.coerceIn(minimum, maximum)) }
-                },
-                modifier = Modifier.weight(1f),
-                supportingText = { Text("$minimum–$maximum") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                singleLine = true,
-            )
-            GameOutlinedButton(
-                "+",
-                { onChange((value + 1).coerceAtMost(maximum)) },
-                Modifier.size(52.dp),
-                enabled = value < maximum,
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+            ) {
+                GameOutlinedButton(
+                    "−",
+                    { onChange((value - 1).coerceAtLeast(minimum)) },
+                    Modifier.size(48.dp),
+                    enabled = value > minimum,
+                )
+                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        value.toString(),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Black,
+                    )
+                    Text(
+                        "$minimum–$maximum",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
+                GameOutlinedButton(
+                    "+",
+                    { onChange((value + 1).coerceAtMost(maximum)) },
+                    Modifier.size(48.dp),
+                    enabled = value < maximum,
+                )
+            }
         }
     }
 }
@@ -1809,24 +2050,39 @@ private fun ChoiceSetting(
     Column(verticalArrangement = Arrangement.spacedBy(GameSpacing.xs)) {
         Text(label, fontWeight = FontWeight.Bold)
         choices.forEach { (id, description) ->
-            Row(
+            val selected = value == id
+            Surface(
                 modifier =
                     Modifier.fillMaxWidth()
                         .selectable(
-                            selected = value == id,
+                            selected = selected,
                             role = Role.RadioButton,
                             onClick = { onChange(id) },
-                        )
-                        .padding(vertical = GameSpacing.xs),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+                        ),
+                shape = GameShapes.small,
+                color =
+                    if (selected) MaterialTheme.gameColors.lobby.copy(alpha = .12f)
+                    else MaterialTheme.colorScheme.surface,
+                border =
+                    BorderStroke(
+                        if (selected) 2.dp else 1.dp,
+                        if (selected) MaterialTheme.gameColors.lobby
+                        else MaterialTheme.colorScheme.outlineVariant,
+                    ),
+                tonalElevation = 0.dp,
             ) {
-                RadioButton(
-                    selected = value == id,
-                    onClick = null,
-                    modifier = Modifier.clearAndSetSemantics {},
-                )
-                Text(description, modifier = Modifier.weight(1f))
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 13.dp, vertical = 11.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+                ) {
+                    Text(description, modifier = Modifier.weight(1f))
+                    Text(
+                        if (selected) "✓" else "",
+                        color = MaterialTheme.gameColors.lobby,
+                        fontWeight = FontWeight.Black,
+                    )
+                }
             }
         }
     }

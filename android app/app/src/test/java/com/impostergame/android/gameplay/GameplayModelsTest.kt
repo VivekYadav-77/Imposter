@@ -53,15 +53,6 @@ class GameplayModelsTest {
     }
 
     @Test
-    fun everyGameplayDestinationIsSecure() {
-        GameplayDestination.entries
-            .filterNot { it == GameplayDestination.LOADING }
-            .forEach { destination ->
-                assertTrue(GameplayUiState(destination = destination).isSensitive)
-            }
-    }
-
-    @Test
     fun meetingReasonUsesOnlyAuthorizedTriggerInformation() {
         val victim =
             com.impostergame.data.model.GameParticipant("victim", "Ari", "owl", false, "dead")

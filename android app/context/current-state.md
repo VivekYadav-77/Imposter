@@ -11,7 +11,7 @@
 
 - Guest create/join, adaptive lobby/host setup, secure resume, authoritative snapshots/retry/reconnect core, private role reveal, tasks/evidence, authorized flag/elimination, meetings/review/voting, and terminal results are source-implemented.
 - Credentials use Android Keystore AES-256-GCM and non-backed-up private preferences. Gameplay remains server authoritative; command retries preserve idempotency identity and conflicts refresh.
-- Phase 7 hardening covers secure windows/overlays, clipboard expiry, bounded/sanitized responses and images, private DTO redaction, signed-upload restrictions, stale snapshot rejection, reconnect status, and countdown accessibility cadence.
+- Phase 7 hardening covers lifecycle role resealing, clipboard expiry, bounded/sanitized responses and images, private DTO redaction, signed-upload restrictions, stale snapshot rejection, reconnect status, and countdown accessibility cadence. Screenshot/recent-task and overlay blocking were removed from every build by the explicit ADR-A-030 product decision.
 
 ## Phase 8 repository controls
 
@@ -51,6 +51,9 @@
 - [x] Added a reusable native signal-room layer (atmospheric canvas, brand mark/header, editorial eyebrow, signal cards/chips, pill controls, player accent rails, and phase-aware task/evidence/meeting/result surfaces) and applied it across home, settings, create/join, lobby, and gameplay without changing authoritative commands.
 - [x] Added server-authoritative player-called meetings plus a functional compact Status / Evidence / Meeting action rail, meeting readiness explanations, and confirmation flow under ADR-A-026.
 - [x] Refined lobby/meeting/task/result parity with paper-surface cards, phase watermarks, compact connection/header behavior, a meeting step tracker, compact vote targets, coherent vector action icons, responsive invite actions, and corrected single-node selection semantics.
+- [x] Rebuilt Create/Join as the website's single mobile mode-card flow, including lookup-before-identity Join behavior, compact room options, a named three-column operative picker, combined consent presentation, and in-card primary action.
+- [x] Replaced approximate phase/semantic colors with the exact frozen website CSS values, aligned task badge/proof geometry, and corrected the role page so only the briefing card uses the private surface.
+- [x] Removed `FLAG_SECURE`, overlay hiding, the unused secure-surface API, and the stale all-gameplay-sensitive model contract from debug, staging, and release. Private roles still reseal on pause/focus loss.
 - [x] Added server-authoritative same-room replay from results through `POST /api/v1/rooms/current/replay`; the returned room snapshot resets gameplay state and restores lobby polling/settings under ADR-A-027.
 - [ ] Native account/dashboard/history remains intentionally absent pending ADR-A-009 because the current account API is cookie-only and has no approved native OAuth/token exchange.
 
@@ -77,6 +80,8 @@
 - 2026-10-02 parity correction — replaced the remaining approximate lobby/gameplay chrome with the exact website base palette, responsive 70dp command bar, amber invite hierarchy, single readiness block, 78dp roster rows, numbered settings sections with debounced save presentation, dedicated ballot rows, evidence grid/empty state, website modal geometry, double-border role card, floating task rail, and terminal result card/case stamp. PCM output now applies a website-equivalent -14dB/18dB-knee/8:1 compressor envelope and transient Android audio focus.
 - 2026-10-02 physical Acer/API 33 correction path — installed against the temporary local backend, replayed the existing terminal game into the corrected lobby, started it, revealed/acknowledged the private role, and reached the task command center. The lobby was visually captured at 800×1280; secure gameplay was verified through accessibility geometry and live actions.
 - 2026-10-02 `gradlew spotlessCheck quality --no-parallel --max-workers=1` passed 142 tasks and `gradlew connectedQuality --no-parallel --max-workers=1 -PDEBUG_API_BASE_URL=http://127.0.0.1:3000` passed 143 tasks on Acer/API 33.
+- 2026-10-02 capture-enabled parity correction — physical Acer/API 33 screenshots successfully captured Create, Lobby, sealed/revealed Role, and Tasks from one authoritative three-player local-backend game. Android no longer emitted protected/blank gameplay captures; lifecycle role resealing remained active.
+- 2026-10-02 final capture-enabled gate — `gradlew spotlessCheck quality connectedQuality :app:installDebug -PDEBUG_API_BASE_URL=http://127.0.0.1:3000 --no-parallel --max-workers=1` passed all 232 tasks on Acer/API 33. The freshly installed app launched and produced an unrestricted screenshot; `npm run check` passed formatting, lint, typecheck, 21 files/120 tests, OpenAPI, and realtime fixture checks; `git diff --check` passed.
 - The temporary local backend used for the physical path was stopped after verification; port 3000 is not left running.
 - The debug APK was installed, launched, and visually checked in both themes, including light-theme persistence after force-stop/relaunch; the final APK was reinstalled with the app returned to its default Follow device preference.
 - `npm run check` — formatting, lint, typecheck, 21 files/120 unit tests, OpenAPI, and realtime fixtures passed; the database-backed `tests/integration/task-packs.test.ts` also passed (3 tests).
@@ -92,31 +97,33 @@
 
 ## Next action
 
-Run the remaining independently controlled multi-client meeting, evidence, elimination, result, and replay acceptance path on approved staging and record website/Android reference comparisons where the secure-window policy permits capture.
+Run the remaining independently controlled multi-client meeting, evidence, elimination, result, and replay acceptance path on approved staging and record website/Android reference comparisons at the three frozen target viewports.
 
 ## Session handoff
 
 **Date/time:** 2026-10-02 Asia/Calcutta
 **Agent/session:** Codex
 **Active phase:** Phase 8 — end-to-end quality, release, and operations
-**Milestone:** lobby and gameplay parity correction pass
-**Status:** correction implementation, host/device gates, and results-to-lobby-to-task physical flow complete; production-like multi-client terminal-flow acceptance remains open
+**Milestone:** capture-enabled mobile website parity correction pass
+**Status:** screenshot restrictions removed, entry/lobby/gameplay corrections implemented, host/device gates and results-to-lobby-to-task physical flow complete; production-like multi-client terminal-flow acceptance remains open
 
 ### Changed
 
-- `core:designsystem`: exact website operative geometry/colors/names, website typography/tokens, compact phase bar, task cards, vectors, responsive roles, and updated semantics tests.
-- `app`: website lobby/gameplay hierarchy, private role reveal, task stagger/progress motion, voting/results presentation, and synthesized website sound/haptic recipes while retaining authoritative commands.
-- `app` tests: website sound-recipe coverage plus updated identity/navigation semantics.
-- `context`: parity implementation status, ADR-A-029, and updated traceability.
+- `core:designsystem`: exact frozen website phase/semantic colors, role command-bar treatment, corrected task-card geometry/proof vectors, and removal of the obsolete secure-surface primitive.
+- `app`: unrestricted capture/overlay policy, website mobile Create/Join flow, lookup-before-identity Join behavior, named operative picker, corrected private Role surface, and retained lifecycle role resealing.
+- `app` tests: screenshot-enabled window assertion, entry-mode reset regression, updated navigation/identity semantics, and exact color-token assertions.
+- `context`: capture policy ADR-A-030, parity manifest, implementation status, security exception, and updated requirements traceability.
 
 ### Verified
 
-- `gradlew spotlessApply quality` and the final `gradlew spotlessCheck connectedQuality :app:installDebug -PDEBUG_API_BASE_URL=http://127.0.0.1:3000 --no-parallel --max-workers=1` pass on physical Acer/API 33.
-- Current debug APK installs and launches; the physical backend-connected path reaches the rebuilt host lobby, private role reveal, and task command center.
+- `gradlew spotlessCheck quality connectedQuality :app:installDebug -PDEBUG_API_BASE_URL=http://127.0.0.1:3000 --no-parallel --max-workers=1` passed all 232 tasks on physical Acer/API 33.
+- `npm run check` passed formatting, lint, typecheck, 21 files/120 tests, OpenAPI, and realtime fixture validation; `git diff --check` passed.
+- Current debug APK installs and launches; unrestricted physical captures cover Create, Lobby, sealed/revealed Role, Tasks, and the final installed Home surface. The backend-connected path reaches the rebuilt host lobby, private role reveal, and task command center.
 
 ### Decisions added
 
 - ADR-A-029 — Website-exact lobby/gameplay presentation and synthesized feedback.
+- ADR-A-030 — Screenshots, screen recording, recent-task previews, and overlays are permitted in all Android build types; private roles still reseal on lifecycle loss.
 
 ### Remaining issues
 

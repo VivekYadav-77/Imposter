@@ -1,9 +1,6 @@
 package com.impostergame.android.ui
 
-import android.app.Activity
 import android.graphics.BitmapFactory
-import android.os.Build
-import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -50,7 +47,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -65,7 +61,6 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -133,7 +128,6 @@ fun GameplayScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var confirmMinimize by rememberSaveable { mutableStateOf(false) }
-    SecureContent()
     LaunchedEffect(Unit) { viewModel.load() }
     BackHandler(enabled = state.destination != GameplayDestination.LOADING) {
         when {
@@ -890,22 +884,6 @@ private fun ResultMetric(label: String, value: String, modifier: Modifier = Modi
 private fun formatDuration(seconds: Int): String = "${seconds / 60}m ${seconds % 60}s"
 
 @Composable
-private fun SecureContent() {
-    val view = LocalView.current
-    DisposableEffect(view) {
-        val window = (view.context as? Activity)?.window
-        val wasSecure =
-            ((window?.attributes?.flags ?: 0) and WindowManager.LayoutParams.FLAG_SECURE) != 0
-        window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) window?.setHideOverlayWindows(true)
-        onDispose {
-            if (!wasSecure) window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) window?.setHideOverlayWindows(false)
-        }
-    }
-}
-
-@Composable
 private fun RoleRevealScreen(
     state: GameplayUiState,
     viewModel: GameplayViewModel,
@@ -915,8 +893,8 @@ private fun RoleRevealScreen(
     val snapshot = state.snapshot ?: return LoadingScreen("Sealing your private role…")
     Surface(
         Modifier.fillMaxSize(),
-        color = MaterialTheme.gameColors.privateCanvas,
-        contentColor = MaterialTheme.gameColors.privateText,
+        color = androidx.compose.ui.graphics.Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onBackground,
     ) {
         Column(Modifier.fillMaxSize().safeDrawingPadding()) {
             GameTopBar(
@@ -986,6 +964,7 @@ private fun RoleRevealScreen(
                                 },
                         shape = RoundedCornerShape(30.dp),
                         color = MaterialTheme.gameColors.privateSurface,
+                        contentColor = MaterialTheme.gameColors.privateText,
                         border = BorderStroke(1.dp, MaterialTheme.gameColors.accentStrong),
                         shadowElevation = 0.dp,
                     ) {
@@ -1196,13 +1175,7 @@ private fun TaskList(
             ) {
                 TaskCard(
                     title = assignment.description,
-                    description =
-                        "${assignment.difficulty.replaceFirstChar(Char::uppercase)} task · " +
-                            if (assignment.status == "completed") {
-                                "proof accepted"
-                            } else {
-                                "open to add photo proof"
-                            },
+                    description = "${assignment.difficulty.replaceFirstChar(Char::uppercase)} task",
                     taskNumber = index + 1,
                     statusLabel = if (assignment.status == "completed") "Done" else "To do",
                     uploadState =

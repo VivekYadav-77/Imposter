@@ -241,6 +241,16 @@ Use IDs `ADR-A-###`. Status is `proposed`, `approved`, `superseded`, or `rejecte
 - **Consequences:** Lobby and gameplay UI consumes the shared website roles instead of introducing screen-local presentation constants. Transport identity IDs, API/gateway signatures, authentication, persistence, realtime, evidence, and gameplay authority remain unchanged. Android secure-window privacy blocks ordinary role/gameplay screenshots; those states require semantics/interaction verification or test-host captures. Native photo picker, font rasterization, status/navigation bars, haptic motor response, and speaker response remain OS/device controlled.
 - **Supersedes:** The temporary native-tone choice in ADR-A-024 and the canonical-crewmate artwork constraint in ADR-A-025.
 
+### ADR-A-030 — Allow capture and overlays in every Android build
+
+- **Status:** approved by explicit product-owner direction
+- **Date:** 2026-10-02
+- **Approver:** product owner
+- **Decision:** Do not apply `FLAG_SECURE` or `HIDE_OVERLAY_WINDOWS` to Android gameplay in debug, staging, or release. Screenshots, screen recording, recent-task previews, and ordinary overlays are allowed so Android can be compared directly with the mobile website. Continue resealing the private role on pause and focus loss, and retain credential protection, authorization, DTO redaction, bounded media handling, clipboard expiry, and server-authoritative private-field filtering.
+- **Reason:** The product owner explicitly accepted the privacy tradeoff and requires real-device capture-based parity review across room entry, lobby, and gameplay.
+- **Consequences:** Private role, ballot, room, and evidence content can appear in user-initiated captures, screen recordings, recent-task thumbnails, or overlays. Store/privacy disclosures and the hardening checklist must describe this accurately. Synthetic data remains mandatory for committed or published comparison images.
+- **Supersedes:** The screenshot/recent-task and overlay-blocking portion of ADR-A-019 and the secure-capture limitation in ADR-A-029. All other security controls in those decisions remain active.
+
 ## Adding a decision
 
 Copy this structure:

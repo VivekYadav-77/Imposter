@@ -64,6 +64,7 @@ fun GameTopBar(
                 phase.contains("lobby", ignoreCase = true) -> lobby
                 phase.contains("task", ignoreCase = true) -> tasks
                 phase.contains("evidence", ignoreCase = true) -> tasks
+                phase.contains("role", ignoreCase = true) -> voting
                 phase.contains("vote", ignoreCase = true) -> voting
                 phase.contains("result", ignoreCase = true) -> results
                 phase.contains("meeting", ignoreCase = true) -> meeting
@@ -106,6 +107,7 @@ fun GameTopBar(
                                 phase.contains("lobby", true) -> WebsiteIconKind.Lobby
                                 phase.contains("task", true) || phase.contains("evidence", true) ->
                                     WebsiteIconKind.Tasks
+                                phase.contains("role", true) -> WebsiteIconKind.Eye
                                 phase.contains("result", true) -> WebsiteIconKind.Verdict
                                 else -> WebsiteIconKind.Meeting
                             }

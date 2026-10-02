@@ -1,6 +1,7 @@
 package com.impostergame.designsystem.component
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -75,59 +76,61 @@ fun TaskCard(
                         else MaterialTheme.gameColors.tasks
                     )
             )
-            Column(
-                modifier = Modifier.weight(1f).padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(GameSpacing.xs),
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(GameSpacing.sm),
-                    verticalAlignment = Alignment.CenterVertically,
+            taskNumber?.let {
+                Surface(
+                    modifier =
+                        Modifier.padding(start = 10.dp, top = 12.dp).size(WebsiteLayout.taskNumber),
+                    shape = GameShapes.small,
+                    color = MaterialTheme.gameColors.tasks.copy(alpha = 0.16f),
+                    contentColor = MaterialTheme.gameColors.tasks,
                 ) {
-                    taskNumber?.let {
-                        Surface(
-                            modifier = Modifier.size(WebsiteLayout.taskNumber),
-                            shape = GameShapes.small,
-                            color = MaterialTheme.gameColors.tasks.copy(alpha = 0.16f),
-                            contentColor = MaterialTheme.gameColors.tasks,
-                        ) {
-                            androidx.compose.foundation.layout.Box(
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    it.toString().padStart(2, '0'),
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = FontWeight.Black,
-                                )
-                            }
-                        }
-                    }
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Box(contentAlignment = Alignment.Center) {
                         Text(
-                            title,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.ExtraBold,
-                        )
-                        Text(
-                            description,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            it.toString().padStart(2, '0'),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Black,
                         )
                     }
                 }
-                if (uploadState != UploadState.Idle) UploadStateIndicator(uploadState)
+            }
+            Column(
+                modifier = Modifier.weight(1f).padding(horizontal = 10.dp, vertical = 11.dp),
+                verticalArrangement = Arrangement.spacedBy(5.dp),
+            ) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                )
+                Text(
+                    description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (uploadState != UploadState.Idle && uploadState != UploadState.Complete) {
+                    UploadStateIndicator(uploadState)
+                }
                 statusLabel?.let {
+                    val statusColor =
+                        if (uploadState == UploadState.Complete)
+                            LocalGameSemanticColors.current.success
+                        else MaterialTheme.gameColors.tasks
                     Text(
                         it.uppercase(),
-                        color =
-                            if (uploadState == UploadState.Complete)
-                                LocalGameSemanticColors.current.success
-                            else MaterialTheme.gameColors.tasks,
+                        modifier =
+                            Modifier.background(
+                                    statusColor.copy(alpha = .08f),
+                                    GameShapes.pill,
+                                )
+                                .border(1.dp, statusColor, GameShapes.pill)
+                                .padding(horizontal = 9.dp, vertical = 3.dp),
+                        color = statusColor,
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Black,
                     )
                 }
             }
-            if (actionLabel != null && onAction != null) {
+            if (uploadState == UploadState.Complete || (actionLabel != null && onAction != null)) {
                 Surface(
                     color = MaterialTheme.colorScheme.surfaceVariant,
                     border =
@@ -140,11 +143,37 @@ fun TaskCard(
                         Modifier.width(WebsiteLayout.taskProofWidth).fillMaxHeight().padding(6.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        GameOutlinedButton(
-                            if (uploadState == UploadState.Complete) "✓" else "↥",
-                            onAction,
-                            Modifier.size(48.dp),
-                        )
+                        if (uploadState == UploadState.Complete) {
+                            GameGlyph(
+                                GameGlyphKind.Check,
+                                tint = LocalGameSemanticColors.current.success,
+                                size = 24.dp,
+                            )
+                        } else {
+                            Surface(
+                                onClick = requireNotNull(onAction),
+                                modifier =
+                                    Modifier.size(48.dp).semantics {
+                                        contentDescription = requireNotNull(actionLabel)
+                                    },
+                                shape = GameShapes.small,
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                border =
+                                    androidx.compose.foundation.BorderStroke(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.outlineVariant,
+                                    ),
+                                tonalElevation = 0.dp,
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    GameGlyph(
+                                        GameGlyphKind.Evidence,
+                                        tint = MaterialTheme.gameColors.tasks,
+                                        size = 24.dp,
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }

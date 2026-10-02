@@ -60,4 +60,4 @@ Release versioning uses `ANDROID_VERSION_CODE` and `ANDROID_VERSION_NAME`. A rel
 
 See [`context/phase-08-release.md`](context/phase-08-release.md) for CI, rollout, compatibility, monitoring, and acceptance policy and [`context/operations-runbook.md`](context/operations-runbook.md) for incident handling.
 
-Start with [`plan/master-plan.md`](plan/master-plan.md), then continue from [`context/current-state.md`](context/current-state.md). The website's animal avatar artwork and labels are not Android design inputs.
+Start with [`plan/master-plan.md`](plan/master-plan.md), then continue from [`context/current-state.md`](context/current-state.md). The frozen participant-facing mobile website is the Android presentation authority under ADR-A-028; transport and gameplay authority remain server-owned.

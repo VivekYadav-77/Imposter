@@ -16,7 +16,8 @@
 1. Pair every player color/avatar with nickname and neutral color text in identification contexts.
 2. Never show the legacy transport ID to a player or accessibility service.
 3. Use `GameButton` variants for a consistent 48dp target and loading behavior.
-4. Use `SensitiveSurface` for role or other private full-screen content; it applies `FLAG_SECURE` while composed.
+4. Private role content must reseal on lifecycle loss. Screenshot, screen-recording, recent-task,
+   and overlay blocking are intentionally not applied in any build type under ADR-A-030.
 5. Treat countdown text as ordinary semantics, never a live region that announces every tick.
 6. Pass actual hinge occlusion width into `AdaptiveGameScaffold`; never infer layout from a device name or orientation string.
 7. Keep business state outside this module. Catalog data is preview-only and contains no gameplay rules.
