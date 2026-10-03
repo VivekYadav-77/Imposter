@@ -140,7 +140,6 @@ data class GameplayUiState(
     val selectedKillTargetId: String? = null,
     val statusPanelVisible: Boolean = false,
     val killPickerVisible: Boolean = false,
-    val confirmKill: Boolean = false,
     val confirmMeetingCall: Boolean = false,
     val confirmFlag: Boolean = false,
     val meetingAlertId: String? = null,

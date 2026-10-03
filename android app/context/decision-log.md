@@ -260,6 +260,15 @@ Use IDs `ADR-A-###`. Status is `proposed`, `approved`, `superseded`, or `rejecte
 - **Reason:** Compose-owned side effects caused duplicate settings calls and froze unrelated lobby controls, while frequent HTTP refreshes generated avoidable traffic.
 - **Consequences:** Screen recomposition cannot initiate API work, unchanged values do not send requests, late responses cannot replace newer drafts, and Start remains blocked until the authoritative save succeeds. API paths, DTOs, authorization, and gameplay rules are unchanged.
 
+### ADR-A-032 — Website-exact Imposter elimination dashboard and confirmation flow
+
+- **Status:** approved by explicit product-owner parity direction and verified locally
+- **Date:** 2026-10-03
+- **Approver:** product owner
+- **Decision:** On compact task screens, render the Imposter elimination ability after the assignment list and keep the card visible in both ready and cooldown states. Use the frozen website target-list hierarchy, privacy/cooldown copy, and one deliberate `Eliminate player` submission after target selection; do not add a second Android-only confirmation. Continue to revalidate the selected target against the newest snapshot and let the existing idempotent server command decide the outcome.
+- **Reason:** The earlier Android presentation hid the ability while recharging, placed it before assignments, used generic ballot rows, and introduced a user-flow step absent from the approved mobile website.
+- **Consequences:** Visual and interaction parity improves without granting client authority. Back closes the target popup, a changed target fails closed through existing ViewModel validation, and command failures refresh the authoritative snapshot.
+
 ## Adding a decision
 
 Copy this structure:

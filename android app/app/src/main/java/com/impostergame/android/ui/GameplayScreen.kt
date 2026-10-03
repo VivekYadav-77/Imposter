@@ -67,6 +67,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
@@ -121,6 +122,8 @@ import com.impostergame.designsystem.component.WebsiteIconKind
 import com.impostergame.designsystem.theme.GameMotion
 import com.impostergame.designsystem.theme.GameSpacing
 import com.impostergame.designsystem.theme.LocalGameAccessibilityPreferences
+import com.impostergame.designsystem.theme.LocalGameSemanticColors
+import com.impostergame.designsystem.theme.WebsiteLayout
 import com.impostergame.designsystem.theme.gameColors
 import java.time.Instant
 import kotlinx.coroutines.delay
@@ -142,7 +145,6 @@ fun GameplayScreen(
             state.confirmMeetingCall -> viewModel.dismissMeetingConfirmation()
             state.confirmReviewVote -> viewModel.dismissReviewVote()
             state.confirmEjectionVote -> viewModel.dismissEjectionVote()
-            state.confirmKill -> viewModel.dismissKill()
             state.killPickerVisible -> viewModel.dismissKillPicker()
             state.statusPanelVisible -> viewModel.dismissStatus()
             state.confirmFlag -> viewModel.dismissFlag()
@@ -1435,7 +1437,6 @@ private fun TaskPhaseScreen(
     }
     if (state.statusPanelVisible) StatusPanel(snapshot, state, viewModel)
     if (state.killPickerVisible) KillTargetPicker(snapshot, state, viewModel)
-    if (state.confirmKill) KillConfirmation(state, viewModel)
     if (state.confirmMeetingCall) MeetingCallConfirmation(snapshot, viewModel)
     Column(Modifier.fillMaxSize().safeDrawingPadding()) {
         GameTopBar(
@@ -1526,7 +1527,6 @@ private fun TaskList(
             }
         }
         Message(state.message)
-        if (showKill && state.canKill) KillControl(snapshot, state, viewModel)
         if (sorted.isEmpty()) Text("You have no assigned tasks.")
         sorted.forEachIndexed { index, assignment ->
             var entered by remember(assignment.id) { mutableStateOf(false) }
@@ -1571,6 +1571,9 @@ private fun TaskList(
                 )
             }
         }
+        if (showKill && snapshot.self.role == "imposter" && snapshot.self.lifeStatus == "alive") {
+            KillControl(snapshot, state, viewModel)
+        }
     }
 }
 
@@ -1597,7 +1600,9 @@ private fun StatusAndActions(
             Modifier.fillMaxWidth(),
             enabled = snapshot.self.lifeStatus == "alive" && !state.loading,
         )
-        if (state.canKill) KillControl(snapshot, state, viewModel)
+        if (snapshot.self.role == "imposter" && snapshot.self.lifeStatus == "alive") {
+            KillControl(snapshot, state, viewModel)
+        }
     }
 }
 
@@ -2018,6 +2023,15 @@ private fun meetingCooldownText(snapshot: GameSnapshot): String? {
     return "%d:%02d".format(seconds / 60, seconds % 60)
 }
 
+private fun killCooldownText(snapshot: GameSnapshot): String? {
+    val deadline =
+        snapshot.cooldowns.killAvailableAt?.let { runCatching { Instant.parse(it) }.getOrNull() }
+            ?: return null
+    val seconds = (deadline.epochSecond - Instant.now().epochSecond).coerceAtLeast(0)
+    if (seconds == 0L) return null
+    return "%d:%02d".format(seconds / 60, seconds % 60)
+}
+
 @Composable
 private fun MeetingCallConfirmation(snapshot: GameSnapshot, viewModel: GameplayViewModel) {
     WebsiteDialog(
@@ -2042,34 +2056,43 @@ private fun KillControl(
     state: GameplayUiState,
     viewModel: GameplayViewModel,
 ) {
-    SignalCard(Modifier.fillMaxWidth(), accent = MaterialTheme.colorScheme.error) {
-        Column(
-            Modifier.padding(GameSpacing.md),
-            verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
+    val targets = snapshot.participants.filter { it.id in snapshot.self.killableParticipantIds }
+    val ready = state.canKill && targets.isNotEmpty()
+    val danger = LocalGameSemanticColors.current.danger
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(WebsiteLayout.killCardRadius),
+        color = danger.copy(alpha = .06f).compositeOver(MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, danger.copy(alpha = .36f)),
+        tonalElevation = 0.dp,
+        shadowElevation = 1.dp,
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(WebsiteLayout.killCardPadding),
+            horizontalArrangement = Arrangement.spacedBy(GameSpacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                "Authorized elimination",
-                color = MaterialTheme.colorScheme.error,
-                fontWeight = FontWeight.Bold,
-            )
-            val targets =
-                snapshot.participants.filter { it.id in snapshot.self.killableParticipantIds }
-            Text(
-                if (targets.isEmpty()) "Elimination recharging" else "Choose a living crew member",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.ExtraBold,
-            )
-            Text(
-                if (targets.isEmpty()) "The server will unlock this ability when it is ready."
-                else "Your target choice stays private until you confirm it.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(
+                    "IMPOSTOR ABILITY",
+                    color = danger,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Black,
+                )
+                Text(
+                    if (ready) "Choose a living crew member" else "Elimination recharging",
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1,
+                )
+            }
             GameButton(
-                if (targets.isEmpty()) "Kill · Recharging" else "☠  Kill · Ready",
+                if (ready) "☠  Kill · Ready"
+                else "Kill · ${killCooldownText(snapshot) ?: "Recharging"}",
                 viewModel::showKillPicker,
-                Modifier.fillMaxWidth(),
+                Modifier.widthIn(min = WebsiteLayout.killButtonMinWidth),
                 style = GameButtonStyle.Destructive,
-                enabled = targets.isNotEmpty() && !state.loading,
+                enabled = ready && !state.loading,
             )
         }
     }
@@ -2089,19 +2112,35 @@ private fun KillTargetPicker(
         content = {
             Column(
                 Modifier.weight(1f).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+                verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
             ) {
-                Text("Only currently eligible living players are shown.")
+                Text(
+                    "Select one living crew member. This list scrolls while the popup stays a " +
+                        "consistent size.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 targets.forEach { target ->
-                    WebsiteBallotRow(
-                        nickname = target.nickname,
-                        playerColorId = target.avatarId,
+                    KillTargetRow(
+                        target = target,
                         selected = state.selectedKillTargetId == target.id,
                         enabled = !state.loading,
-                        trailingText =
-                            if (state.selectedKillTargetId == target.id) "Target selected"
-                            else "Select target",
                         onClick = { viewModel.selectKillTarget(target.id) },
+                    )
+                }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(7.dp),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    WebsiteIcon(
+                        WebsiteIconKind.Lock,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        size = 15.dp,
+                    )
+                    Text(
+                        "Only the eliminated player is notified. Cooldown after this action: " +
+                            formatDuration(snapshot.cooldowns.killCooldownSeconds),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
                     )
                 }
             }
@@ -2109,10 +2148,11 @@ private fun KillTargetPicker(
         actions = {
             GameOutlinedButton("Cancel", viewModel::dismissKillPicker, Modifier.weight(1f))
             GameButton(
-                "Review",
-                viewModel::requestKillConfirmation,
+                "Eliminate player",
+                viewModel::confirmKill,
                 Modifier.weight(1f),
                 enabled = state.selectedKillTargetId != null,
+                loading = state.loading,
                 style = GameButtonStyle.Destructive,
             )
         },
@@ -2120,28 +2160,68 @@ private fun KillTargetPicker(
 }
 
 @Composable
-private fun KillConfirmation(state: GameplayUiState, viewModel: GameplayViewModel) {
-    val target =
-        state.snapshot?.participants?.firstOrNull { it.id == state.selectedKillTargetId } ?: return
-    WebsiteDialog(
-        title = "Confirm elimination",
-        onDismissRequest = viewModel::dismissKill,
-        content = {
-            Column(verticalArrangement = Arrangement.spacedBy(GameSpacing.sm)) {
-                PlayerCard(target.nickname, target.avatarId)
-                Text("This immediately changes the game and may trigger a meeting.")
-            }
-        },
-        actions = {
-            GameOutlinedButton("Cancel", viewModel::dismissKill, Modifier.weight(1f))
-            GameButton(
-                "Eliminate",
-                viewModel::confirmKill,
-                Modifier.weight(1f),
-                style = GameButtonStyle.Destructive,
+private fun KillTargetRow(
+    target: com.impostergame.data.model.GameParticipant,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val danger = LocalGameSemanticColors.current.danger
+    Surface(
+        modifier =
+            Modifier.fillMaxWidth()
+                .heightIn(min = 66.dp)
+                .selectable(
+                    selected = selected,
+                    enabled = enabled,
+                    role = Role.RadioButton,
+                    onClick = onClick,
+                ),
+        shape = RoundedCornerShape(14.dp),
+        color =
+            if (selected) danger.copy(alpha = .12f).compositeOver(MaterialTheme.colorScheme.surface)
+            else MaterialTheme.colorScheme.surfaceVariant,
+        border =
+            BorderStroke(
+                if (selected) 2.dp else 1.dp,
+                if (selected) danger else MaterialTheme.colorScheme.outlineVariant,
+            ),
+        tonalElevation = 0.dp,
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            PlayerAvatar(
+                transportId = target.avatarId,
+                size = 46.dp,
+                contentDescription = target.nickname,
+                decorative = true,
+                selected = selected,
             )
-        },
-    )
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    target.nickname,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 1,
+                )
+                Text(
+                    "Living crew member",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            Box(
+                Modifier.size(34.dp).background(danger.copy(alpha = .12f), CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (selected) GameGlyph(GameGlyphKind.Check, tint = danger, size = 18.dp)
+                else Text("☠", color = danger, style = MaterialTheme.typography.titleSmall)
+            }
+        }
+    }
 }
 
 @Composable

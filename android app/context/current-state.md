@@ -1,6 +1,6 @@
 # Current Android implementation state
 
-**Last updated:** 2026-10-01
+**Last updated:** 2026-10-03
 **Overall status:** Phase 8 remains active. The product owner has replaced the earlier native-adaptation direction with approval-gated exact mobile-website parity under ADR-A-028. The shared design-system foundation and first screen group (bootstrap/resume, Home, Settings) are implemented and locally verified; later screen groups are intentionally waiting for approval.
 **Active phase:** Phase 8 — end-to-end quality, release, and operations
 **Active plan:** [`../plan/phase-08-quality-release.md`](../plan/phase-08-quality-release.md)
@@ -58,6 +58,7 @@
 - [x] Replaced approximate phase/semantic colors with the exact frozen website CSS values, aligned task badge/proof geometry, and corrected the role page so only the briefing card uses the private surface.
 - [x] Removed `FLAG_SECURE`, overlay hiding, the unused secure-surface API, and the stale all-gameplay-sensitive model contract from debug, staging, and release. Private roles still reseal on pause/focus loss.
 - [x] Added server-authoritative same-room replay from results through `POST /api/v1/rooms/current/replay`; the returned room snapshot resets gameplay state and restores lobby polling/settings under ADR-A-027.
+- [x] Corrected the compact Imposter task dashboard against the frozen mobile website: the elimination ability now follows the assignment list, remains visible while recharging, uses the website danger card and cooldown treatment, opens the website-equivalent two-line target list with privacy/cooldown guidance, and submits from the target dialog without an extra Android-only confirmation screen. Entering Tasks now refreshes evidence so the bottom-rail count is current.
 - [ ] Native account/dashboard/history remains intentionally absent pending ADR-A-009 because the current account API is cookie-only and has no approved native OAuth/token exchange.
 
 ## Verification
@@ -87,6 +88,7 @@
 - 2026-10-02 final capture-enabled gate — `gradlew spotlessCheck quality connectedQuality :app:installDebug -PDEBUG_API_BASE_URL=http://127.0.0.1:3000 --no-parallel --max-workers=1` passed all 232 tasks on Acer/API 33. The freshly installed app launched and produced an unrestricted screenshot; `npm run check` passed formatting, lint, typecheck, 21 files/120 tests, OpenAPI, and realtime fixture checks; `git diff --check` passed.
 - 2026-10-02 supplied-reference host-lobby correction — compared seven website captures against the physical Android host lobby, corrected the pinned-body defect and host settings composition, exercised Meeting voting disclosure on Acer/API 33, and captured top/settings states. `gradlew spotlessCheck quality :app:installDebug -PDEBUG_API_BASE_URL=http://127.0.0.1:3000 --no-parallel --max-workers=1` passed 166 tasks; the final amber-role refinement compiled, installed, and passed `git diff --check`.
 - 2026-10-02 host-lobby parity follow-up — corrected command-bar/content geometry, invite/readiness styling, setting controls/icons/disclosures, meeting-mode layout, and sticky status presentation. Added non-blocking deduplicated autosave plus realtime-primary room updates with foreground-only disconnected fallback. `gradlew spotlessCheck quality :app:assembleDebug` passed 165 tasks; `connectedQuality :app:installDebug` passed 144 tasks on Acer/API 33; `npm run check` passed 21 files/120 tests plus OpenAPI/realtime fixtures.
+- 2026-10-03 Imposter-dashboard parity pass — exercised a real three-player local-backend round on Acer One 8 T4-82L/API 33, received the Imposter role, verified the assignment dashboard and target picker at the device's 800×1280 resolution, and completed a server-authoritative elimination through the website-equivalent single-confirm flow. `gradlew spotlessApply quality` passed; after clearing the manual game process, `gradlew connectedQuality :app:installDebug -PDEBUG_API_BASE_URL=http://127.0.0.1:3000 --no-parallel --max-workers=1` passed 144 tasks and installed the final APK.
 - The temporary local backend used for the physical path was stopped after verification; port 3000 is not left running.
 - The debug APK was installed, launched, and visually checked in both themes, including light-theme persistence after force-stop/relaunch; the final APK was reinstalled with the app returned to its default Follow device preference.
 - `npm run check` — formatting, lint, typecheck, 21 files/120 unit tests, OpenAPI, and realtime fixtures passed; the database-backed `tests/integration/task-packs.test.ts` also passed (3 tests).
@@ -102,40 +104,37 @@
 
 ## Next action
 
-Capture the corrected host lobby in both themes at 320dp, 390dp, and 430dp, then run the remaining independently controlled multi-client meeting, evidence, elimination, result, and replay acceptance path on approved staging.
+Capture the corrected host lobby and Imposter task dashboard in both themes at 320dp, 390dp, and 430dp, then run the remaining independently controlled multi-client meeting, evidence, elimination, result, and replay acceptance path on approved staging.
 
-## Session handoff
+## Session handoff — 2026-10-03
 
-**Date/time:** 2026-10-02 Asia/Calcutta
+**Date/time:** 2026-10-03 Asia/Calcutta
 **Agent/session:** Codex
 **Active phase:** Phase 8 — end-to-end quality, release, and operations
-**Milestone:** capture-enabled mobile website parity correction pass
-**Status:** screenshot restrictions removed, entry/lobby/gameplay corrections implemented, host/device gates and results-to-lobby-to-task physical flow complete; production-like multi-client terminal-flow acceptance remains open
+**Milestone:** compact Imposter task-dashboard parity
+**Status:** complete for the corrected screen and elimination flow; wider device/staging acceptance remains open
 
 ### Changed
 
-- `core:designsystem`: exact frozen website phase/semantic colors, role command-bar treatment, corrected task-card geometry/proof vectors, and removal of the obsolete secure-surface primitive.
-- `app`: unrestricted capture/overlay policy, website mobile Create/Join flow, lookup-before-identity Join behavior, named operative picker, corrected private Role surface, and retained lifecycle role resealing.
-- `app` tests: screenshot-enabled window assertion, entry-mode reset regression, updated navigation/identity semantics, and exact color-token assertions.
-- `context`: capture policy ADR-A-030, parity manifest, implementation status, security exception, and updated requirements traceability.
+- `app/gameplay`: removed the Android-only second elimination confirmation, refreshes evidence on entry to Tasks, and preserves server-authoritative eligibility/idempotency.
+- `app/ui`: reordered and restyled the Imposter ability card, added its cooldown state, and matched the mobile website target picker, privacy copy, and action labels.
+- `core/designsystem`: centralized the frozen mobile elimination-card measurements.
 
 ### Verified
 
-- `gradlew spotlessCheck quality connectedQuality :app:installDebug -PDEBUG_API_BASE_URL=http://127.0.0.1:3000 --no-parallel --max-workers=1` passed all 232 tasks on physical Acer/API 33.
-- `npm run check` passed formatting, lint, typecheck, 21 files/120 tests, OpenAPI, and realtime fixture validation; `git diff --check` passed.
-- Current debug APK installs and launches; unrestricted physical captures cover Create, Lobby, sealed/revealed Role, Tasks, and the final installed Home surface. The backend-connected path reaches the rebuilt host lobby, private role reveal, and task command center.
+- `gradlew spotlessApply quality --no-parallel --max-workers=1` — passed after resolving one pre-existing Compose modifier-order lint failure.
+- `gradlew connectedQuality :app:installDebug -PDEBUG_API_BASE_URL=http://127.0.0.1:3000 --no-parallel --max-workers=1` — passed 144 tasks on Acer One 8 T4-82L/API 33 and installed the final APK.
+- Manual device path — created a three-player room, started Avengers, received Imposter, inspected the 800×1280 dashboard/target picker, and completed an authoritative elimination.
 
 ### Decisions added
 
-- ADR-A-029 — Website-exact lobby/gameplay presentation and synthesized feedback.
-- ADR-A-030 — Screenshots, screen recording, recent-task previews, and overlays are permitted in all Android build types; private roles still reseal on lifecycle loss.
+- ADR-A-032 — Website-exact Imposter elimination dashboard and confirmation flow.
 
 ### Remaining issues
 
-- APP-004 remains: run the independently controlled three-client gameplay/meeting/results/reconnect matrix on an approved production-like backend.
-- Account/dashboard/history remains blocked on ADR-A-009. Replay and player-called meetings are now implemented through existing authoritative server contracts with no client-side authority.
-- Full TalkBack traversal, 200% font across every gameplay phase, API 26/31/36, and compact-landscape/tablet product acceptance still require the Phase 8 device matrix.
+- Compact 320dp/390dp/430dp and dark-theme capture comparison plus approved-staging multi-client acceptance remain part of the Phase 8 matrix.
+- Native account/dashboard/history remains blocked by ADR-A-009 and is outside this gameplay-dashboard correction.
 
 ### Next action
 
-Execute APP-004 on approved staging with three independently controlled clients and record the Phase 8 acceptance ledger.
+Run the corrected Imposter dashboard at the remaining compact widths and dark theme, then execute APP-004 on approved staging.

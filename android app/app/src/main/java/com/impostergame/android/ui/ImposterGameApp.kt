@@ -1851,7 +1851,7 @@ private fun LobbySettings(
                             NumberedSettingsHeading(
                                 "01",
                                 "Game basics",
-                                "Choose the map and total play time.",
+                                description = "Choose the map and total play time.",
                             )
                             TaskPackPicker(state, viewModel)
                             NumberSetting(
@@ -1897,8 +1897,8 @@ private fun LobbySettings(
 private fun NumberedSettingsHeading(
     number: String,
     title: String,
-    description: String? = null,
     modifier: Modifier = Modifier,
+    description: String? = null,
 ) {
     Row(
         modifier = modifier,
@@ -2410,7 +2410,12 @@ private fun SettingsDisclosure(
                 Modifier.fillMaxWidth().clickable { onExpandedChange(!expanded) }.padding(14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                NumberedSettingsHeading(number, title, description, Modifier.weight(1f))
+                NumberedSettingsHeading(
+                    number,
+                    title,
+                    Modifier.weight(1f),
+                    description,
+                )
                 WebsiteIcon(
                     WebsiteIconKind.Chevron,
                     Modifier.rotate(chevronRotation),

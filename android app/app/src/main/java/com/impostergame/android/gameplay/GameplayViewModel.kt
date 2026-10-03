@@ -86,12 +86,16 @@ class GameplayViewModel(
 
     fun resealRole() = update { it.copy(roleRevealed = false) }
 
-    fun acknowledgeRole() = update {
-        if (it.roleViewed) {
-            it.copy(roleRevealed = false, destination = GameplayDestination.TASKS)
-        } else {
-            it
+    fun acknowledgeRole() {
+        val enteringTasks = _state.value.roleViewed
+        update {
+            if (it.roleViewed) {
+                it.copy(roleRevealed = false, destination = GameplayDestination.TASKS)
+            } else {
+                it
+            }
         }
+        if (enteringTasks) refreshSubmissions()
     }
 
     fun showTasks() = update { it.copy(destination = GameplayDestination.TASKS, message = null) }
@@ -113,7 +117,6 @@ class GameplayViewModel(
                 it.copy(
                     killPickerVisible = true,
                     selectedKillTargetId = null,
-                    confirmKill = false,
                     message = null,
                 )
             }
@@ -122,7 +125,7 @@ class GameplayViewModel(
     }
 
     fun dismissKillPicker() = update {
-        it.copy(killPickerVisible = false, selectedKillTargetId = null, confirmKill = false)
+        it.copy(killPickerVisible = false, selectedKillTargetId = null)
     }
 
     fun selectAssignment(id: String) {
@@ -357,16 +360,10 @@ class GameplayViewModel(
 
     fun selectKillTarget(id: String) {
         if (_state.value.mayKill(id)) {
-            update { it.copy(selectedKillTargetId = id, confirmKill = false, message = null) }
+            update { it.copy(selectedKillTargetId = id, message = null) }
             emitFeedback(GameFeedbackKind.Ui)
         }
     }
-
-    fun requestKillConfirmation() {
-        if (_state.value.selectedKillTargetId != null) update { it.copy(confirmKill = true) }
-    }
-
-    fun dismissKill() = update { it.copy(confirmKill = false) }
 
     fun requestMeetingConfirmation() {
         if (_state.value.mayCallMeeting()) {
@@ -586,7 +583,6 @@ class GameplayViewModel(
                         it.copy(
                             selectedKillTargetId = null,
                             killPickerVisible = false,
-                            confirmKill = false,
                             message = "Action accepted.",
                         )
                     }
@@ -597,7 +593,6 @@ class GameplayViewModel(
                         it.copy(
                             selectedKillTargetId = null,
                             killPickerVisible = false,
-                            confirmKill = false,
                             message = "The opportunity changed. ${messageFor(result.error)}",
                         )
                     }

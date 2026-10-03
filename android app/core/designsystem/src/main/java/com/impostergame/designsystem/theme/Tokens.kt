@@ -68,6 +68,9 @@ object WebsiteLayout {
     val taskCardRadius = 16.dp
     val taskNumber = 36.dp
     val taskProofWidth = 70.dp
+    val killCardRadius = 16.dp
+    val killCardPadding = 12.dp
+    val killButtonMinWidth = 116.dp
     val mobileActionHeight = 70.dp
     val mobileActionRadius = 18.dp
     val lobbyPageBottom = 138.dp
