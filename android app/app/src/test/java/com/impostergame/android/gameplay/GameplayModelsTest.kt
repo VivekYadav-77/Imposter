@@ -13,10 +13,9 @@ import com.impostergame.data.model.MeetingParticipant
 import com.impostergame.data.model.MeetingRules
 import com.impostergame.data.model.MeetingUploader
 import com.impostergame.data.model.ReviewItem
-import com.impostergame.data.model.Submission
-import com.impostergame.data.model.SubmissionUploader
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -41,15 +40,6 @@ class GameplayModelsTest {
         val authorized = state(capabilities = listOf("kill"), killable = listOf("target"))
         assertTrue(authorized.mayKill("target"))
         assertFalse(authorized.mayKill("someone-else"))
-    }
-
-    @Test
-    fun flagRequiresCapabilityAcceptedEvidenceAndDifferentUploader() {
-        val authorized = state(capabilities = listOf("flag_evidence"))
-        assertTrue(authorized.mayFlag(submission("other", "accepted", flagged = false)))
-        assertFalse(authorized.mayFlag(submission("self", "accepted", flagged = false)))
-        assertFalse(authorized.mayFlag(submission("other", "pending", flagged = false)))
-        assertFalse(authorized.mayFlag(submission("other", "accepted", flagged = true)))
     }
 
     @Test
@@ -83,6 +73,21 @@ class GameplayModelsTest {
         assertFalse(GameplayUiState(snapshot = base, remainingSeconds = 0).mayReviewVote())
         val observer = base.copy(self = base.self.copy(lifeStatus = "dead"))
         assertFalse(GameplayUiState(snapshot = observer, remainingSeconds = 10).mayEjectionVote())
+    }
+
+    @Test
+    fun meetingSuccessMessageIsClearedWhenTaskPhaseResumes() {
+        assertNull(
+            messageAfterPhaseTransition(
+                GamePhase.VOTING,
+                GamePhase.TASK,
+                "Vote accepted and locked.",
+            )
+        )
+        assertEquals(
+            "Upload complete.",
+            messageAfterPhaseTransition(GamePhase.TASK, GamePhase.TASK, "Upload complete."),
+        )
     }
 
     @Test
@@ -189,18 +194,6 @@ class GameplayModelsTest {
 
     private fun assignment(id: String, status: String) =
         Assignment(id, "Task $id", status, null, "easy")
-
-    private fun submission(uploader: String, status: String, flagged: Boolean) =
-        Submission(
-            id = "submission-$uploader-$status-$flagged",
-            assignmentId = "assignment",
-            uploader = SubmissionUploader(uploader, uploader),
-            processingStatus = status,
-            reviewStatus = "valid",
-            createdAt = "2026-09-28T00:00:00Z",
-            image = null,
-            flaggedBySelf = flagged,
-        )
 
     private fun meeting(trigger: String, reported: String? = null) =
         Meeting(

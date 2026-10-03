@@ -6,7 +6,6 @@ import com.impostergame.android.sanitizedForDisplay
 import com.impostergame.data.model.CallMeetingInput
 import com.impostergame.data.model.ConfirmSubmissionInput
 import com.impostergame.data.model.EjectionVoteInput
-import com.impostergame.data.model.FlagSubmissionInput
 import com.impostergame.data.model.GameSnapshot
 import com.impostergame.data.model.KillInput
 import com.impostergame.data.model.ReviewVoteInput
@@ -19,9 +18,9 @@ import com.impostergame.data.network.ParticipantApi
 import com.impostergame.data.network.SignedUploadClient
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
-import java.net.URI
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
@@ -40,12 +39,6 @@ interface GameplayGateway {
     suspend fun submissions(): GatewayResult<List<Submission>>
 
     suspend fun loadImage(url: String): GatewayResult<ByteArray>
-
-    suspend fun flag(
-        submissionId: String,
-        expectedStateVersion: Long,
-        key: String,
-    ): GatewayResult<Unit>
 
     suspend fun kill(
         targetParticipantId: String,
@@ -96,12 +89,6 @@ class UnavailableGameplayGateway(private val reason: String) : GameplayGateway {
 
     override suspend fun loadImage(url: String): GatewayResult<ByteArray> = failure()
 
-    override suspend fun flag(
-        submissionId: String,
-        expectedStateVersion: Long,
-        key: String,
-    ): GatewayResult<Unit> = failure()
-
     override suspend fun kill(
         targetParticipantId: String,
         expectedStateVersion: Long,
@@ -133,6 +120,7 @@ class UnavailableGameplayGateway(private val reason: String) : GameplayGateway {
 class NetworkGameplayGateway(
     private val api: ParticipantApi,
     private val uploads: SignedUploadClient,
+    private val apiBaseUrl: HttpUrl,
     private val imageClient: OkHttpClient = com.impostergame.data.network.ApiClient.defaultClient(),
     private val allowInsecureLocalDebug: Boolean = false,
 ) : GameplayGateway {
@@ -204,9 +192,8 @@ class NetworkGameplayGateway(
 
     override suspend fun loadImage(url: String): GatewayResult<ByteArray> =
         withContext(Dispatchers.IO) {
-            val uri = runCatching { URI(url) }.getOrNull()
-            val local = uri?.host in setOf("localhost", "127.0.0.1", "10.0.2.2")
-            if (uri?.scheme != "https" && !(allowInsecureLocalDebug && local)) {
+            val resolvedUrl = resolveEvidenceImageUrl(apiBaseUrl, url, allowInsecureLocalDebug)
+            if (resolvedUrl == null) {
                 return@withContext GatewayResult.Failure(
                     com.impostergame.data.network.ApiFailure.Contract(
                         IllegalArgumentException("Evidence image URL must use HTTPS")
@@ -214,95 +201,82 @@ class NetworkGameplayGateway(
                 )
             }
             try {
-                imageClient.newCall(Request.Builder().url(url).get().build()).execute().use {
-                    response ->
-                    if (!response.isSuccessful) {
-                        GatewayResult.Failure(
-                            com.impostergame.data.network.ApiFailure.Http(
-                                response.code,
-                                "image_${response.code}",
-                                "Evidence image is unavailable",
-                                null,
-                                null,
-                                null,
-                            )
-                        )
-                    } else {
-                        val body = response.body
-                        val mediaType = body.contentType()
-                        if (
-                            mediaType == null ||
-                                mediaType.type != "image" ||
-                                mediaType.subtype !in ALLOWED_IMAGE_SUBTYPES
-                        ) {
+                imageClient
+                    .newCall(Request.Builder().url(resolvedUrl).get().build())
+                    .execute()
+                    .use { response ->
+                        if (!response.isSuccessful) {
                             GatewayResult.Failure(
-                                com.impostergame.data.network.ApiFailure.Contract(
-                                    IllegalArgumentException(
-                                        "Evidence preview type is not supported"
-                                    )
-                                )
-                            )
-                        } else if (body.contentLength() > MAX_PREVIEW_BYTES) {
-                            GatewayResult.Failure(
-                                com.impostergame.data.network.ApiFailure.Contract(
-                                    IllegalArgumentException("Evidence preview is too large")
+                                com.impostergame.data.network.ApiFailure.Http(
+                                    response.code,
+                                    "image_${response.code}",
+                                    "Evidence image is unavailable",
+                                    null,
+                                    null,
+                                    null,
                                 )
                             )
                         } else {
-                            val bytes =
-                                body.byteStream().use { it.readAtMost(MAX_PREVIEW_BYTES + 1) }
-                            if (bytes.size > MAX_PREVIEW_BYTES) {
+                            val body = response.body
+                            val mediaType = body.contentType()
+                            if (
+                                mediaType == null ||
+                                    mediaType.type != "image" ||
+                                    mediaType.subtype !in ALLOWED_IMAGE_SUBTYPES
+                            ) {
+                                GatewayResult.Failure(
+                                    com.impostergame.data.network.ApiFailure.Contract(
+                                        IllegalArgumentException(
+                                            "Evidence preview type is not supported"
+                                        )
+                                    )
+                                )
+                            } else if (body.contentLength() > MAX_PREVIEW_BYTES) {
                                 GatewayResult.Failure(
                                     com.impostergame.data.network.ApiFailure.Contract(
                                         IllegalArgumentException("Evidence preview is too large")
                                     )
                                 )
                             } else {
-                                val bounds =
-                                    BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-                                if (
-                                    bounds.outWidth <= 0 ||
-                                        bounds.outHeight <= 0 ||
-                                        bounds.outWidth > MAX_PREVIEW_DIMENSION ||
-                                        bounds.outHeight > MAX_PREVIEW_DIMENSION ||
-                                        bounds.outWidth.toLong() * bounds.outHeight >
-                                            MAX_PREVIEW_PIXELS
-                                ) {
+                                val bytes =
+                                    body.byteStream().use { it.readAtMost(MAX_PREVIEW_BYTES + 1) }
+                                if (bytes.size > MAX_PREVIEW_BYTES) {
                                     GatewayResult.Failure(
                                         com.impostergame.data.network.ApiFailure.Contract(
                                             IllegalArgumentException(
-                                                "Evidence preview dimensions are invalid"
+                                                "Evidence preview is too large"
                                             )
                                         )
                                     )
                                 } else {
-                                    GatewayResult.Success(bytes)
+                                    val bounds =
+                                        BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+                                    if (
+                                        bounds.outWidth <= 0 ||
+                                            bounds.outHeight <= 0 ||
+                                            bounds.outWidth > MAX_PREVIEW_DIMENSION ||
+                                            bounds.outHeight > MAX_PREVIEW_DIMENSION ||
+                                            bounds.outWidth.toLong() * bounds.outHeight >
+                                                MAX_PREVIEW_PIXELS
+                                    ) {
+                                        GatewayResult.Failure(
+                                            com.impostergame.data.network.ApiFailure.Contract(
+                                                IllegalArgumentException(
+                                                    "Evidence preview dimensions are invalid"
+                                                )
+                                            )
+                                        )
+                                    } else {
+                                        GatewayResult.Success(bytes)
+                                    }
                                 }
                             }
                         }
                     }
-                }
             } catch (error: java.io.IOException) {
                 GatewayResult.Failure(com.impostergame.data.network.ApiFailure.Transport(error))
             }
-        }
-
-    override suspend fun flag(
-        submissionId: String,
-        expectedStateVersion: Long,
-        key: String,
-    ): GatewayResult<Unit> =
-        when (
-            val result =
-                api.flagSubmission(
-                    submissionId,
-                    FlagSubmissionInput(expectedStateVersion),
-                    key,
-                )
-        ) {
-            is ApiResult.Failure -> GatewayResult.Failure(result.error)
-            is ApiResult.Success -> GatewayResult.Success(Unit)
         }
 
     override suspend fun kill(
@@ -355,6 +329,16 @@ class NetworkGameplayGateway(
         const val MAX_PREVIEW_PIXELS = 16_777_216L
         val ALLOWED_IMAGE_SUBTYPES = setOf("jpeg", "png", "webp")
     }
+}
+
+internal fun resolveEvidenceImageUrl(
+    apiBaseUrl: HttpUrl,
+    url: String,
+    allowInsecureLocalDebug: Boolean,
+): HttpUrl? {
+    val resolved = apiBaseUrl.resolve(url) ?: return null
+    val local = resolved.host in setOf("localhost", "127.0.0.1", "10.0.2.2")
+    return resolved.takeIf { it.scheme == "https" || (allowInsecureLocalDebug && local) }
 }
 
 private fun InputStream.readAtMost(maxBytes: Int): ByteArray {

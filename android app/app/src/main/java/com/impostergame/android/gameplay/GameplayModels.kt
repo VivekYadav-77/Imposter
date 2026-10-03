@@ -1,6 +1,7 @@
 package com.impostergame.android.gameplay
 
 import com.impostergame.data.model.Assignment
+import com.impostergame.data.model.GamePhase
 import com.impostergame.data.model.GameSnapshot
 import com.impostergame.data.model.Meeting
 import com.impostergame.data.model.Submission
@@ -17,14 +18,6 @@ enum class GameplayDestination {
 
 internal fun List<Assignment>.incompleteFirst(): List<Assignment> = sortedBy {
     it.status == "completed"
-}
-
-internal fun GameplayUiState.mayFlag(submission: Submission): Boolean {
-    val self = snapshot?.self ?: return false
-    return self.capabilities.contains("flag_evidence") &&
-        submission.uploader.id != self.participantId &&
-        !submission.flaggedBySelf &&
-        submission.processingStatus == "accepted"
 }
 
 internal fun GameplayUiState.mayKill(targetId: String): Boolean {
@@ -66,6 +59,17 @@ internal fun GameplayUiState.mayEjectionVote(): Boolean {
         ejectionVoteSubmittedMeetingId != meeting.id &&
         !meeting.hasCastEjectionVote
 }
+
+internal fun messageAfterPhaseTransition(
+    previousPhase: GamePhase?,
+    nextPhase: GamePhase,
+    currentMessage: String?,
+): String? =
+    if (nextPhase == GamePhase.TASK && previousPhase != GamePhase.TASK) {
+        null
+    } else {
+        currentMessage
+    }
 
 internal fun GameSnapshot.meetingReason(): String =
     when (meeting?.triggerType) {
@@ -135,13 +139,14 @@ data class GameplayUiState(
     val preparedEvidence: PreparedEvidence? = null,
     val activeSubmissionId: String? = null,
     val submissions: List<Submission> = emptyList(),
+    val evidenceImageBytes: Map<String, ByteArray> = emptyMap(),
     val selectedSubmissionId: String? = null,
     val previewImageBytes: ByteArray? = null,
+    val previewImageLoading: Boolean = false,
     val selectedKillTargetId: String? = null,
     val statusPanelVisible: Boolean = false,
     val killPickerVisible: Boolean = false,
     val confirmMeetingCall: Boolean = false,
-    val confirmFlag: Boolean = false,
     val meetingAlertId: String? = null,
     val selectedReviewDecision: String? = null,
     val confirmReviewVote: Boolean = false,
@@ -162,9 +167,6 @@ data class GameplayUiState(
 
     val canSubmitEvidence: Boolean
         get() = snapshot?.self?.capabilities?.contains("submit_evidence") == true
-
-    val canFlagEvidence: Boolean
-        get() = snapshot?.self?.capabilities?.contains("flag_evidence") == true
 }
 
 internal fun Meeting.publicBallotsAllowed(voteVisibility: String): Boolean =

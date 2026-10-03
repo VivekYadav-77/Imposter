@@ -138,3 +138,28 @@ Capture the corrected host lobby and Imposter task dashboard in both themes at 3
 ### Next action
 
 Run the corrected Imposter dashboard at the remaining compact widths and dark theme, then execute APP-004 on approved staging.
+
+## Session handoff — 2026-10-03 evidence gallery parity
+
+**Milestone:** website-equivalent evidence gallery and reliable Android previews
+**Status:** implemented and verified locally; manual multi-client backend acceptance remains with the product owner
+
+### Changed
+
+- Removed participant-facing evidence flag actions from the website and Android clients while leaving the backend contract compatible.
+- Resolved backend-issued relative evidence read URLs against the configured API origin, retaining production HTTPS and bounded image validation.
+- Replaced Android evidence list cards with the website-equivalent two-column thumbnail grid, full-screen overlay action, accepted badge, and zoomable preview for room and final evidence.
+- Scoped thumbnail byte caching to evidence/result use and clears it when the app backgrounds.
+- Clears meeting vote acknowledgements when an authoritative task-phase snapshot resumes.
+
+### Verified
+
+- `npm run check` — passed formatting, lint, typecheck, 21 files/120 tests, OpenAPI, and realtime fixtures.
+- `gradlew quality --no-parallel --max-workers=1` — passed 142 tasks.
+- `gradlew connectedQuality :app:installDebug -PDEBUG_API_BASE_URL=http://127.0.0.1:3000 --no-parallel --max-workers=1` — passed 144 tasks on Acer One 8 T4-82L/API 33 and installed the updated APK.
+- Relative evidence URL and task-phase message-transition regressions are covered by JVM tests.
+- The local backend remained stopped; live evidence acceptance was intentionally left for the requested manual server test.
+
+### Decision added
+
+- ADR-A-033 — Evidence gallery parity without participant flag actions.

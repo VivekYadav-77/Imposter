@@ -118,6 +118,7 @@ class MainActivity : ComponentActivity() {
                     apiBaseUrl = apiBaseUrl,
                     allowInsecureLocalDebug = BuildConfig.DEBUG,
                 ),
+                apiBaseUrl = apiBaseUrl,
                 allowInsecureLocalDebug = BuildConfig.DEBUG,
             )
         } ?: UnavailableGameplayGateway("API_BASE_URL is not configured for this build")

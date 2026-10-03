@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -70,6 +71,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -92,7 +94,6 @@ import com.impostergame.android.gameplay.UploadStage
 import com.impostergame.android.gameplay.endReasonLabel
 import com.impostergame.android.gameplay.mayCallMeeting
 import com.impostergame.android.gameplay.mayEjectionVote
-import com.impostergame.android.gameplay.mayFlag
 import com.impostergame.android.gameplay.mayReviewVote
 import com.impostergame.android.gameplay.meetingReason
 import com.impostergame.android.gameplay.publicBallotsAllowed
@@ -147,7 +148,6 @@ fun GameplayScreen(
             state.confirmEjectionVote -> viewModel.dismissEjectionVote()
             state.killPickerVisible -> viewModel.dismissKillPicker()
             state.statusPanelVisible -> viewModel.dismissStatus()
-            state.confirmFlag -> viewModel.dismissFlag()
             state.meetingAlertId != null -> viewModel.dismissMeetingAlert()
             state.selectedAssignmentId != null -> viewModel.dismissTaskDetail()
             state.selectedSubmissionId != null -> viewModel.dismissEvidencePreview()
@@ -977,7 +977,10 @@ private fun FinalResultScreen(
                     }
                     val accepted = state.submissions.filter { it.processingStatus == "accepted" }
                     Surface(
-                        onClick = { evidenceExpanded = !evidenceExpanded },
+                        onClick = {
+                            evidenceExpanded = !evidenceExpanded
+                            if (evidenceExpanded) viewModel.refreshEvidenceImages()
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp),
                         color = MaterialTheme.gameColors.surfaceRaised,
@@ -1034,8 +1037,21 @@ private fun FinalResultScreen(
                                 fontWeight = FontWeight.Black,
                             )
                             if (accepted.isEmpty()) Text("No accepted task photos were recorded.")
-                            accepted.forEach {
-                                EvidenceCard(it, viewModel, Modifier.fillMaxWidth())
+                            accepted.chunked(2).forEach { submissions ->
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    submissions.forEach { submission ->
+                                        EvidenceCard(
+                                            submission = submission,
+                                            imageBytes = state.evidenceImageBytes[submission.id],
+                                            viewModel = viewModel,
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                    }
+                                    if (submissions.size == 1) Box(Modifier.weight(1f))
+                                }
                             }
                             GameOutlinedButton(
                                 "Close evidence  ⌃",
@@ -2496,8 +2512,23 @@ private fun EvidenceGalleryScreen(
                                 )
                             }
                         } else {
-                            state.submissions.forEach { submission ->
-                                EvidenceCard(submission, viewModel, Modifier.fillMaxWidth())
+                            state.submissions.chunked(2).forEach { submissions ->
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    submissions.forEach { submission ->
+                                        EvidenceCard(
+                                            submission = submission,
+                                            imageBytes = state.evidenceImageBytes[submission.id],
+                                            viewModel = viewModel,
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                    }
+                                    if (submissions.size == 1) {
+                                        Box(Modifier.weight(1f))
+                                    }
+                                }
                             }
                         }
                     }
@@ -2506,52 +2537,102 @@ private fun EvidenceGalleryScreen(
         }
     }
     state.selectedSubmissionId?.let { EvidencePreviewDialog(state, viewModel) }
-    if (state.confirmFlag) {
-        WebsiteDialog(
-            title = "Flag this evidence?",
-            onDismissRequest = viewModel::dismissFlag,
-            content = {
-                Text("The evidence will be queued for review. Misuse may disrupt the game.")
-            },
-            actions = {
-                GameOutlinedButton("Cancel", viewModel::dismissFlag, Modifier.weight(1f))
-                GameButton(
-                    "Flag evidence",
-                    viewModel::confirmFlag,
-                    Modifier.weight(1f),
-                    style = GameButtonStyle.Destructive,
-                )
-            },
-        )
-    }
 }
 
 @Composable
 private fun EvidenceCard(
     submission: Submission,
+    imageBytes: ByteArray?,
     viewModel: GameplayViewModel,
     modifier: Modifier = Modifier,
 ) {
-    WebsiteCard(modifier, accent = MaterialTheme.gameColors.tasks) {
+    Surface(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
         Column(
-            Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(GameSpacing.xs),
+            Modifier.padding(9.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(submission.uploader.nickname, fontWeight = FontWeight.Bold)
-            Text(
-                submission.processingStatus.uppercase(),
-                color = MaterialTheme.gameColors.tasks,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Black,
-            )
-            Text("Review · ${submission.reviewStatus}", style = MaterialTheme.typography.bodySmall)
-            if (submission.flaggedBySelf) Text("Flagged by you")
-            GameOutlinedButton(
-                "View",
-                { viewModel.selectEvidence(submission.id) },
+            Box(
+                Modifier.fillMaxWidth()
+                    .aspectRatio(1f)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .clickable(enabled = submission.image != null) {
+                        viewModel.selectEvidence(submission.id)
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                if (imageBytes != null) {
+                    EvidenceThumbnail(imageBytes)
+                } else if (submission.image != null) {
+                    CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 2.dp)
+                } else {
+                    Text(
+                        submission.processingStatus,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
+                if (submission.image != null) {
+                    Surface(
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(10.dp),
+                        shape = RoundedCornerShape(999.dp),
+                        color = Color.Black.copy(alpha = 0.82f),
+                    ) {
+                        Text(
+                            "↗ View full screen",
+                            Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                }
+            }
+            Row(
                 Modifier.fillMaxWidth(),
-            )
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    "Task evidence",
+                    Modifier.weight(1f),
+                    maxLines = 1,
+                    fontWeight = FontWeight.Bold,
+                )
+                val semantic = LocalGameSemanticColors.current
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = semantic.successContainer,
+                    border = BorderStroke(1.dp, semantic.success),
+                ) {
+                    Text(
+                        submission.processingStatus.uppercase(),
+                        Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        color = semantic.onSuccessContainer,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Black,
+                    )
+                }
+            }
         }
+    }
+}
+
+@Composable
+private fun EvidenceThumbnail(bytes: ByteArray) {
+    val bitmap =
+        remember(bytes) { BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap() }
+    bitmap?.let {
+        androidx.compose.foundation.Image(
+            bitmap = it,
+            contentDescription = "Task evidence thumbnail",
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop,
+        )
     }
 }
 
@@ -2563,7 +2644,7 @@ private fun EvidencePreviewDialog(state: GameplayUiState, viewModel: GameplayVie
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         Surface(
-            Modifier.fillMaxWidth().padding(16.dp).widthIn(max = 520.dp).heightIn(max = 720.dp),
+            Modifier.fillMaxSize().padding(16.dp).widthIn(max = 720.dp),
             shape = RoundedCornerShape(20.dp),
             color = MaterialTheme.colorScheme.surface,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
@@ -2586,15 +2667,12 @@ private fun EvidencePreviewDialog(state: GameplayUiState, viewModel: GameplayVie
                     )
                     GameCloseButton(viewModel::dismissEvidencePreview, "Close evidence preview")
                 }
-                state.previewImageBytes?.let { ZoomableEvidenceBitmap(it) }
-                    ?: Text(if (state.loading) "Loading image…" else "Image unavailable.")
-                if (state.mayFlag(submission)) {
-                    GameButton(
-                        "Flag evidence",
-                        viewModel::requestFlag,
-                        Modifier.fillMaxWidth(),
-                        style = GameButtonStyle.Destructive,
-                    )
+                Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                    state.previewImageBytes?.let { ZoomableEvidenceBitmap(it) }
+                        ?: Text(
+                            if (state.previewImageLoading) "Loading image…"
+                            else "Image unavailable. Refresh and try again."
+                        )
                 }
             }
         }
@@ -2624,15 +2702,14 @@ private fun ZoomableEvidenceBitmap(bytes: ByteArray) {
     }
     bitmap?.let {
         Box(
-            Modifier.fillMaxWidth()
-                .height(360.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant),
+            Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center,
         ) {
             androidx.compose.foundation.Image(
                 bitmap = it,
                 contentDescription = "Full-screen evidence preview. Pinch to zoom.",
                 modifier = Modifier.fillMaxSize().scale(scale).transformable(transform),
+                contentScale = ContentScale.Fit,
             )
         }
     }

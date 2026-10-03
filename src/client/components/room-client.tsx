@@ -1794,12 +1794,7 @@ function TaskView({
           })
         }
       />
-      <EvidenceGallery
-        open={gallery}
-        onClose={() => setGallery(false)}
-        game={game}
-        onError={onError}
-      />
+      <EvidenceGallery open={gallery} onClose={() => setGallery(false)} onError={onError} />
       <Dialog
         open={killPickerOpen}
         title="Choose a target"
@@ -2010,17 +2005,14 @@ function UploadDialog({
 function EvidenceGallery({
   open,
   onClose,
-  game,
   onError,
 }: {
   open: boolean;
   onClose: () => void;
-  game: GameSnapshot;
   onError: (message: string) => void;
 }) {
   const [items, setItems] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(false);
-  const [flagId, setFlagId] = useState<string | null>(null);
   const [preview, setPreview] = useState<{ src: string; alt: string } | null>(null);
   useEffect(() => {
     if (!open) return;
@@ -2034,22 +2026,6 @@ function EvidenceGallery({
   useEffect(() => {
     if (!open) setPreview(null);
   }, [open]);
-  const flag = async () => {
-    if (!flagId) return;
-    try {
-      await participantApi.flag(flagId, game.stateVersion, null);
-      setItems((current) =>
-        current.map((item) =>
-          item.id === flagId ? { ...item, flaggedBySelf: true, reviewStatus: "flagged" } : item,
-        ),
-      );
-      gameToast("Photo flagged for the next review.", "info");
-    } catch (e) {
-      onError(errorMessage(e));
-    } finally {
-      setFlagId(null);
-    }
-  };
   return (
     <Dialog open={open} title="Room evidence" onClose={onClose}>
       {loading ? (
@@ -2095,26 +2071,10 @@ function EvidenceGallery({
                   {item.processingStatus}
                 </Badge>
               </div>
-              {game.self.capabilities.includes("flag_evidence") &&
-                item.uploader.id !== game.self.participantId &&
-                !item.flaggedBySelf && (
-                  <Button variant="ghost" onClick={() => setFlagId(item.id)}>
-                    Flag for review
-                  </Button>
-                )}
             </article>
           ))}
         </div>
       )}
-      <ConfirmDialog
-        open={Boolean(flagId)}
-        onClose={() => setFlagId(null)}
-        onConfirm={() => void flag()}
-        title="Flag this photo?"
-        description="The room may review it during the next meeting. You cannot flag your own evidence."
-        confirmLabel="Flag photo"
-        dangerous
-      />
       <ImagePreview
         open={Boolean(preview)}
         src={preview?.src ?? null}

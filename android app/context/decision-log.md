@@ -269,6 +269,15 @@ Use IDs `ADR-A-###`. Status is `proposed`, `approved`, `superseded`, or `rejecte
 - **Reason:** The earlier Android presentation hid the ability while recharging, placed it before assignments, used generic ballot rows, and introduced a user-flow step absent from the approved mobile website.
 - **Consequences:** Visual and interaction parity improves without granting client authority. Back closes the target popup, a changed target fails closed through existing ViewModel validation, and command failures refresh the authoritative snapshot.
 
+### ADR-A-033 — Evidence gallery parity without participant flag actions
+
+- **Status:** approved by explicit product-owner direction and verified locally
+- **Date:** 2026-10-03
+- **Approver:** product owner
+- **Decision:** Remove participant-facing evidence flag controls from both website and Android evidence surfaces. Render Android room and final evidence as the website-equivalent two-column thumbnail grid with an overlaid full-screen action, accepted-status badge, and zoomable preview. Resolve backend-issued relative read capabilities against the configured API origin while retaining the existing HTTPS-only production policy, localhost-only debug exception, response-size/type/dimension validation, and bounded in-memory cache. Clear meeting vote acknowledgements when an authoritative task-phase snapshot resumes.
+- **Reason:** The Android client rejected valid relative evidence URLs, exposed a list/detail flow that differed from the approved mobile website, retained a stale vote acknowledgement after the meeting, and both clients still exposed an evidence flag action the product owner removed from the experience.
+- **Consequences:** Own and authorized public evidence use the same server-issued read capability and preview path. Thumbnail bytes are loaded only for evidence/result views, cleared on backgrounding, and never persisted or logged. The backend flag endpoint and capability remain contract-compatible but neither client exposes them. Meeting vote acknowledgement remains available during the meeting and cannot leak into the resumed task dashboard.
+
 ## Adding a decision
 
 Copy this structure:

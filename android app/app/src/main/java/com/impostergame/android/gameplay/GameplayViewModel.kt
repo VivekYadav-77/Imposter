@@ -38,7 +38,6 @@ class GameplayViewModel(
     private var pendingUpload: PendingUpload? = null
     private var pendingKill: PendingAction? = null
     private var pendingMeetingCall: PendingAction? = null
-    private var pendingFlag: PendingAction? = null
     private var pendingReviewVote: PendingAction? = null
     private var pendingEjectionVote: PendingAction? = null
     private var pendingReplay: PendingAction? = null
@@ -102,8 +101,10 @@ class GameplayViewModel(
 
     fun showEvidence() {
         update { it.copy(destination = GameplayDestination.EVIDENCE, message = null) }
-        refreshSubmissions()
+        refreshSubmissions(loadThumbnails = true)
     }
+
+    fun refreshEvidenceImages() = refreshSubmissions(loadThumbnails = true)
 
     fun showStatus() = update {
         it.copy(statusPanelVisible = true, killPickerVisible = false, message = null)
@@ -288,22 +289,44 @@ class GameplayViewModel(
     fun selectEvidence(id: String) {
         val submission = _state.value.submissions.firstOrNull { it.id == id } ?: return
         val url = submission.image?.url
+        val cached = _state.value.evidenceImageBytes[id]
         update {
             it.copy(
                 selectedSubmissionId = id,
-                previewImageBytes = null,
-                loading = url != null,
+                previewImageBytes = cached,
+                previewImageLoading = url != null && cached == null,
                 message =
                     if (url == null) "This image is still processing or has expired." else null,
             )
         }
-        if (url != null) {
+        if (url != null && cached == null) {
             viewModelScope.launch {
                 when (val result = gateway.loadImage(url)) {
                     is GatewayResult.Success ->
-                        update { it.copy(previewImageBytes = result.value, loading = false) }
+                        update { current ->
+                            current.copy(
+                                evidenceImageBytes =
+                                    current.evidenceImageBytes + (id to result.value),
+                                previewImageBytes =
+                                    if (current.selectedSubmissionId == id) result.value
+                                    else current.previewImageBytes,
+                                previewImageLoading =
+                                    current.previewImageLoading &&
+                                        current.selectedSubmissionId != id,
+                            )
+                        }
                     is GatewayResult.Failure ->
-                        update { it.copy(message = messageFor(result.error), loading = false) }
+                        update { current ->
+                            current.copy(
+                                message =
+                                    if (current.selectedSubmissionId == id)
+                                        "Evidence image is unavailable. Refresh and try again."
+                                    else current.message,
+                                previewImageLoading =
+                                    current.previewImageLoading &&
+                                        current.selectedSubmissionId != id,
+                            )
+                        }
                 }
             }
         }
@@ -313,49 +336,8 @@ class GameplayViewModel(
         it.copy(
             selectedSubmissionId = null,
             previewImageBytes = null,
-            confirmFlag = false,
+            previewImageLoading = false,
         )
-    }
-
-    fun requestFlag() {
-        val state = _state.value
-        val submission =
-            state.submissions.firstOrNull { it.id == state.selectedSubmissionId } ?: return
-        if (state.mayFlag(submission)) {
-            update { it.copy(confirmFlag = true) }
-        }
-    }
-
-    fun dismissFlag() = update { it.copy(confirmFlag = false) }
-
-    fun confirmFlag() {
-        val current = _state.value
-        val snapshot = current.snapshot ?: return
-        val submissionId = current.selectedSubmissionId ?: return
-        val fingerprint = "$submissionId|${snapshot.stateVersion}"
-        val command =
-            pendingFlag?.takeIf { it.fingerprint == fingerprint }
-                ?: PendingAction(fingerprint, newKey()).also { pendingFlag = it }
-        launchOnce {
-            when (val result = gateway.flag(submissionId, snapshot.stateVersion, command.key)) {
-                is GatewayResult.Success -> {
-                    pendingFlag = null
-                    update {
-                        it.copy(
-                            confirmFlag = false,
-                            message = "Evidence flagged for review.",
-                        )
-                    }
-                    refreshSubmissions()
-                }
-                is GatewayResult.Failure -> {
-                    update { it.copy(confirmFlag = false, message = messageFor(result.error)) }
-                    if (result.error is ApiFailure.Http && result.error.status == 409) {
-                        refreshSubmissions()
-                    }
-                }
-            }
-        }
     }
 
     fun selectKillTarget(id: String) {
@@ -555,7 +537,6 @@ class GameplayViewModel(
         pendingUpload = null
         pendingKill = null
         pendingMeetingCall = null
-        pendingFlag = null
         pendingReviewVote = null
         pendingEjectionVote = null
         pendingReplay = null
@@ -613,7 +594,14 @@ class GameplayViewModel(
                 )
             }
         }
-        update { it.copy(previewImageBytes = null, reviewImageBytes = null) }
+        update {
+            it.copy(
+                previewImageBytes = null,
+                previewImageLoading = false,
+                evidenceImageBytes = emptyMap(),
+                reviewImageBytes = null,
+            )
+        }
     }
 
     private fun refresh(showLoading: Boolean = false, forceRoleSeal: Boolean = false) {
@@ -705,6 +693,8 @@ class GameplayViewModel(
                 ejectionVoteSubmittedMeetingId =
                     current.ejectionVoteSubmittedMeetingId?.takeIf { it == meetingId },
                 reviewImageBytes = if (sameReviewItem) current.reviewImageBytes else null,
+                message =
+                    messageAfterPhaseTransition(previous?.phase, snapshot.phase, current.message),
             )
         }
         if (announceMeeting) {
@@ -751,7 +741,10 @@ class GameplayViewModel(
         }
     }
 
-    private fun refreshSubmissions(loadMeetingEvidence: Boolean = false) {
+    private fun refreshSubmissions(
+        loadMeetingEvidence: Boolean = false,
+        loadThumbnails: Boolean = false,
+    ) {
         viewModelScope.launch {
             when (val result = gateway.submissions()) {
                 is GatewayResult.Success -> {
@@ -761,8 +754,12 @@ class GameplayViewModel(
                         active?.processingStatus == "accepted" &&
                             _state.value.uploadStage != UploadStage.COMPLETE
                     update {
+                        val currentIds =
+                            result.value.mapTo(mutableSetOf()) { submission -> submission.id }
                         it.copy(
                             submissions = result.value,
+                            evidenceImageBytes =
+                                it.evidenceImageBytes.filterKeys(currentIds::contains),
                             uploadStage =
                                 when (active?.processingStatus) {
                                     "accepted" -> UploadStage.COMPLETE
@@ -779,8 +776,28 @@ class GameplayViewModel(
                     if (loadMeetingEvidence) {
                         loadReviewImage(result.value)
                     }
+                    if (loadThumbnails) loadEvidenceThumbnails(result.value)
                 }
                 is GatewayResult.Failure -> update { it.copy(message = messageFor(result.error)) }
+            }
+        }
+    }
+
+    private suspend fun loadEvidenceThumbnails(
+        submissions: List<com.impostergame.data.model.Submission>
+    ) {
+        submissions.forEach { submission ->
+            val url = submission.image?.url ?: return@forEach
+            if (_state.value.evidenceImageBytes.containsKey(submission.id)) return@forEach
+            when (val image = gateway.loadImage(url)) {
+                is GatewayResult.Success ->
+                    update {
+                        it.copy(
+                            evidenceImageBytes =
+                                it.evidenceImageBytes + (submission.id to image.value)
+                        )
+                    }
+                is GatewayResult.Failure -> Unit
             }
         }
     }
