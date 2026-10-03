@@ -63,26 +63,36 @@ class SocketIoRealtimeTransport(
             io.socket.emitter.Emitter.Listener { args ->
                 trySend(TransportEvent.Failed(args.firstOrNull()?.toString().orEmpty()))
             }
-        val payloadListener =
+        val payloadListeners = EVENT_NAMES.associateWith { eventName ->
             io.socket.emitter.Emitter.Listener { args ->
                 val payload = args.firstOrNull()
                 val value =
                     when (payload) {
-                        is JSONObject -> payload.toString()
-                        is String -> payload
+                        is JSONObject ->
+                            JSONObject(payload.toString())
+                                .apply { if (!has("type")) put("type", eventName) }
+                                .toString()
+                        is String ->
+                            runCatching {
+                                    JSONObject(payload)
+                                        .apply { if (!has("type")) put("type", eventName) }
+                                        .toString()
+                                }
+                                .getOrDefault(payload)
                         else -> return@Listener
                     }
                 trySend(TransportEvent.Payload(value))
             }
+        }
         socket.on(Socket.EVENT_CONNECT, connect)
         socket.on(Socket.EVENT_DISCONNECT, disconnect)
         socket.on(Socket.EVENT_CONNECT_ERROR, error)
-        EVENT_NAMES.forEach { socket.on(it, payloadListener) }
+        payloadListeners.forEach { (eventName, listener) -> socket.on(eventName, listener) }
         awaitClose {
             socket.off(Socket.EVENT_CONNECT, connect)
             socket.off(Socket.EVENT_DISCONNECT, disconnect)
             socket.off(Socket.EVENT_CONNECT_ERROR, error)
-            EVENT_NAMES.forEach { socket.off(it, payloadListener) }
+            payloadListeners.forEach { (eventName, listener) -> socket.off(eventName, listener) }
         }
     }
 

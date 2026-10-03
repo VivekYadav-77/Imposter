@@ -108,7 +108,7 @@ fun GameTopBar(
                                 phase.contains("lobby", true) -> WebsiteIconKind.Lobby
                                 phase.contains("task", true) || phase.contains("evidence", true) ->
                                     WebsiteIconKind.Tasks
-                                phase.contains("role", true) -> WebsiteIconKind.Eye
+                                phase.contains("role", true) -> WebsiteIconKind.Lock
                                 phase.contains("result", true) -> WebsiteIconKind.Verdict
                                 else -> WebsiteIconKind.Meeting
                             }

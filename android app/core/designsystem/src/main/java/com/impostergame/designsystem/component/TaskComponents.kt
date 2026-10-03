@@ -55,16 +55,21 @@ fun TaskCard(
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null,
 ) {
-    SignalCard(
+    Surface(
         modifier = modifier.fillMaxWidth(),
-        accent =
-            when (uploadState) {
-                UploadState.Complete -> LocalGameSemanticColors.current.success
-                UploadState.RetryableFailure -> LocalGameSemanticColors.current.warning
-                UploadState.TerminalFailure -> LocalGameSemanticColors.current.danger
-                else -> MaterialTheme.gameColors.tasks
-            },
-        emphasized = uploadState !in setOf(UploadState.Idle, UploadState.Complete),
+        shape = GameShapes.task,
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp,
+        shadowElevation = 3.dp,
+        border =
+            androidx.compose.foundation.BorderStroke(
+                1.dp,
+                when (uploadState) {
+                    UploadState.RetryableFailure -> LocalGameSemanticColors.current.warning
+                    UploadState.TerminalFailure -> LocalGameSemanticColors.current.danger
+                    else -> MaterialTheme.colorScheme.outlineVariant
+                },
+            ),
     ) {
         Row(modifier = Modifier.fillMaxWidth().heightIn(min = WebsiteLayout.taskCardMinHeight)) {
             Box(

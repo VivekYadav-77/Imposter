@@ -52,6 +52,7 @@ import com.impostergame.designsystem.theme.gameColors
 
 enum class WebsiteIconKind {
     Arrow,
+    Camera,
     Check,
     Chevron,
     Clock,
@@ -60,6 +61,7 @@ enum class WebsiteIconKind {
     Minus,
     Lobby,
     Tasks,
+    Upload,
     Meeting,
     Verdict,
     Room,
@@ -254,6 +256,10 @@ fun WebsiteIcon(
             }
             when (kind) {
                 WebsiteIconKind.Arrow -> path("M5 12h14m-5-5 5 5-5 5")
+                WebsiteIconKind.Camera -> {
+                    path("M4 8.5h3l1.4-2h7.2l1.4 2h3v10H4z")
+                    drawCircle(tint, 3.2f, Offset(12f, 13.5f), style = stroke)
+                }
                 WebsiteIconKind.Check -> path("m5 12 4.2 4.2L19 6.8")
                 WebsiteIconKind.Chevron -> path("m8 10 4 4 4-4")
                 WebsiteIconKind.Clock -> {
@@ -282,6 +288,7 @@ fun WebsiteIcon(
                 WebsiteIconKind.Minus -> path("M6 12h12")
                 WebsiteIconKind.Tasks ->
                     path("M5 4h14v16H5zM8 9l1.5 1.5L12 8m1.5 2H16m-8 5 1.5 1.5L12 14m1.5 2H16")
+                WebsiteIconKind.Upload -> path("M12 16V4m-4 4 4-4 4 4M5 14v5h14v-5")
                 WebsiteIconKind.Meeting ->
                     path(
                         "M6.5 18.5 4 21l.7-4.2A7 7 0 0 1 3 12c0-4.4 4-8 9-8s9 3.6 9 8-4 8-9 8a10 10 0 0 1-5.5-1.5ZM8 12h.01M12 12h.01M16 12h.01"

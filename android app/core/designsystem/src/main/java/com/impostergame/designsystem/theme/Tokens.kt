@@ -67,7 +67,7 @@ object WebsiteLayout {
     val taskCardMinHeight = 104.dp
     val taskCardRadius = 16.dp
     val taskNumber = 36.dp
-    val taskProofWidth = 76.dp
+    val taskProofWidth = 70.dp
     val mobileActionHeight = 70.dp
     val mobileActionRadius = 18.dp
     val lobbyPageBottom = 138.dp

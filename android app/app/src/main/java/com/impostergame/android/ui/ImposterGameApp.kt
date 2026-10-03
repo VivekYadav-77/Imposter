@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -1575,11 +1576,7 @@ private fun LobbyScreen(
                         Modifier.weight(1f).fillMaxWidth(),
                         contentAlignment = Alignment.TopCenter,
                     ) {
-                        Column(
-                            Modifier.widthIn(max = 430.dp)
-                                .fillMaxWidth()
-                                .verticalScroll(rememberScrollState())
-                        ) {
+                        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
                             LobbyHeader(room, onCopyCode)
                             LobbyMessages(state)
                             Roster(room, scrollable = false)
@@ -2030,54 +2027,65 @@ private fun TaskPackPicker(state: EntryLobbyUiState, viewModel: EntryLobbyViewMo
             enter = fadeIn(tween(GameMotion.StandardMillis)) + expandVertically(),
             exit = fadeOut(tween(GameMotion.QuickMillis)) + shrinkVertically(),
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                state.taskPacks.forEach { pack ->
-                    val isSelected = state.settings.selectedTaskPackId == pack.id
-                    Surface(
-                        modifier =
-                            Modifier.fillMaxWidth()
-                                .selectable(
-                                    selected = isSelected,
-                                    onClick = {
-                                        viewModel.selectTaskPack(pack.id)
-                                        expanded = false
-                                    },
-                                    role = Role.RadioButton,
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 228.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    items(state.taskPacks, key = { it.id }) { pack ->
+                        val isSelected = state.settings.selectedTaskPackId == pack.id
+                        Surface(
+                            modifier =
+                                Modifier.fillMaxWidth()
+                                    .selectable(
+                                        selected = isSelected,
+                                        onClick = {
+                                            viewModel.selectTaskPack(pack.id)
+                                            expanded = false
+                                        },
+                                        role = Role.RadioButton,
+                                    ),
+                            shape = GameShapes.small,
+                            color =
+                                if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = .12f)
+                                else MaterialTheme.colorScheme.surface,
+                            border =
+                                BorderStroke(
+                                    if (isSelected) 2.dp else 1.dp,
+                                    if (isSelected) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.outlineVariant,
                                 ),
-                        shape = GameShapes.small,
-                        color =
-                            if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = .12f)
-                            else MaterialTheme.colorScheme.surface,
-                        border =
-                            BorderStroke(
-                                if (isSelected) 2.dp else 1.dp,
-                                if (isSelected) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.outlineVariant,
-                            ),
-                        tonalElevation = 0.dp,
-                    ) {
-                        Row(
-                            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
+                            tonalElevation = 0.dp,
                         ) {
-                            Column(Modifier.weight(1f)) {
-                                Text(pack.name, fontWeight = FontWeight.Black)
-                                Text(
-                                    "${pack.activeTaskCount} tasks",
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            }
-                            if (isSelected) {
-                                WebsiteIcon(
-                                    WebsiteIconKind.Check,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    size = 17.dp,
-                                )
+                            Row(
+                                Modifier.fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(pack.name, fontWeight = FontWeight.Black)
+                                    Text(
+                                        "${pack.activeTaskCount} tasks",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                }
+                                if (isSelected) {
+                                    WebsiteIcon(
+                                        WebsiteIconKind.Check,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        size = 17.dp,
+                                    )
+                                }
                             }
                         }
                     }
                 }
+                GameOutlinedButton(
+                    "Close map list",
+                    { expanded = false },
+                    Modifier.fillMaxWidth(),
+                )
             }
         }
     }
@@ -2634,10 +2642,7 @@ private fun LobbyAction(state: EntryLobbyUiState, viewModel: EntryLobbyViewModel
             shape = GameShapes.medium,
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             modifier =
-                Modifier.widthIn(max = 430.dp)
-                    .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 8.dp)
-                    .imePadding(),
+                Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp).imePadding(),
         ) {
             Column(
                 Modifier.padding(GameSpacing.xs),
