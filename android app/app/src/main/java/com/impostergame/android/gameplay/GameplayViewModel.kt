@@ -162,9 +162,12 @@ class GameplayViewModel(
     fun discardCameraUri(uri: Uri) = evidenceProcessor.cleanupCameraUri(uri)
 
     fun prepareEvidence(uri: Uri, cameraCapture: Boolean = false) {
+        val assignmentId = _state.value.selectedAssignmentId ?: return
         uploadJob?.cancel()
         update {
             it.copy(
+                selectedAssignmentId = null,
+                activeUploadAssignmentId = assignmentId,
                 uploadStage = UploadStage.PREPARING,
                 preparedEvidence = null,
                 message = null,
@@ -182,6 +185,8 @@ class GameplayViewModel(
                             preparedEvidence = evidence,
                         )
                     }
+                    uploadJob = null
+                    submitPreparedEvidence(assignmentId, evidence)
                 },
                 onFailure = { error ->
                     update {
@@ -209,15 +214,29 @@ class GameplayViewModel(
     fun submitEvidence() {
         if (uploadJob?.isActive == true) return
         val current = _state.value
-        val snapshot = current.snapshot ?: return
-        val assignmentId = current.selectedAssignmentId ?: return
+        val assignmentId =
+            current.activeUploadAssignmentId ?: current.selectedAssignmentId ?: return
         val evidence = current.preparedEvidence ?: return
+        submitPreparedEvidence(assignmentId, evidence)
+    }
+
+    private fun submitPreparedEvidence(assignmentId: String, evidence: PreparedEvidence) {
+        if (uploadJob?.isActive == true) return
+        val current = _state.value
+        val snapshot = current.snapshot ?: return
         if (!snapshot.self.capabilities.contains("submit_evidence")) return
         val fingerprint = "$assignmentId|${snapshot.stateVersion}|${evidence.checksum}"
         val command =
             pendingUpload?.takeIf { it.fingerprint == fingerprint }
                 ?: PendingUpload(fingerprint, newKey(), newKey()).also { pendingUpload = it }
         emitFeedback(GameFeedbackKind.UploadStart, "$assignmentId:${snapshot.stateVersion}")
+        update {
+            it.copy(
+                selectedAssignmentId = null,
+                activeUploadAssignmentId = assignmentId,
+                message = null,
+            )
+        }
         uploadJob = viewModelScope.launch {
             val result =
                 gateway.submitEvidence(
@@ -237,7 +256,7 @@ class GameplayViewModel(
                             uploadStage = UploadStage.PROCESSING,
                             preparedEvidence = null,
                             activeSubmissionId = result.value.submission.id,
-                            message = "Evidence received and processing.",
+                            message = null,
                         )
                     }
                     emitFeedback(GameFeedbackKind.Upload, result.value.submission.id)

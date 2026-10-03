@@ -117,25 +117,28 @@ class GameplayModelsTest {
     @Test
     fun terminalLabelsCoverWinnerAndAbandonedReason() {
         val base = snapshot(emptyList(), emptyList())
-        assertEquals("Crewmates win", base.copy(winner = "crew").winnerLabel())
+        assertEquals("Crew wins", base.copy(winner = "crew").winnerLabel())
         assertEquals("Imposters win", base.copy(winner = "imposters").winnerLabel())
         assertEquals(
-            "All required tasks were completed.",
+            "Every crew task was completed. The ship is secure.",
             base.copy(endReason = "tasks_completed").endReasonLabel(),
         )
         assertEquals(
-            "All imposters were ejected.",
+            "Every imposter was identified and ejected.",
             base.copy(endReason = "imposters_ejected").endReasonLabel(),
         )
         assertEquals(
-            "Imposters reached parity with the crew.",
+            "The imposters matched the remaining crew and took control.",
             base.copy(endReason = "imposter_parity").endReasonLabel(),
         )
         assertEquals(
-            "The game timer expired.",
+            "Time expired before the crew could secure the room.",
             base.copy(endReason = "time_expired").endReasonLabel(),
         )
-        assertEquals("The game was abandoned.", base.copy(endReason = "abandoned").endReasonLabel())
+        assertEquals(
+            "This game was abandoned before a winner was decided.",
+            base.copy(endReason = "abandoned").endReasonLabel(),
+        )
     }
 
     @Test

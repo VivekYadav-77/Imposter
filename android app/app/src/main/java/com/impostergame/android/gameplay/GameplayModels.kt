@@ -81,7 +81,7 @@ internal fun GameSnapshot.meetingReason(): String =
 
 internal fun GameSnapshot.winnerLabel(): String =
     when (winner) {
-        "crew" -> "Crewmates win"
+        "crew" -> "Crew wins"
         "imposters",
         "imposter" -> "Imposters win"
         else -> "Game ended"
@@ -89,11 +89,11 @@ internal fun GameSnapshot.winnerLabel(): String =
 
 internal fun GameSnapshot.endReasonLabel(): String =
     when (endReason) {
-        "tasks_completed" -> "All required tasks were completed."
-        "imposters_ejected" -> "All imposters were ejected."
-        "imposter_parity" -> "Imposters reached parity with the crew."
-        "time_expired" -> "The game timer expired."
-        "abandoned" -> "The game was abandoned."
+        "tasks_completed" -> "Every crew task was completed. The ship is secure."
+        "imposters_ejected" -> "Every imposter was identified and ejected."
+        "imposter_parity" -> "The imposters matched the remaining crew and took control."
+        "time_expired" -> "Time expired before the crew could secure the room."
+        "abandoned" -> "This game was abandoned before a winner was decided."
         else -> endReason?.replace('_', ' ')?.replaceFirstChar(Char::uppercase) ?: "Final result"
     }
 
@@ -130,6 +130,7 @@ data class GameplayUiState(
     val roleRevealed: Boolean = false,
     val roleViewed: Boolean = false,
     val selectedAssignmentId: String? = null,
+    val activeUploadAssignmentId: String? = null,
     val uploadStage: UploadStage = UploadStage.IDLE,
     val preparedEvidence: PreparedEvidence? = null,
     val activeSubmissionId: String? = null,

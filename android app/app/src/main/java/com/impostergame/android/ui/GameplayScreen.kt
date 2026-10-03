@@ -21,6 +21,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Arrangement
@@ -67,6 +68,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -100,7 +102,6 @@ import com.impostergame.data.model.RoomSnapshot
 import com.impostergame.data.model.Submission
 import com.impostergame.designsystem.avatar.PlayerAvatar
 import com.impostergame.designsystem.avatar.PlayerColors
-import com.impostergame.designsystem.component.GameBackButton
 import com.impostergame.designsystem.component.GameButton
 import com.impostergame.designsystem.component.GameButtonStyle
 import com.impostergame.designsystem.component.GameGlyph
@@ -121,6 +122,7 @@ import com.impostergame.designsystem.theme.GameMotion
 import com.impostergame.designsystem.theme.GameSpacing
 import com.impostergame.designsystem.theme.LocalGameAccessibilityPreferences
 import com.impostergame.designsystem.theme.gameColors
+import java.time.Instant
 import kotlinx.coroutines.delay
 
 @Composable
@@ -259,37 +261,56 @@ private fun MeetingScreen(
             Modifier.weight(1f)
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(GameSpacing.md),
-            verticalArrangement = Arrangement.spacedBy(GameSpacing.md),
+                .padding(horizontal = 14.dp, vertical = 22.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text(
-                if (meeting.phase == "resolved") "MEETING VERDICT" else "EMERGENCY MEETING",
-                color = MaterialTheme.gameColors.meeting,
-                style = MaterialTheme.typography.displaySmall,
-                fontWeight = FontWeight.Black,
-                modifier = Modifier.semantics { heading() },
-            )
-            MeetingProgress(meeting.phase)
-            Text(
-                snapshot.meetingReason(),
-                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-            )
-            Message(state.message)
             if (snapshot.self.lifeStatus != "alive") {
                 Message(
                     "You are ${snapshot.self.lifeStatus}. You can observe this meeting but cannot vote."
                 )
             }
             when (meeting.phase) {
-                "discussion" -> DiscussionPanel(state)
-                "review" -> ReviewPanel(state, viewModel)
+                "discussion" -> {
+                    MeetingHeading(meeting.sequenceNumber, "Emergency meeting")
+                    Text(snapshot.meetingReason(), style = MaterialTheme.typography.titleMedium)
+                    DiscussionPanel(state)
+                }
+                "review" -> {
+                    MeetingHeading(meeting.sequenceNumber, "Review the evidence")
+                    ReviewPanel(state, viewModel)
+                }
                 "voting" -> EjectionVotingPanel(state, viewModel)
-                "resolved" -> MeetingResultPanel(state)
+                "resolved" -> {
+                    MeetingHeading(meeting.sequenceNumber, "Room decision")
+                    MeetingResultPanel(state)
+                }
                 else -> Text("Waiting for the server to advance the meeting…")
             }
         }
+    }
+}
+
+@Composable
+private fun MeetingHeading(sequence: Int, title: String) {
+    Column(
+        Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            "MEETING $sequence",
+            Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.primary,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Black,
+        )
+        Text(
+            title,
+            Modifier.fillMaxWidth().semantics { heading() },
+            style = MaterialTheme.typography.displaySmall,
+            fontWeight = FontWeight.Black,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 
@@ -430,19 +451,23 @@ private fun EjectionVotingPanel(state: GameplayUiState, viewModel: GameplayViewM
         Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
     ) {
-        Text(
-            "MEETING ${meeting.sequenceNumber}",
-            color = MaterialTheme.gameColors.accentStrong,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Black,
-        )
-        Text(
-            "Who do you trust least?",
-            modifier = Modifier.fillMaxWidth().semantics { heading() },
-            style = MaterialTheme.typography.displaySmall,
-            fontWeight = FontWeight.Black,
-            textAlign = TextAlign.Center,
-        )
+        MeetingHeading(meeting.sequenceNumber, "Who do you trust least?")
+        if (snapshot.meetingRules.votingMode == "all_voted") {
+            Surface(
+                color = MaterialTheme.colorScheme.tertiaryContainer,
+                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                shape = RoundedCornerShape(6.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary),
+                tonalElevation = 0.dp,
+            ) {
+                Text(
+                    "This meeting resolves after every connected eligible player votes. Players who remain offline after the reconnect grace period no longer block the result.",
+                    Modifier.fillMaxWidth().padding(12.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
         Text(
             if (state.mayEjectionVote())
                 "Choose carefully. Your ballot locks as soon as you confirm it."
@@ -471,7 +496,7 @@ private fun EjectionVotingPanel(state: GameplayUiState, viewModel: GameplayViewM
                 )
             }
             WebsiteBallotRow(
-                nickname = "Skip vote",
+                nickname = "Skip",
                 playerColorId = "red",
                 selected = state.hasEjectionSelection && state.selectedEjectionTargetId == null,
                 enabled = !state.loading,
@@ -596,41 +621,148 @@ private fun MeetingResultPanel(state: GameplayUiState) {
         result.ejectedParticipantId?.let { id ->
             snapshot.participants.firstOrNull { it.id == id }?.nickname
         }
-    SignalCard(
+    Surface(
         Modifier.fillMaxWidth(),
-        accent = MaterialTheme.gameColors.results,
-        emphasized = true,
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(2.dp, MaterialTheme.gameColors.results),
+        shadowElevation = 12.dp,
+        tonalElevation = 0.dp,
     ) {
         Column(
-            Modifier.padding(GameSpacing.md).semantics { liveRegion = LiveRegionMode.Assertive },
-            verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
+            Modifier.padding(18.dp).semantics { liveRegion = LiveRegionMode.Assertive },
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            Surface(
+                modifier = Modifier.rotate(-3f),
+                shape = RoundedCornerShape(2.dp),
+                color = MaterialTheme.colorScheme.primary.copy(alpha = .08f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+                tonalElevation = 0.dp,
+            ) {
+                Text(
+                    "DECISION",
+                    Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Black,
+                )
+            }
             Text(
                 ejected?.let { "$it was ejected" } ?: "No one was ejected",
                 style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.Black,
+                textAlign = TextAlign.Center,
             )
-            result.totals.forEach { total ->
-                val name =
-                    snapshot.participants.firstOrNull { it.id == total.participantId }?.nickname
-                        ?: "Player"
-                Text("$name: ${total.votes}")
+            if (result.totals.isNotEmpty()) {
+                Column(
+                    Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    result.totals.forEach { total ->
+                        val player =
+                            snapshot.participants.firstOrNull { it.id == total.participantId }
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            player?.let {
+                                PlayerAvatar(it.avatarId, 30.dp, it.nickname, decorative = true)
+                            }
+                            Text(player?.nickname ?: "Player", Modifier.weight(1f))
+                            Text(total.votes.toString(), fontWeight = FontWeight.Black)
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth()) {
+                        Text("Skipped", Modifier.weight(1f))
+                        Text(result.skipVotes.toString(), fontWeight = FontWeight.Black)
+                    }
+                }
             }
-            Text("Skip: ${result.skipVotes}")
             if (meeting.publicBallotsAllowed(snapshot.meetingRules.voteVisibility))
                 PublicBallots(result.ballots)
             else Text("Individual ballots are private.")
-            Text("Waiting for the server to continue…")
         }
     }
 }
 
 @Composable
 private fun PublicBallots(ballots: List<com.impostergame.data.model.PublicVote>) {
-    if (ballots.isEmpty()) return
-    Text("Public ballots", fontWeight = FontWeight.Bold)
-    ballots.forEach { ballot ->
-        Text("${ballot.voterNickname} → ${ballot.targetNickname ?: "Skip"}")
+    Surface(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        tonalElevation = 0.dp,
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Surface(
+                    Modifier.size(30.dp),
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = .12f),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        WebsiteIcon(
+                            WebsiteIconKind.Eye,
+                            tint = MaterialTheme.colorScheme.primary,
+                            size = 16.dp,
+                        )
+                    }
+                }
+                Column {
+                    Text("Public ballot feed", fontWeight = FontWeight.ExtraBold)
+                    Text(
+                        "New ballots appear as they lock.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+            if (ballots.isEmpty()) {
+                Text("No ballot has been locked yet.")
+            } else {
+                ballots.forEach { ballot ->
+                    Surface(
+                        Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.gameColors.surfaceRaised,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                        tonalElevation = 0.dp,
+                    ) {
+                        Row(
+                            Modifier.padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            PlayerAvatar(
+                                ballot.voterAvatarId,
+                                30.dp,
+                                ballot.voterNickname,
+                                decorative = true,
+                            )
+                            Column(Modifier.weight(1f)) {
+                                Text("VOTER", style = MaterialTheme.typography.labelSmall)
+                                Text(ballot.voterNickname, fontWeight = FontWeight.Bold)
+                            }
+                            WebsiteIcon(WebsiteIconKind.Arrow, size = 17.dp)
+                            Column(Modifier.weight(1f)) {
+                                Text("VOTED FOR", style = MaterialTheme.typography.labelSmall)
+                                Text(
+                                    ballot.targetNickname ?: "Skipped",
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -646,6 +778,9 @@ private fun FinalResultScreen(
     val snapshot = state.snapshot ?: return LoadingScreen("Loading final result…")
     val summary = snapshot.resultSummary
     var resultSecretTaps by rememberSaveable(snapshot.id) { mutableIntStateOf(0) }
+    var evidenceExpanded by rememberSaveable(snapshot.id) { mutableStateOf(false) }
+    var votesExpanded by rememberSaveable(snapshot.id) { mutableStateOf(false) }
+    state.selectedSubmissionId?.let { EvidencePreviewDialog(state, viewModel) }
     Column(Modifier.fillMaxSize().safeDrawingPadding()) {
         GameTopBar(
             phase = "Results",
@@ -662,18 +797,22 @@ private fun FinalResultScreen(
         Column(
             Modifier.weight(1f)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 14.dp, vertical = 24.dp),
+                .padding(horizontal = 12.dp, vertical = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            WebsiteCard(
-                Modifier.fillMaxWidth().widthIn(max = 720.dp),
-                accent = MaterialTheme.gameColors.results,
+            Surface(
+                Modifier.fillMaxWidth().widthIn(max = 560.dp),
+                shape = RoundedCornerShape(22.dp),
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                shadowElevation = 10.dp,
+                tonalElevation = 0.dp,
             ) {
                 Column(
-                    Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 24.dp),
+                    Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 22.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
                     Surface(
                         modifier = Modifier.rotate(-4f),
@@ -702,131 +841,220 @@ private fun FinalResultScreen(
                         fontWeight = FontWeight.Black,
                         textAlign = TextAlign.Center,
                     )
-                    Text(snapshot.endReasonLabel(), textAlign = TextAlign.Center)
                     Text(
-                        "You finished as ${snapshot.self.role.replaceFirstChar(Char::uppercase)} • ${snapshot.self.lifeStatus}",
+                        snapshot.endReasonLabel(),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
                     )
                     if (summary != null) {
-                        Row(
+                        Column(
                             Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
                             ResultMetric(
                                 "Players",
                                 summary.players.size.toString(),
-                                Modifier.weight(1f),
+                                Modifier.fillMaxWidth(),
                             )
                             ResultMetric(
                                 "Crew tasks",
                                 "${summary.completedTasks}/${summary.totalTasks}",
-                                Modifier.weight(1f),
+                                Modifier.fillMaxWidth(),
                             )
                             ResultMetric(
                                 "Duration",
                                 formatDuration(summary.durationSeconds),
-                                Modifier.weight(1f),
+                                Modifier.fillMaxWidth(),
                             )
                         }
                     }
-                }
-            }
-            Message(state.message)
-            GameOutlinedButton(
-                if (state.resultDetailsExpanded) "Hide full results" else "See full results",
-                viewModel::toggleResultDetails,
-                Modifier.fillMaxWidth().widthIn(max = 520.dp),
-            )
-            val reduceMotion = LocalGameAccessibilityPreferences.current.reduceMotion
-            AnimatedVisibility(
-                visible = state.resultDetailsExpanded && summary != null,
-                enter =
-                    if (reduceMotion) EnterTransition.None
-                    else
-                        fadeIn(tween(GameMotion.StandardMillis)) +
-                            expandVertically(
-                                animationSpec =
-                                    tween(
-                                        GameMotion.EmphasisMillis,
-                                        easing = GameMotion.EmphasisEasing,
-                                    )
-                            ),
-                exit =
-                    if (reduceMotion) ExitTransition.None
-                    else
-                        fadeOut(tween(GameMotion.QuickMillis)) +
-                            shrinkVertically(tween(GameMotion.StandardMillis)),
-            ) {
-                if (summary != null)
-                    WebsiteCard(
-                        Modifier.fillMaxWidth().widthIn(max = 720.dp),
-                        accent = MaterialTheme.gameColors.results,
+                    GameOutlinedButton(
+                        if (state.resultDetailsExpanded) "⌃  Hide full results"
+                        else "⌄  See full results",
+                        viewModel::toggleResultDetails,
+                        Modifier.fillMaxWidth().padding(horizontal = 26.dp),
+                    )
+                    val reduceMotion = LocalGameAccessibilityPreferences.current.reduceMotion
+                    AnimatedVisibility(
+                        visible = state.resultDetailsExpanded && summary != null,
+                        enter =
+                            if (reduceMotion) EnterTransition.None
+                            else fadeIn(tween(GameMotion.StandardMillis)) + expandVertically(),
+                        exit =
+                            if (reduceMotion) ExitTransition.None
+                            else fadeOut(tween(GameMotion.QuickMillis)) + shrinkVertically(),
                     ) {
                         Column(
-                            Modifier.padding(GameSpacing.md),
-                            verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
-                        ) {
-                            Text(
-                                "Game summary",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                            )
-                            Text("Duration: ${formatDuration(summary.durationSeconds)}")
-                            Text("Tasks: ${summary.completedTasks}/${summary.totalTasks}")
-                            Text("Task pack: ${snapshot.taskPack.name}")
-                            summary.players.forEach { player ->
-                                PlayerCard(
-                                    nickname = player.nickname,
-                                    playerColorId = player.avatarId,
-                                    status = null,
-                                    compact = true,
+                            Modifier.fillMaxWidth()
+                                .background(
+                                    MaterialTheme.gameColors.surfaceRaised,
+                                    RoundedCornerShape(12.dp),
                                 )
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        "IDENTITY REVEAL",
+                                        color = MaterialTheme.colorScheme.primary,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Black,
+                                    )
+                                    Text(
+                                        "Roles & task records",
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.Black,
+                                    )
+                                }
                                 Text(
-                                    "${player.role.replaceFirstChar(Char::uppercase)} • ${player.crewRole?.name ?: "No crew specialization"} • ${player.lifeStatus} • tasks ${player.completedTasks}/${player.totalTasks}"
+                                    if (snapshot.meetingRules.voteVisibility == "public")
+                                        "PUBLIC BALLOTS"
+                                    else "PRIVATE BALLOTS",
+                                    modifier =
+                                        Modifier.border(
+                                                1.dp,
+                                                MaterialTheme.gameColors.lobby,
+                                                RoundedCornerShape(50),
+                                            )
+                                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                                    color = MaterialTheme.gameColors.lobby,
+                                    style = MaterialTheme.typography.labelSmall,
                                 )
                             }
-                            val accepted =
-                                state.submissions.filter { it.processingStatus == "accepted" }
-                            Text(
-                                "Accepted evidence: ${accepted.size}",
-                                fontWeight = FontWeight.Bold,
+                            summary?.players.orEmpty().forEach { player ->
+                                ResultPlayerCard(player)
+                            }
+                            GameOutlinedButton(
+                                "Close full results  ⌃",
+                                viewModel::toggleResultDetails,
+                                Modifier.fillMaxWidth(),
                             )
-                            accepted.forEach {
-                                Text("Evidence ${it.id.take(8)} • ${it.reviewStatus}")
+                            Surface(
+                                onClick = { votesExpanded = !votesExpanded },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                                border =
+                                    BorderStroke(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.outlineVariant,
+                                    ),
+                                tonalElevation = 0.dp,
+                            ) {
+                                Row(
+                                    Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text("Vote details", fontWeight = FontWeight.ExtraBold)
+                                        Text(
+                                            "Review the final ballot separately",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                    WebsiteIcon(
+                                        WebsiteIconKind.Chevron,
+                                        Modifier.rotate(if (votesExpanded) 180f else 0f),
+                                        size = 18.dp,
+                                    )
+                                }
                             }
                             val meeting = snapshot.meeting
                             if (
-                                meeting != null &&
+                                votesExpanded &&
+                                    meeting != null &&
                                     meeting.publicBallotsAllowed(
                                         snapshot.meetingRules.voteVisibility
                                     )
-                            )
+                            ) {
                                 PublicBallots(meeting.result?.ballots.orEmpty())
+                            }
                         }
                     }
-            }
-            TextButton(
-                onClick = {
-                    resultSecretTaps = (resultSecretTaps + 1).coerceAtMost(3)
-                    viewModel.playResultInteraction(resultSecretTaps >= 3)
-                }
-            ) {
-                Text(
-                    if (resultSecretTaps >= 3)
-                        "✦ The smallest operative was suspicious all along. ✦"
-                    else "◉"
-                )
-            }
-            WebsiteCard(
-                Modifier.fillMaxWidth().widthIn(max = 720.dp),
-                accent = MaterialTheme.gameColors.results,
-            ) {
-                Column(
-                    Modifier.padding(GameSpacing.lg),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
-                ) {
+                    val accepted = state.submissions.filter { it.processingStatus == "accepted" }
+                    Surface(
+                        onClick = { evidenceExpanded = !evidenceExpanded },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.gameColors.surfaceRaised,
+                        tonalElevation = 0.dp,
+                    ) {
+                        Row(
+                            Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            WebsiteIcon(
+                                WebsiteIconKind.Room,
+                                tint = MaterialTheme.colorScheme.primary,
+                                size = 20.dp,
+                            )
+                            Column(Modifier.weight(1f)) {
+                                Text("Evidence", fontWeight = FontWeight.ExtraBold)
+                                Text(
+                                    "Review accepted task photos",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Text(
+                                accepted.size.toString(),
+                                color = MaterialTheme.gameColors.lobby,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            WebsiteIcon(
+                                WebsiteIconKind.Chevron,
+                                Modifier.rotate(if (evidenceExpanded) 180f else 0f),
+                                size = 18.dp,
+                            )
+                        }
+                    }
+                    if (evidenceExpanded) {
+                        Column(
+                            Modifier.fillMaxWidth()
+                                .background(
+                                    MaterialTheme.gameColors.surfaceRaised,
+                                    RoundedCornerShape(10.dp),
+                                )
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                "CASE ARCHIVE",
+                                color = MaterialTheme.colorScheme.primary,
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                            Text(
+                                "Final evidence",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Black,
+                            )
+                            if (accepted.isEmpty()) Text("No accepted task photos were recorded.")
+                            accepted.forEach {
+                                EvidenceCard(it, viewModel, Modifier.fillMaxWidth())
+                            }
+                            GameOutlinedButton(
+                                "Close evidence  ⌃",
+                                { evidenceExpanded = false },
+                                Modifier.fillMaxWidth(),
+                            )
+                        }
+                    }
+                    TextButton(
+                        onClick = {
+                            resultSecretTaps = (resultSecretTaps + 1).coerceAtMost(3)
+                            viewModel.playResultInteraction(resultSecretTaps >= 3)
+                        }
+                    ) {
+                        Text(if (resultSecretTaps >= 3) "✦ Suspicious ✦" else "◉")
+                    }
+                    Box(
+                        Modifier.fillMaxWidth()
+                            .height(1.dp)
+                            .background(MaterialTheme.colorScheme.outlineVariant)
+                    )
                     Text(
                         "Play again with this room?",
                         style = MaterialTheme.typography.titleLarge,
@@ -834,28 +1062,91 @@ private fun FinalResultScreen(
                         textAlign = TextAlign.Center,
                     )
                     Text(
-                        "Return everyone to the lobby with the same room code, players, and game settings.",
+                        "Yes returns you to the lobby settings with the same room code and crew.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
                     )
-                    GameButton(
-                        "Yes, play again",
-                        { viewModel.replay(onReplayRoom) },
+                    Row(
                         Modifier.fillMaxWidth(),
-                        loading = state.loading,
-                    )
-                    GameOutlinedButton(
-                        "Leave and return home",
-                        onReturnHome,
-                        Modifier.fillMaxWidth(),
-                        enabled = !state.loading,
-                    )
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        GameButton(
+                            "Yes, play again",
+                            { viewModel.replay(onReplayRoom) },
+                            Modifier.weight(1f),
+                            loading = state.loading,
+                        )
+                        GameOutlinedButton(
+                            "No, go home",
+                            onReturnHome,
+                            Modifier.weight(1f),
+                            enabled = !state.loading,
+                        )
+                    }
                 }
             }
         }
     }
     LaunchedEffect(summary?.players?.size) {
         if (state.submissions.isEmpty()) viewModel.refreshReviewEvidence()
+    }
+}
+
+@Composable
+private fun ResultPlayerCard(player: com.impostergame.data.model.GameResultPlayer) {
+    val roleColor =
+        if (player.role == "imposter") MaterialTheme.colorScheme.error
+        else MaterialTheme.gameColors.results
+    Surface(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, roleColor.copy(alpha = .65f)),
+        tonalElevation = 0.dp,
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            PlayerAvatar(player.avatarId, 42.dp, player.nickname, decorative = true)
+            Column(Modifier.weight(1f)) {
+                Text(player.nickname, fontWeight = FontWeight.ExtraBold)
+                Text(
+                    stringResource(PlayerColors.fromTransportId(player.avatarId).nameResource),
+                    style = MaterialTheme.typography.labelSmall,
+                )
+                Text(
+                    if (player.role == "imposter") "△  Imposter"
+                    else "⌕  ${player.crewRole?.name ?: "Crewmate"}",
+                    color = roleColor,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                player.crewRole?.let {
+                    Text(
+                        it.specialization,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    "${player.completedTasks}/${player.totalTasks}",
+                    fontWeight = FontWeight.Black,
+                )
+                Text("tasks", style = MaterialTheme.typography.labelSmall)
+                Text(
+                    player.lifeStatus.uppercase(),
+                    color =
+                        if (player.lifeStatus == "alive") MaterialTheme.gameColors.ready
+                        else MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Black,
+                )
+            }
+        }
     }
 }
 
@@ -1267,7 +1558,7 @@ private fun TaskList(
                     uploadState =
                         when {
                             assignment.status == "completed" -> UploadState.Complete
-                            assignment.id == state.selectedAssignmentId ->
+                            assignment.id == state.activeUploadAssignmentId ->
                                 state.uploadStage.toDesignUploadState()
                             else -> UploadState.Idle
                         },
@@ -1354,7 +1645,7 @@ private fun GameActionBar(
                         if (state.mayCallMeeting()) {
                             "${snapshot.meetingRules.remainingForSelf} left"
                         } else {
-                            "Unavailable"
+                            meetingCooldownText(snapshot) ?: "Unavailable"
                         },
                     onClick =
                         if (state.mayCallMeeting()) viewModel::requestMeetingConfirmation
@@ -1437,11 +1728,17 @@ private fun StatusPanel(
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         Box(
-            Modifier.fillMaxSize().padding(12.dp),
+            Modifier.fillMaxSize()
+                .pointerInput(Unit) { detectTapGestures { viewModel.dismissStatus() } }
+                .padding(12.dp),
             contentAlignment = Alignment.BottomCenter,
         ) {
             Surface(
-                modifier = Modifier.widthIn(max = 520.dp).fillMaxWidth().heightIn(max = 760.dp),
+                modifier =
+                    Modifier.widthIn(max = 520.dp)
+                        .fillMaxWidth()
+                        .heightIn(max = 760.dp)
+                        .pointerInput(Unit) { detectTapGestures {} },
                 shape = RoundedCornerShape(22.dp),
                 color = MaterialTheme.gameColors.surfaceRaised,
                 tonalElevation = 0.dp,
@@ -1619,32 +1916,82 @@ private fun StatusPanel(
         }
     }
     if (showRoleDetails) {
-        val roleName =
-            if (snapshot.self.role == "imposter") "Imposter"
-            else snapshot.self.crewRole?.name ?: "Crewmate"
-        WebsiteDialog(
-            title = roleName,
-            onDismissRequest = { showRoleDetails = false },
-            content = {
-                snapshot.self.crewRole?.let {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(it.specialization, fontWeight = FontWeight.Bold)
-                        Text(it.ability, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-                    ?: Text(
-                        if (snapshot.self.role == "imposter") "Blend in. Eliminate quietly."
-                        else "Complete your tasks. Watch everyone."
+        RoleDetailsDialog(snapshot) { showRoleDetails = false }
+    }
+}
+
+@Composable
+private fun RoleDetailsDialog(snapshot: GameSnapshot, onDismiss: () -> Unit) {
+    val roleName =
+        if (snapshot.self.role == "imposter") "Imposter"
+        else snapshot.self.crewRole?.name ?: "Crewmate"
+    val specialization =
+        if (snapshot.self.role == "imposter") "Deception"
+        else snapshot.self.crewRole?.specialization ?: "General operations"
+    val ability =
+        if (snapshot.self.role == "imposter")
+            "Quietly eliminate living players while blending in with the crew."
+        else snapshot.self.crewRole?.ability ?: "Complete assigned tasks and identify impostors."
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Surface(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp).widthIn(max = 420.dp),
+            shape = RoundedCornerShape(18.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            shadowElevation = 18.dp,
+            tonalElevation = 0.dp,
+        ) {
+            Column {
+                Row(
+                    Modifier.fillMaxWidth().padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        roleName,
+                        Modifier.weight(1f),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Black,
                     )
-            },
-            actions = {
-                GameOutlinedButton(
-                    "Close role",
-                    { showRoleDetails = false },
-                    Modifier.fillMaxWidth(),
+                    GameCloseButton(onDismiss, "Close role")
+                }
+                Box(
+                    Modifier.fillMaxWidth()
+                        .height(1.dp)
+                        .background(MaterialTheme.colorScheme.outlineVariant)
                 )
-            },
-        )
+                Column(
+                    Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    RoleDetailCard("SPECIALIZATION", specialization)
+                    RoleDetailCard("ABILITY", ability)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RoleDetailCard(label: String, value: String) {
+    Surface(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.gameColors.surfaceRaised,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        tonalElevation = 0.dp,
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                label,
+                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Black,
+            )
+            Text(value, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        }
     }
 }
 
@@ -1655,11 +2002,21 @@ private fun meetingAvailabilityLabel(snapshot: GameSnapshot, state: GameplayUiSt
         snapshot.meetingRules.requiresCompletedTask && !snapshot.meetingRules.hasCompletedTask ->
             "Complete one task before calling a meeting."
         snapshot.cooldowns.meetingAvailableAt != null && !state.mayCallMeeting() ->
-            "Meeting cooldown is active."
+            meetingCooldownText(snapshot)?.let { "Available in $it" }
+                ?: "Meeting cooldown is active."
         !snapshot.self.capabilities.contains("call_meeting") ->
             "Meeting is not currently available."
         else -> "Ready to gather the room."
     }
+
+private fun meetingCooldownText(snapshot: GameSnapshot): String? {
+    val deadline =
+        snapshot.cooldowns.meetingAvailableAt?.let { runCatching { Instant.parse(it) }.getOrNull() }
+            ?: return null
+    val seconds = (deadline.epochSecond - Instant.now().epochSecond).coerceAtLeast(0)
+    if (seconds == 0L) return null
+    return "%d:%02d".format(seconds / 60, seconds % 60)
+}
 
 @Composable
 private fun MeetingCallConfirmation(snapshot: GameSnapshot, viewModel: GameplayViewModel) {
@@ -1979,41 +2336,23 @@ private fun EvidenceGalleryScreen(
 ) {
     val snapshot = state.snapshot ?: return LoadingScreen("Loading evidence…")
     TaskPhaseScreen(state, viewModel, onToggleSound, onToggleTheme)
-    state.selectedSubmissionId?.let {
-        EvidencePreviewDialog(state, viewModel)
-    }
-    if (state.confirmFlag) {
-        WebsiteDialog(
-            title = "Flag this evidence?",
-            onDismissRequest = viewModel::dismissFlag,
-            content = {
-                Text("The evidence will be queued for review. Misuse may disrupt the game.")
-            },
-            actions = {
-                GameOutlinedButton("Cancel", viewModel::dismissFlag, Modifier.weight(1f))
-                GameButton(
-                    "Flag evidence",
-                    viewModel::confirmFlag,
-                    Modifier.weight(1f),
-                    style = GameButtonStyle.Destructive,
-                )
-            },
-        )
-    }
     Dialog(
         onDismissRequest = viewModel::showTasks,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier.fillMaxSize().pointerInput(Unit) {
+                detectTapGestures { viewModel.showTasks() }
+            },
+            contentAlignment = Alignment.Center,
+        ) {
             Surface(
                 modifier =
-                    Modifier.padding(12.dp)
+                    Modifier.padding(16.dp)
                         .widthIn(max = 520.dp)
                         .fillMaxWidth()
-                        .heightIn(
-                            min = 350.dp,
-                            max = 720.dp,
-                        ),
+                        .heightIn(max = 680.dp)
+                        .pointerInput(Unit) { detectTapGestures {} },
                 shape = RoundedCornerShape(20.dp),
                 color = MaterialTheme.colorScheme.surface,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
@@ -2039,7 +2378,9 @@ private fun EvidenceGalleryScreen(
                             .background(MaterialTheme.colorScheme.outlineVariant)
                     )
                     Column(
-                        Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp),
+                        Modifier.heightIn(max = 570.dp)
+                            .verticalScroll(rememberScrollState())
+                            .padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         Message(state.message)
@@ -2075,22 +2416,33 @@ private fun EvidenceGalleryScreen(
                                 )
                             }
                         } else {
-                            state.submissions.chunked(2).forEach { row ->
-                                Row(
-                                    Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                ) {
-                                    row.forEach { submission ->
-                                        EvidenceCard(submission, viewModel, Modifier.weight(1f))
-                                    }
-                                    if (row.size == 1) Box(Modifier.weight(1f))
-                                }
+                            state.submissions.forEach { submission ->
+                                EvidenceCard(submission, viewModel, Modifier.fillMaxWidth())
                             }
                         }
                     }
                 }
             }
         }
+    }
+    state.selectedSubmissionId?.let { EvidencePreviewDialog(state, viewModel) }
+    if (state.confirmFlag) {
+        WebsiteDialog(
+            title = "Flag this evidence?",
+            onDismissRequest = viewModel::dismissFlag,
+            content = {
+                Text("The evidence will be queued for review. Misuse may disrupt the game.")
+            },
+            actions = {
+                GameOutlinedButton("Cancel", viewModel::dismissFlag, Modifier.weight(1f))
+                GameButton(
+                    "Flag evidence",
+                    viewModel::confirmFlag,
+                    Modifier.weight(1f),
+                    style = GameButtonStyle.Destructive,
+                )
+            },
+        )
     }
 }
 
@@ -2130,9 +2482,16 @@ private fun EvidencePreviewDialog(state: GameplayUiState, viewModel: GameplayVie
         onDismissRequest = viewModel::dismissEvidencePreview,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        Surface(Modifier.fillMaxSize().safeDrawingPadding()) {
+        Surface(
+            Modifier.fillMaxWidth().padding(16.dp).widthIn(max = 520.dp).heightIn(max = 720.dp),
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            shadowElevation = 20.dp,
+            tonalElevation = 0.dp,
+        ) {
             Column(
-                Modifier.fillMaxSize().padding(GameSpacing.md),
+                Modifier.fillMaxWidth().padding(GameSpacing.md),
                 verticalArrangement = Arrangement.spacedBy(GameSpacing.sm),
             ) {
                 Row(
@@ -2145,7 +2504,7 @@ private fun EvidencePreviewDialog(state: GameplayUiState, viewModel: GameplayVie
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                     )
-                    GameBackButton("Evidence", viewModel::dismissEvidencePreview)
+                    GameCloseButton(viewModel::dismissEvidencePreview, "Close evidence preview")
                 }
                 state.previewImageBytes?.let { ZoomableEvidenceBitmap(it) }
                     ?: Text(if (state.loading) "Loading image…" else "Image unavailable.")

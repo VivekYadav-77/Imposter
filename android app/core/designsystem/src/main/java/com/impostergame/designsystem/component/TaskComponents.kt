@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -55,12 +55,21 @@ fun TaskCard(
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null,
 ) {
+    val working =
+        uploadState in
+            setOf(
+                UploadState.Preparing,
+                UploadState.RequestingIntent,
+                UploadState.Uploading,
+                UploadState.Confirming,
+                UploadState.Processing,
+            )
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = GameShapes.task,
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 0.dp,
-        shadowElevation = 3.dp,
+        shadowElevation = 1.dp,
         border =
             androidx.compose.foundation.BorderStroke(
                 1.dp,
@@ -71,7 +80,7 @@ fun TaskCard(
                 },
             ),
     ) {
-        Row(modifier = Modifier.fillMaxWidth().heightIn(min = WebsiteLayout.taskCardMinHeight)) {
+        Row(modifier = Modifier.fillMaxWidth().height(WebsiteLayout.taskCardMinHeight)) {
             Box(
                 Modifier.width(4.dp)
                     .fillMaxHeight()
@@ -112,9 +121,6 @@ fun TaskCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                if (uploadState != UploadState.Idle && uploadState != UploadState.Complete) {
-                    UploadStateIndicator(uploadState)
-                }
                 statusLabel?.let {
                     val statusColor =
                         if (uploadState == UploadState.Complete)
@@ -148,7 +154,13 @@ fun TaskCard(
                         Modifier.width(WebsiteLayout.taskProofWidth).fillMaxHeight().padding(6.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        if (uploadState == UploadState.Complete) {
+                        if (working) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = MaterialTheme.gameColors.tasks,
+                                strokeWidth = 2.dp,
+                            )
+                        } else if (uploadState == UploadState.Complete) {
                             GameGlyph(
                                 GameGlyphKind.Check,
                                 tint = LocalGameSemanticColors.current.success,
