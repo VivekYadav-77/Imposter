@@ -24,10 +24,9 @@ This folder is the compact working memory for Android implementation agents. Its
 
 Read, in order:
 
-1. `../plan/master-plan.md`
-2. `current-state.md`
-3. `decision-log.md`
-4. the active phase file linked from `current-state.md`
-5. only the contract/source files named by that phase
+1. `current-state.md`
+2. `decision-log.md`
+3. the supporting context files linked from `current-state.md`
+4. only the contract/source files named by the active milestone
 
 This is sufficient context for normal continuation. Inspect additional code only when the active milestone requires it.

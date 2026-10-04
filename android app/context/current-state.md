@@ -3,7 +3,7 @@
 **Last updated:** 2026-10-04
 **Overall status:** Phase 8 remains active. Website-exact gameplay parity is joined by native Google account, dashboard, history, profile, device, rejoin, deletion-reauthentication, and guest-upgrade support under ADR-A-035. Account production rollout remains disabled until configuration and staging/device acceptance are complete.
 **Active phase:** Phase 8 — end-to-end quality, release, and operations
-**Active plan:** [`../plan/phase-08-quality-release.md`](../plan/phase-08-quality-release.md)
+**Active release context:** [`phase-08-release.md`](phase-08-release.md)
 **Last verified commit:** not recorded; current worktree contains the Phase 8 implementation
 **Android build status:** Full `quality` and `connectedQuality` gates pass with JDK 17; the latest physical run passed on Acer One 8 T4-82L/API 33 and the current debug APK was installed and visually checked in persistent light and dark modes
 
@@ -64,6 +64,7 @@
 
 ## Verification
 
+- 2026-10-04 monorepo layout verification — moved the complete Next.js/backend project under `website/`, updated CI/deployment/contract references, and kept Android under `android app/`. From the new locations, `npm run check` passed 22 files/134 tests plus contract validation, `npm run build` passed, and `gradlew spotlessMiscCheck :app:testDebugUnitTest :app:assembleDebug --no-parallel --max-workers=1` passed.
 - Android Studio, SDK Platform 36, Build Tools 36.0.0, platform tools, emulator, and API 36 Google APIs x86_64 images are installed; licenses are accepted.
 - `gradlew quality --no-parallel --max-workers=1` with pinned JDK 17 — passed after the live-test fix; 142 tasks, no lint or unit-test failures.
 - `gradlew :core:data:test :app:assembleDebug` — passed; the debug APK installs successfully.

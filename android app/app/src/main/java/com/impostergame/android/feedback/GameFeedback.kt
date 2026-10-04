@@ -129,7 +129,7 @@ private data class NoiseSpec(
     val lowPass: Double,
 )
 
-/** PCM port of src/client/audio/game-sounds.ts. */
+/** PCM port of website/src/client/audio/game-sounds.ts. */
 internal class WebsiteSoundPlayer(private val audioManager: AudioManager? = null) : Closeable {
     private val running = AtomicBoolean(true)
     private val executor = Executors.newSingleThreadExecutor { task ->

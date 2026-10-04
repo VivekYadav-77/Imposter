@@ -9,6 +9,9 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website
     env:
       DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/imposter_game_test
       TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/imposter_game_test
@@ -20,6 +23,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
+          cache-dependency-path: website/package-lock.json
       - name: Start PostgreSQL
         run: |
           sudo systemctl start postgresql

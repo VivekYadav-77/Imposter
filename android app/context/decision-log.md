@@ -298,6 +298,15 @@ Use IDs `ADR-A-###`. Status is `proposed`, `approved`, `superseded`, or `rejecte
 - **Prompt parity clarification:** Android revalidates account authority before Start/Join routing and when a terminal result becomes authoritative. Only an absent or authoritative `401` account session enables the Google/guest entry chooser or guest result upgrade; transport failure preserves the credential and does not misclassify the player as a guest. A guest result first shows the dismissible history prompt and, after dismissal, the persistent save-case card.
 - **Supersedes:** ADR-A-009 and the account/dashboard exclusions in ADR-A-018, ADR-A-024, ADR-A-025, ADR-A-026, and ADR-A-027.
 
+### ADR-A-036 — Repository project boundaries
+
+- **Status:** approved by explicit product-owner direction
+- **Date:** 2026-10-04
+- **Approver:** product owner
+- **Decision:** Keep the Next.js website, Node.js backend, contracts, migrations, tests, and deployment documentation together under the repository-level `website/` directory. Keep the native Gradle project under `android app/`. Reserve the repository root for shared Git/GitHub configuration and a project index README.
+- **Reason:** Explicit project boundaries make the repository easier to navigate without changing either application's internal relative paths or runtime behavior.
+- **Consequences:** Website npm commands run from `website/`; Android Gradle commands run from `android app/`; CI and deployment working directories must preserve those boundaries; Android contract references resolve through `../website/`.
+
 ## Adding a decision
 
 Copy this structure:

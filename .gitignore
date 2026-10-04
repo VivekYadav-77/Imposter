@@ -1,38 +1,38 @@
-# Dependencies and package-manager state
-/node_modules/
-/.npm/
-/.yarn/cache/
-/.yarn/install-state.gz
-/.pnp.*
+# Website dependencies and package-manager state
+/website/node_modules/
+/website/.npm/
+/website/.yarn/cache/
+/website/.yarn/install-state.gz
+/website/.pnp.*
 
-# Framework, compiler, and bundler output
-/.next/
-/out/
-/dist/
-/build/
-/.turbo/
-/.swc/
-/.cache/
+# Website framework, compiler, and bundler output
+/website/.next/
+/website/out/
+/website/dist/
+/website/build/
+/website/.turbo/
+/website/.swc/
+/website/.cache/
 *.tsbuildinfo
 .eslintcache
 .stylelintcache
 
-# Test and coverage output
-/coverage/
-/.nyc_output/
-/.vitest/
-/.playwright-results/
-/playwright-report/
-/test-results/
-/blob-report/
-/junit.xml
+# Website test and coverage output
+/website/coverage/
+/website/.nyc_output/
+/website/.vitest/
+/website/.playwright-results/
+/website/playwright-report/
+/website/test-results/
+/website/blob-report/
+/website/junit.xml
 
 # Hosting and deployment-tool state
-/.vercel/
-/.netlify/
-/.serverless/
-/.sst/
-/.wrangler/
+/website/.vercel/
+/website/.netlify/
+/website/.serverless/
+/website/.sst/
+/website/.wrangler/
 
 # Local environment and secrets
 .env
@@ -43,20 +43,20 @@
 *.p12
 *.pfx
 
-# Runtime data and temporary databases
-/.data/
-/.tmp-*/
-/pgdata/
-/postgres-data/
-/backups/
-/logs/
-/tmp/
-/temp/
+# Website runtime data and temporary databases
+/website/.data/
+/website/.tmp-*/
+/website/pgdata/
+/website/postgres-data/
+/website/backups/
+/website/logs/
+/website/tmp/
+/website/temp/
 *.pid
 *.pid.lock
 
-# Generated contracts
-/openapi/.generated-openapi.json
+# Generated website contracts
+/website/openapi/.generated-openapi.json
 
 # Logs, crash reports, and package archives
 *.log

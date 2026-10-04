@@ -7,7 +7,7 @@ This runbook deploys Version 1 as a single-server application on an Ubuntu 24.04
 - Nginx as the public TLS and WebSocket reverse proxy;
 - evidence images in a private EBS-backed directory.
 
-The project does **not** use Prisma. Database tables are created and upgraded by the 12 ordered `node-pg-migrate` migrations in `migrations/`.
+The project does **not** use Prisma. Database tables are created and upgraded by the 17 ordered `node-pg-migrate` migrations in `migrations/`.
 
 Replace every value shown as `REPLACE_...` and every example domain before starting production.
 
@@ -135,7 +135,7 @@ Clone the repository using a read-only deployment credential:
 
 ```bash
 sudo -u imposter git clone --branch main REPLACE_REPOSITORY_URL /opt/imposter-game/current
-cd /opt/imposter-game/current
+cd /opt/imposter-game/current/website
 git rev-parse HEAD
 ```
 
@@ -251,7 +251,7 @@ Open a shell as the application user, load the production environment, and insta
 
 ```bash
 sudo -u imposter -H bash
-cd /opt/imposter-game/current
+cd /opt/imposter-game/current/website
 set -a
 . /etc/imposter-game/imposter-game.env
 set +a
@@ -267,7 +267,7 @@ exit
 Confirm migration state:
 
 ```bash
-sudo -u imposter -H bash -c 'cd /opt/imposter-game/current && set -a && . /etc/imposter-game/imposter-game.env && set +a && npm run migrate:up'
+sudo -u imposter -H bash -c 'cd /opt/imposter-game/current/website && set -a && . /etc/imposter-game/imposter-game.env && set +a && npm run migrate:up'
 ```
 
 The second run should report that there are no pending migrations.
@@ -278,7 +278,7 @@ Run this exactly once:
 
 ```bash
 sudo -u imposter -H bash
-cd /opt/imposter-game/current
+cd /opt/imposter-game/current/website
 set -a
 . /etc/imposter-game/imposter-game.env
 set +a
@@ -311,7 +311,7 @@ Requires=postgresql.service
 Type=simple
 User=imposter
 Group=imposter
-WorkingDirectory=/opt/imposter-game/current
+WorkingDirectory=/opt/imposter-game/current/website
 Environment=NODE_ENV=production
 EnvironmentFile=/etc/imposter-game/imposter-game.env
 ExecStart=/usr/bin/node dist/server/index.js
@@ -463,7 +463,7 @@ Replace `REPLACE_COMMIT_OR_TAG` with the reviewed release:
 ```bash
 sudo -u postgres pg_dump --format=custom imposter_game | sudo tee /var/backups/imposter-game/pre-deploy.dump >/dev/null
 sudo -u imposter -H bash
-cd /opt/imposter-game/current
+cd /opt/imposter-game/current/website
 git fetch --tags origin
 git checkout REPLACE_COMMIT_OR_TAG
 set -a
@@ -486,7 +486,7 @@ Application rollback:
 
 ```bash
 sudo -u imposter -H bash
-cd /opt/imposter-game/current
+cd /opt/imposter-game/current/website
 git checkout REPLACE_PREVIOUS_COMMIT_OR_TAG
 set -a
 . /etc/imposter-game/imposter-game.env

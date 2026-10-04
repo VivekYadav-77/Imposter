@@ -1,6 +1,6 @@
 # Android API and realtime contract map
 
-This is a navigation aid, not a replacement for `../../openapi/openapi.json` or `../../contracts/realtime-v1.schema.json`. Verify exact paths, bodies, status codes, and schemas before implementation.
+This is a navigation aid, not a replacement for `../../website/openapi/openapi.json` or `../../website/contracts/realtime-v1.schema.json`. Verify exact paths, bodies, status codes, and schemas before implementation.
 
 ## Entry/session
 
