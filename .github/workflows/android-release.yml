@@ -32,6 +32,8 @@ jobs:
       ANDROID_VERSION_CODE: ${{ inputs.version_code }}
       ANDROID_VERSION_NAME: ${{ inputs.version_name }}
       PRODUCTION_API_BASE_URL: ${{ inputs.production_api_base_url }}
+      ANDROID_ACCOUNT_FEATURE_ENABLED: "true"
+      GOOGLE_WEB_CLIENT_ID: 120811442981-ki3m1am77h0m9dujmqsiv71l2vrgf43p.apps.googleusercontent.com
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
       ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}

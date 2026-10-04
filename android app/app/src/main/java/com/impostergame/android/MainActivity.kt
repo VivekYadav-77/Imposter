@@ -215,8 +215,8 @@ class MainActivity : ComponentActivity() {
                 onShareDiagnostics = ::shareSupportDiagnostics,
                 preferences = preferences,
                 onThemeModeChanged = appPreferences::setThemeMode,
-                onSoundChanged = appPreferences::setSoundEnabled,
-                onHapticsChanged = appPreferences::setHapticsEnabled,
+                onSoundChanged = ::setSoundEnabled,
+                onHapticsChanged = ::setHapticsEnabled,
                 onReduceMotionChanged = appPreferences::setReduceMotion,
                 onHighContrastChanged = appPreferences::setHighContrast,
                 onResolvedDarkTheme = ::updateSystemBars,
@@ -235,6 +235,16 @@ class MainActivity : ComponentActivity() {
 
     private fun handleFeedback(event: GameFeedbackEvent) {
         feedbackController.emit(event, appPreferences.state.value, window.decorView)
+    }
+
+    private fun setSoundEnabled(enabled: Boolean) {
+        appPreferences.setSoundEnabled(enabled)
+        feedbackController.previewSound()
+    }
+
+    private fun setHapticsEnabled(enabled: Boolean) {
+        appPreferences.setHapticsEnabled(enabled)
+        feedbackController.previewHaptic(window.decorView)
     }
 
     override fun onResume() {

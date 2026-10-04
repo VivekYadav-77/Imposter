@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -20,12 +20,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.impostergame.designsystem.R
 import com.impostergame.designsystem.theme.GameShapes
@@ -54,12 +59,14 @@ fun TaskCard(
     uploadState: UploadState = UploadState.Idle,
     taskNumber: Int? = null,
     statusLabel: String? = null,
+    onTitleClick: (() -> Unit)? = null,
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null,
     proofContentDescription: String? = null,
     onProofClick: (() -> Unit)? = null,
     proofContent: (@Composable () -> Unit)? = null,
 ) {
+    var titleOverflow by remember(title) { mutableStateOf(false) }
     val working =
         uploadState in
             setOf(
@@ -85,7 +92,7 @@ fun TaskCard(
                 },
             ),
     ) {
-        Row(modifier = Modifier.fillMaxWidth().height(WebsiteLayout.taskCardMinHeight)) {
+        Row(modifier = Modifier.fillMaxWidth().heightIn(min = WebsiteLayout.taskCardMinHeight)) {
             Box(
                 Modifier.width(4.dp)
                     .fillMaxHeight()
@@ -118,13 +125,33 @@ fun TaskCard(
             ) {
                 Text(
                     title,
+                    modifier =
+                        Modifier.clickable(
+                            enabled = titleOverflow && onTitleClick != null,
+                            onClick = { onTitleClick?.invoke() },
+                        ),
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.ExtraBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    onTextLayout = { titleOverflow = it.hasVisualOverflow },
                 )
+                if (titleOverflow && onTitleClick != null) {
+                    Text(
+                        "Read full task…",
+                        modifier = Modifier.clickable(onClick = onTitleClick),
+                        color = MaterialTheme.gameColors.tasks,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                    )
+                }
                 Text(
                     description,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 statusLabel?.let {
                     val statusColor =

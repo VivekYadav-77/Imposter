@@ -43,22 +43,27 @@ class AppPreferencesStore(context: Context) {
     }
 
     fun setThemeMode(value: ThemeMode) {
+        mutableState.value = mutableState.value.copy(themeMode = value)
         preferences.edit { putString(KEY_THEME_MODE, value.storedValue) }
     }
 
     fun setSoundEnabled(value: Boolean) {
+        mutableState.value = mutableState.value.copy(soundEnabled = value)
         preferences.edit { putBoolean(KEY_SOUND_ENABLED, value) }
     }
 
     fun setHapticsEnabled(value: Boolean) {
+        mutableState.value = mutableState.value.copy(hapticsEnabled = value)
         preferences.edit { putBoolean(KEY_HAPTICS_ENABLED, value) }
     }
 
     fun setReduceMotion(value: Boolean) {
+        mutableState.value = mutableState.value.copy(reduceMotion = value)
         preferences.edit { putBoolean(KEY_REDUCE_MOTION, value) }
     }
 
     fun setHighContrast(value: Boolean) {
+        mutableState.value = mutableState.value.copy(highContrast = value)
         preferences.edit { putBoolean(KEY_HIGH_CONTRAST, value) }
     }
 

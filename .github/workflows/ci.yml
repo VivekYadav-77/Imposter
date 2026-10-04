@@ -43,6 +43,8 @@ jobs:
       ANDROID_VERSION_CODE: "1"
       ANDROID_VERSION_NAME: "0.1.0"
       PRODUCTION_API_BASE_URL: https://release-ci.invalid
+      ANDROID_ACCOUNT_FEATURE_ENABLED: "true"
+      GOOGLE_WEB_CLIENT_ID: 000000000000-ci.apps.googleusercontent.com
       ANDROID_KEYSTORE_PASSWORD: ci-only-password
       ANDROID_KEY_ALIAS: ci-release
       ANDROID_KEY_PASSWORD: ci-only-password

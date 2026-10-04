@@ -6,10 +6,13 @@ import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import com.impostergame.designsystem.avatar.PlayerAvatar
 import com.impostergame.designsystem.component.GameButton
+import com.impostergame.designsystem.component.TaskCard
 import com.impostergame.designsystem.theme.ImposterGameTheme
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -40,5 +43,27 @@ class AccessibilityTest {
             .onNodeWithContentDescription("Morgan, Wolf, Selected")
             .assertIsSelected()
             .assertIsDisplayed()
+    }
+
+    @Test
+    fun longTaskKeepsMetadataVisibleAndOpensFullTextAction() {
+        var opened = false
+        composeRule.setContent {
+            ImposterGameTheme {
+                TaskCard(
+                    title =
+                        "Find the nearest marked entrance, document every visible checkpoint, " +
+                            "and take a selfie beside the final location without leaving the room",
+                    description = "Hard task",
+                    statusLabel = "To do",
+                    onTitleClick = { opened = true },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Hard task").assertIsDisplayed()
+        composeRule.onNodeWithText("TO DO").assertIsDisplayed()
+        composeRule.onNodeWithText("Read full task…").assertIsDisplayed().performClick()
+        composeRule.runOnIdle { assertTrue(opened) }
     }
 }

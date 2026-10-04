@@ -64,6 +64,26 @@ class GameFeedbackController(context: Context) : Closeable {
         foreground = value
     }
 
+    fun previewSound() {
+        if (!foreground || audioManager.ringerMode != AudioManager.RINGER_MODE_NORMAL) return
+        soundPlayer.play(GameFeedbackKind.Ui)
+    }
+
+    fun previewHaptic(view: View) {
+        if (!foreground) return
+        if (vibrator?.hasVibrator() == true) {
+            vibrator.vibrate(VibrationEffect.createOneShot(55L, VibrationEffect.DEFAULT_AMPLITUDE))
+        } else {
+            view.performHapticFeedback(
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    HapticFeedbackConstants.CONFIRM
+                } else {
+                    HapticFeedbackConstants.VIRTUAL_KEY
+                }
+            )
+        }
+    }
+
     fun emit(event: GameFeedbackEvent, preferences: AppPreferences, view: View) {
         if (!foreground) return
         if (!gate.shouldPlay(event)) return

@@ -1,6 +1,11 @@
 package com.impostergame.android.ui
 
+import android.Manifest
+import android.app.Activity
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
+import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -73,6 +78,7 @@ import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -87,6 +93,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.impostergame.android.gameplay.GameplayDestination
 import com.impostergame.android.gameplay.GameplayUiState
@@ -1581,6 +1590,43 @@ private fun TaskList(
     showKill: Boolean,
 ) {
     val sorted = snapshot.assignments
+    var expandedAssignmentId by rememberSaveable { mutableStateOf<String?>(null) }
+    sorted
+        .firstOrNull { it.id == expandedAssignmentId }
+        ?.let { assignment ->
+            WebsiteDialog(
+                title = "Full task",
+                onDismissRequest = { expandedAssignmentId = null },
+                showCloseButton = true,
+                content = {
+                    Column(
+                        Modifier.fillMaxWidth()
+                            .heightIn(max = 420.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Text(
+                            assignment.description,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                        )
+                        Text(
+                            "${assignment.difficulty.replaceFirstChar(Char::uppercase)} task · " +
+                                if (assignment.status == "completed") "Done" else "To do",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                },
+                actions = {
+                    GameButton(
+                        "Close",
+                        { expandedAssignmentId = null },
+                        Modifier.fillMaxWidth(),
+                    )
+                },
+            )
+        }
     Column(
         modifier =
             modifier
@@ -1663,6 +1709,7 @@ private fun TaskList(
                     description = "${assignment.difficulty.replaceFirstChar(Char::uppercase)} task",
                     taskNumber = index + 1,
                     statusLabel = if (assignment.status == "completed") "Done" else "To do",
+                    onTitleClick = { expandedAssignmentId = assignment.id },
                     uploadState =
                         when {
                             assignment.status == "completed" -> UploadState.Complete
@@ -2432,7 +2479,11 @@ private fun TaskEvidenceDialog(
     state: GameplayUiState,
     viewModel: GameplayViewModel,
 ) {
+    val context = LocalContext.current
+    val activity = context as? Activity
     var cameraUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var showCameraPermissionHelp by rememberSaveable { mutableStateOf(false) }
+    var cameraPermissionBlocked by rememberSaveable { mutableStateOf(false) }
     val camera =
         rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
             cameraUri?.let { uri ->
@@ -2441,10 +2492,77 @@ private fun TaskEvidenceDialog(
             }
             cameraUri = null
         }
+    fun launchCamera() {
+        viewModel.createCameraUri().also {
+            cameraUri = it
+            camera.launch(it)
+        }
+    }
+    val cameraPermission =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) {
+                showCameraPermissionHelp = false
+                cameraPermissionBlocked = false
+                launchCamera()
+            } else {
+                cameraPermissionBlocked =
+                    activity?.let {
+                        !ActivityCompat.shouldShowRequestPermissionRationale(
+                            it,
+                            Manifest.permission.CAMERA,
+                        )
+                    } ?: true
+                showCameraPermissionHelp = true
+            }
+        }
     val picker =
         rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
             uri?.let(viewModel::prepareEvidence)
         }
+    if (showCameraPermissionHelp) {
+        WebsiteDialog(
+            title = "Camera access needed",
+            onDismissRequest = { showCameraPermissionHelp = false },
+            content = {
+                Text(
+                    if (cameraPermissionBlocked) {
+                        "Camera access is turned off for Imposter Game. Open app settings and " +
+                            "allow Camera to take a task photo. You can still choose an existing " +
+                            "photo without this permission."
+                    } else {
+                        "Allow Camera to take a new task-evidence photo. Imposter Game only opens " +
+                            "the camera when you tap Take photo; you can still choose an existing " +
+                            "photo without allowing it."
+                    }
+                )
+            },
+            actions = {
+                GameOutlinedButton(
+                    "Not now",
+                    { showCameraPermissionHelp = false },
+                    Modifier.weight(1f),
+                )
+                GameButton(
+                    if (cameraPermissionBlocked) "Open settings" else "Ask again",
+                    {
+                        showCameraPermissionHelp = false
+                        if (cameraPermissionBlocked) {
+                            context.startActivity(
+                                Intent(
+                                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                        "package:${context.packageName}".toUri(),
+                                    )
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            )
+                        } else {
+                            cameraPermission.launch(Manifest.permission.CAMERA)
+                        }
+                    },
+                    Modifier.weight(1f),
+                )
+            },
+        )
+    }
     Dialog(
         onDismissRequest = viewModel::dismissTaskDetail,
         properties = DialogProperties(usePlatformDefaultWidth = false),
@@ -2501,9 +2619,15 @@ private fun TaskEvidenceDialog(
                                     title = "Take photo",
                                     subtitle = "Open your camera",
                                     onClick = {
-                                        viewModel.createCameraUri().also {
-                                            cameraUri = it
-                                            camera.launch(it)
+                                        if (
+                                            ContextCompat.checkSelfPermission(
+                                                context,
+                                                Manifest.permission.CAMERA,
+                                            ) == PackageManager.PERMISSION_GRANTED
+                                        ) {
+                                            launchCamera()
+                                        } else {
+                                            cameraPermission.launch(Manifest.permission.CAMERA)
                                         }
                                     },
                                 )
