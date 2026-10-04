@@ -12,6 +12,7 @@ import "./game-command-center.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.PUBLIC_APP_URL ?? "http://localhost:3000"),
+  applicationName: "Imposter Game",
   title: {
     default: "Imposter Game — Trust no one. Prove everything.",
     template: "%s · Imposter Game",
@@ -22,6 +23,10 @@ export const metadata: Metadata = {
     title: "Imposter Game",
     description: "Everyone’s watching. Someone’s lying.",
     type: "website",
+  },
+  icons: {
+    icon: [{ url: "/imposter-game-logo.svg", type: "image/svg+xml" }],
+    shortcut: "/imposter-game-logo.svg",
   },
   robots: { index: true, follow: true },
 };

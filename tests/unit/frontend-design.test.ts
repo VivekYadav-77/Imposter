@@ -346,14 +346,19 @@ describe("frontend design foundations", () => {
   });
 
   it("uses original vector identity and scene assets instead of emoji UI", async () => {
-    const [icons, scenes, home, room] = await Promise.all([
+    const [icons, logo, layout, scenes, home, room] = await Promise.all([
       readFile("src/client/components/icons.tsx", "utf8"),
+      readFile("public/imposter-game-logo.svg", "utf8"),
+      readFile("app/layout.tsx", "utf8"),
       readFile("src/client/components/signal-visuals.tsx", "utf8"),
       readFile("app/page.tsx", "utf8"),
       readFile("src/client/components/room-client.tsx", "utf8"),
     ]);
     expect(icons).toContain("export function BrandMark");
     expect(icons).toContain("export type IconName");
+    expect(logo).toContain('viewBox="0 0 40 40"');
+    expect(logo).toContain("M9.5 20s3.8-6 10.5-6");
+    expect(layout).toContain("/imposter-game-logo.svg");
     expect(scenes).toContain("SignalSceneArt");
     expect(home).toContain('<SignalSceneArt scene="meeting"');
     expect(room).not.toContain("🤷");
