@@ -85,6 +85,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.impostergame.android.account.AccountDestination
+import com.impostergame.android.account.AccountSessionStatus
 import com.impostergame.android.account.AccountViewModel
 import com.impostergame.android.account.PendingGuestEntry
 import com.impostergame.android.entry.ConsentKind
@@ -199,6 +200,8 @@ fun ImposterGameApp(
                 !state.resumeFailed
         ) {
             accountViewModel.bootstrap()
+        } else if (accountFeatureEnabled && state.destination == EntryDestination.RESULTS) {
+            accountViewModel.validatePresence()
         } else if (accountFeatureEnabled && state.destination != EntryDestination.BOOTSTRAP) {
             accountViewModel.restorePresence()
         }
@@ -238,6 +241,10 @@ fun ImposterGameApp(
                     onRoomReady = {
                         accountState.rejoinedRoom?.let(viewModel::enterAccountRoom)
                     },
+                    darkTheme = darkTheme,
+                    onToggleTheme = {
+                        onThemeModeChanged(if (darkTheme) ThemeMode.Light else ThemeMode.Dark)
+                    },
                 )
             } else
                 when (state.destination) {
@@ -248,12 +255,12 @@ fun ImposterGameApp(
                             state.resumeFailed,
                             state.loading,
                             if (accountFeatureEnabled) {
-                                { accountViewModel.showAuthChoice(PendingGuestEntry.JOIN) }
+                                { accountViewModel.requestPlay(PendingGuestEntry.JOIN) }
                             } else {
                                 viewModel::showJoin
                             },
                             if (accountFeatureEnabled) {
-                                { accountViewModel.showAuthChoice(PendingGuestEntry.CREATE) }
+                                { accountViewModel.requestPlay(PendingGuestEntry.CREATE) }
                             } else {
                                 viewModel::showCreate
                             },
@@ -317,9 +324,14 @@ fun ImposterGameApp(
                                 gameplayViewModel.clearForHome()
                                 viewModel.enterReplayedRoom(room)
                             },
-                            onReturnHome = viewModel::exitResults,
+                            onReturnHome = {
+                                viewModel.exitResults(accountViewModel::showDashboardAfterResults)
+                            },
                             accountFeatureEnabled = accountFeatureEnabled,
-                            accountSignedIn = accountState.accountCredentialPresent,
+                            showGuestUpgrade =
+                                accountState.sessionStatus == AccountSessionStatus.SIGNED_OUT,
+                            accountSigningIn = accountState.signingIn,
+                            accountMessage = accountState.message,
                             onSaveCase = { accountViewModel.continueWithGoogle("post_game") },
                             onToggleSound = { onSoundChanged(!preferences.soundEnabled) },
                             onToggleTheme = {
@@ -336,9 +348,14 @@ fun ImposterGameApp(
                                 gameplayViewModel.clearForHome()
                                 viewModel.enterReplayedRoom(room)
                             },
-                            onReturnHome = viewModel::exitResults,
+                            onReturnHome = {
+                                viewModel.exitResults(accountViewModel::showDashboardAfterResults)
+                            },
                             accountFeatureEnabled = accountFeatureEnabled,
-                            accountSignedIn = accountState.accountCredentialPresent,
+                            showGuestUpgrade =
+                                accountState.sessionStatus == AccountSessionStatus.SIGNED_OUT,
+                            accountSigningIn = accountState.signingIn,
+                            accountMessage = accountState.message,
                             onSaveCase = { accountViewModel.continueWithGoogle("post_game") },
                             onToggleSound = { onSoundChanged(!preferences.soundEnabled) },
                             onToggleTheme = {

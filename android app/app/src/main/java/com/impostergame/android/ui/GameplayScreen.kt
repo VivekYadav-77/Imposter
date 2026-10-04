@@ -111,6 +111,7 @@ import com.impostergame.designsystem.component.GameGlyph
 import com.impostergame.designsystem.component.GameGlyphKind
 import com.impostergame.designsystem.component.GameOutlinedButton
 import com.impostergame.designsystem.component.GameTopBar
+import com.impostergame.designsystem.component.GoogleSignInButton
 import com.impostergame.designsystem.component.PlayerCard
 import com.impostergame.designsystem.component.SignalBackground
 import com.impostergame.designsystem.component.SignalCard
@@ -137,7 +138,9 @@ fun GameplayScreen(
     onReplayRoom: (RoomSnapshot) -> Unit,
     onReturnHome: () -> Unit,
     accountFeatureEnabled: Boolean = false,
-    accountSignedIn: Boolean = false,
+    showGuestUpgrade: Boolean = false,
+    accountSigningIn: Boolean = false,
+    accountMessage: String? = null,
     onSaveCase: (() -> Unit)? = null,
     onToggleSound: (() -> Unit)? = null,
     onToggleTheme: (() -> Unit)? = null,
@@ -216,7 +219,9 @@ fun GameplayScreen(
                     onReplayRoom,
                     onReturnHome,
                     accountFeatureEnabled,
-                    accountSignedIn,
+                    showGuestUpgrade,
+                    accountSigningIn,
+                    accountMessage,
                     onSaveCase,
                     onToggleSound,
                     onToggleTheme,
@@ -782,7 +787,9 @@ private fun FinalResultScreen(
     onReplayRoom: (RoomSnapshot) -> Unit,
     onReturnHome: () -> Unit,
     accountFeatureEnabled: Boolean,
-    accountSignedIn: Boolean,
+    showGuestUpgrade: Boolean,
+    accountSigningIn: Boolean,
+    accountMessage: String?,
     onSaveCase: (() -> Unit)?,
     onToggleSound: (() -> Unit)?,
     onToggleTheme: (() -> Unit)?,
@@ -792,7 +799,47 @@ private fun FinalResultScreen(
     var resultSecretTaps by rememberSaveable(snapshot.id) { mutableIntStateOf(0) }
     var evidenceExpanded by rememberSaveable(snapshot.id) { mutableStateOf(false) }
     var votesExpanded by rememberSaveable(snapshot.id) { mutableStateOf(false) }
+    var upgradeDismissed by rememberSaveable(snapshot.id) { mutableStateOf(false) }
+    val guestUpgradeEligible = accountFeatureEnabled && showGuestUpgrade && onSaveCase != null
     state.selectedSubmissionId?.let { EvidencePreviewDialog(state, viewModel) }
+    if (guestUpgradeEligible && !upgradeDismissed) {
+        WebsiteDialog(
+            title = "Keep this case in your history?",
+            onDismissRequest = { upgradeDismissed = true },
+            showCloseButton = true,
+            content = {
+                Text(
+                    "Continue with Google to attach this completed game, your stats, and this room to your private dashboard.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                accountMessage?.let {
+                    Text(
+                        it,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Assertive },
+                    )
+                }
+                GoogleSignInButton(
+                    onClick = onSaveCase,
+                    modifier = Modifier.fillMaxWidth(),
+                    loading = accountSigningIn,
+                )
+                GameOutlinedButton(
+                    "Keep playing as guest",
+                    { upgradeDismissed = true },
+                    Modifier.fillMaxWidth(),
+                    enabled = !accountSigningIn,
+                )
+                Text(
+                    "You can still view results, replay, or leave without creating an account.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            },
+            actions = {},
+        )
+    }
     Column(Modifier.fillMaxSize().safeDrawingPadding()) {
         GameTopBar(
             phase = "Results",
@@ -1083,8 +1130,11 @@ private fun FinalResultScreen(
                             .height(1.dp)
                             .background(MaterialTheme.colorScheme.outlineVariant)
                     )
-                    if (accountFeatureEnabled && !accountSignedIn && onSaveCase != null) {
-                        SignalCard(Modifier.fillMaxWidth()) {
+                    if (guestUpgradeEligible && upgradeDismissed) {
+                        SignalCard(
+                            Modifier.fillMaxWidth(),
+                            accent = MaterialTheme.colorScheme.primary,
+                        ) {
                             Column(
                                 Modifier.padding(14.dp),
                                 verticalArrangement = Arrangement.spacedBy(9.dp),
@@ -1104,10 +1154,10 @@ private fun FinalResultScreen(
                                     "Continue with Google to attach this finished game and room to your private history.",
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
-                                GameButton(
-                                    "Continue with Google",
-                                    onSaveCase,
-                                    Modifier.fillMaxWidth(),
+                                GoogleSignInButton(
+                                    onClick = onSaveCase,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    loading = accountSigningIn,
                                 )
                             }
                         }

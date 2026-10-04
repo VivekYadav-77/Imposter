@@ -60,6 +60,7 @@
 - [x] Added server-authoritative same-room replay from results through `POST /api/v1/rooms/current/replay`; the returned room snapshot resets gameplay state and restores lobby polling/settings under ADR-A-027.
 - [x] Corrected the compact Imposter task dashboard against the frozen mobile website: the elimination ability now follows the assignment list, remains visible while recharging, uses the website danger card and cooldown treatment, opens the website-equivalent two-line target list with privacy/cooldown guidance, and submits from the target dialog without an extra Android-only confirmation screen. Entering Tasks now refreshes evidence so the bottom-rail count is current.
 - [x] Added Credential Manager Google sign-in, nonce-bound native backend challenges, independent account Keystore storage, account-first API/repository models, participant-first bootstrap presentation, dashboard/history/detail/settings/device management, bearer rejoin, and non-blocking guest result upgrade behind `ANDROID_ACCOUNT_FEATURE_ENABLED` under ADR-A-035.
+- [x] Matched the website account gates: Start/Join revalidates the stored account before routing, signed-out or authoritatively expired sessions see the Google/guest chooser, transport failures preserve and suppress false guest upgrades, and guest results show a dismissible history prompt followed by the persistent save-case card.
 
 ## Verification
 
@@ -116,12 +117,15 @@ Capture the corrected host lobby and Imposter task dashboard in both themes at 3
 - Added one-time nonce-bound Android Google challenges and ID-token completion while retaining the website OAuth/cookie contract.
 - Added account bearer support to `/api/v1/me/**`, signed-in room auto-claim, and bearer participant-token delivery for account rejoin.
 - Added Credential Manager, independent Keystore-backed account storage, participant-first bootstrap, dashboard/history/detail/profile/device/account screens, and guest result upgrade.
+- Added server-validated Start/Join gating plus the website-equivalent one-time result upgrade dialog and persistent save card, including Google-branded actions and explicit guest continuation.
 - Added ADR-A-035, OpenAPI/client maps, deployment inputs, rollout gates, and privacy-safe account incident guidance.
 
 ### Verified
 
 - `npm run format:check`, `npm run lint`, `npm run typecheck`, unit tests (22 files / 134 tests), OpenAPI drift/validation, and realtime fixture checks passed.
 - `gradlew quality --no-parallel --max-workers=1` passed 142 tasks after the account implementation.
+- `gradlew spotlessApply quality --no-parallel --max-workers=1` passed 145 tasks after the account-gate/result-upgrade correction; focused tests cover valid, expired, absent, and transport-unavailable account presence.
+- A feature-enabled localhost debug APK was installed on Acer One 8 T4-82L/API 33; tapping `Start a room` while signed out displayed `Choose how to play`, `Continue with Google`, and `Play as a guest` with no connection error.
 - Feature-enabled `assembleDebug` completed, and `validateStagingConfiguration` passed with a synthetic HTTPS origin and syntactically valid web client ID while storing a clean configuration cache entry.
 - The targeted database integration suite was discovered but skipped because `DATABASE_URL` is not configured in this shell; live Google, migration, device, and cross-client E2E remain unverified.
 

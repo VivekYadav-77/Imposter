@@ -43,6 +43,7 @@ class ApiClient(
         encodedPath: String,
         query: Map<String, String> = emptyMap(),
         deserializer: KSerializer<T>,
+        bearerToken: String? = credentialProvider(),
     ): ApiResult<T> {
         val url =
             baseUrl
@@ -52,7 +53,12 @@ class ApiClient(
                     query.forEach { (name, value) -> addQueryParameter(name, value) }
                 }
                 .build()
-        return execute(routeTemplate, Request.Builder().url(url).get(), deserializer)
+        return execute(
+            routeTemplate,
+            Request.Builder().url(url).get(),
+            deserializer,
+            bearerToken = bearerToken,
+        )
     }
 
     suspend fun <T : Any> getOptional(
@@ -60,6 +66,7 @@ class ApiClient(
         encodedPath: String,
         query: Map<String, String> = emptyMap(),
         deserializer: KSerializer<T>,
+        bearerToken: String? = credentialProvider(),
     ): ApiResult<T?> {
         val url =
             baseUrl
@@ -74,22 +81,29 @@ class ApiClient(
             Request.Builder().url(url).get(),
             deserializer.nullable,
             onNoContent = { null },
+            bearerToken = bearerToken,
         )
     }
 
-    suspend fun delete(routeTemplate: String, encodedPath: String): ApiResult<Unit> {
+    suspend fun delete(
+        routeTemplate: String,
+        encodedPath: String,
+        bearerToken: String? = credentialProvider(),
+    ): ApiResult<Unit> {
         val url = baseUrl.newBuilder().addEncodedPathSegments(encodedPath.trimStart('/')).build()
         return execute(
             routeTemplate,
             Request.Builder().url(url).delete(),
             Unit.serializer(),
             onNoContent = {},
+            bearerToken = bearerToken,
         )
     }
 
     suspend fun <T> command(
         command: CommandRequest,
         deserializer: KSerializer<T>,
+        bearerToken: String? = credentialProvider(),
     ): ApiResult<T> {
         val requestBody = command.body.toRequestBody(JSON_MEDIA_TYPE)
         val request =
@@ -103,7 +117,31 @@ class ApiClient(
                 .method(command.method.name, requestBody)
                 .header("Idempotency-Key", command.idempotencyKey)
                 .header("X-Session-Transport", "bearer")
-        return execute(command.routeTemplate, request, deserializer)
+        return execute(command.routeTemplate, request, deserializer, bearerToken = bearerToken)
+    }
+
+    suspend fun commandNoContent(
+        command: CommandRequest,
+        bearerToken: String? = credentialProvider(),
+    ): ApiResult<Unit> {
+        val request =
+            Request.Builder()
+                .url(
+                    baseUrl
+                        .newBuilder()
+                        .addEncodedPathSegments(command.encodedPath.trimStart('/'))
+                        .build()
+                )
+                .method(command.method.name, command.body.toRequestBody(JSON_MEDIA_TYPE))
+                .header("Idempotency-Key", command.idempotencyKey)
+                .header("X-Session-Transport", "bearer")
+        return execute(
+            command.routeTemplate,
+            request,
+            Unit.serializer(),
+            onNoContent = {},
+            bearerToken = bearerToken,
+        )
     }
 
     private suspend fun <T> execute(
@@ -111,6 +149,7 @@ class ApiClient(
         builder: Request.Builder,
         deserializer: KSerializer<T>,
         onNoContent: (() -> T)? = null,
+        bearerToken: String? = credentialProvider(),
     ): ApiResult<T> {
         val routeMetric =
             when (routeTemplate) {
@@ -124,7 +163,7 @@ class ApiClient(
             builder
                 .header("Accept", "application/json")
                 .header("X-Request-ID", requestId)
-                .apply { credentialProvider()?.let { header("Authorization", "Bearer $it") } }
+                .apply { bearerToken?.let { header("Authorization", "Bearer $it") } }
                 .build()
         val startedAt = System.nanoTime()
         val response =

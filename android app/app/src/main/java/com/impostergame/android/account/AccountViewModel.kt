@@ -31,13 +31,22 @@ enum class PendingGuestEntry {
     JOIN,
 }
 
+enum class AccountSessionStatus {
+    CHECKING,
+    AUTHENTICATED,
+    SIGNED_OUT,
+    UNAVAILABLE,
+}
+
 data class AccountUiState(
     val destination: AccountDestination = AccountDestination.NONE,
     val pendingGuestEntry: PendingGuestEntry = PendingGuestEntry.CREATE,
+    val pendingPlayRequest: Boolean = false,
     val loading: Boolean = false,
     val signingIn: Boolean = false,
     val message: String? = null,
     val accountCredentialPresent: Boolean = false,
+    val sessionStatus: AccountSessionStatus = AccountSessionStatus.CHECKING,
     val profile: UserProfile? = null,
     val dashboard: DashboardData? = null,
     val history: List<UserGameSummary> = emptyList(),
@@ -71,7 +80,9 @@ class AccountViewModel(
             when (gateway.restore()) {
                 is StoredAccountSession.Available -> loadDashboard(open = true)
                 StoredAccountSession.None,
-                is StoredAccountSession.Unavailable -> Unit
+                is StoredAccountSession.Unavailable ->
+                    mutableState.value =
+                        mutableState.value.copy(sessionStatus = AccountSessionStatus.SIGNED_OUT)
             }
         }
     }
@@ -80,10 +91,41 @@ class AccountViewModel(
     fun restorePresence() {
         if (!enabled || presenceRestoreStarted) return
         presenceRestoreStarted = true
-        viewModelScope.launch {
-            if (gateway.restore() is StoredAccountSession.Available) {
-                mutableState.value = mutableState.value.copy(accountCredentialPresent = true)
+        validatePresence()
+    }
+
+    /** Revalidates the account when a result becomes authoritative, matching the website gate. */
+    fun validatePresence() {
+        if (!enabled) return
+        viewModelScope.launch { validateStoredPresence() }
+    }
+
+    private suspend fun validateStoredPresence() {
+        when (gateway.restore()) {
+            is StoredAccountSession.Available -> {
+                mutableState.value =
+                    mutableState.value.copy(
+                        accountCredentialPresent = true,
+                        sessionStatus = AccountSessionStatus.CHECKING,
+                    )
+                when (val profile = gateway.me()) {
+                    is ApiResult.Success ->
+                        mutableState.value =
+                            mutableState.value.copy(
+                                accountCredentialPresent = true,
+                                sessionStatus = AccountSessionStatus.AUTHENTICATED,
+                                profile = profile.value,
+                            )
+                    is ApiResult.Failure -> fail(profile.error)
+                }
             }
+            StoredAccountSession.None,
+            is StoredAccountSession.Unavailable ->
+                mutableState.value =
+                    mutableState.value.copy(
+                        accountCredentialPresent = false,
+                        sessionStatus = AccountSessionStatus.SIGNED_OUT,
+                    )
         }
     }
 
@@ -93,8 +135,20 @@ class AccountViewModel(
             mutableState.value.copy(
                 destination = AccountDestination.AUTH_CHOICE,
                 pendingGuestEntry = entry,
+                pendingPlayRequest = false,
                 message = null,
             )
+    }
+
+    fun requestPlay(entry: PendingGuestEntry) {
+        if (!enabled) return
+        if (mutableState.value.sessionStatus == AccountSessionStatus.SIGNED_OUT) {
+            showAuthChoice(entry)
+            return
+        }
+        mutableState.value =
+            mutableState.value.copy(pendingGuestEntry = entry, pendingPlayRequest = true)
+        viewModelScope.launch { loadDashboard(open = true) }
     }
 
     fun dismiss() {
@@ -104,6 +158,12 @@ class AccountViewModel(
 
     fun showDashboard() {
         viewModelScope.launch { loadDashboard(open = true) }
+    }
+
+    /** Opens the account landing page after participant cleanup, but never signs a guest in. */
+    fun showDashboardAfterResults() {
+        if (!enabled || !mutableState.value.accountCredentialPresent) return
+        showDashboard()
     }
 
     fun showHistory() {
@@ -195,6 +255,7 @@ class AccountViewModel(
                         mutableState.value =
                             mutableState.value.copy(
                                 accountCredentialPresent = true,
+                                sessionStatus = AccountSessionStatus.AUTHENTICATED,
                                 profile = completion.value,
                                 signingIn = false,
                                 message =
@@ -259,7 +320,11 @@ class AccountViewModel(
             mutableState.value = mutableState.value.copy(loading = true, message = null)
             gateway.signOut()
             clearGoogleState()
-            mutableState.value = AccountUiState(message = "Signed out.")
+            mutableState.value =
+                AccountUiState(
+                    message = "Signed out.",
+                    sessionStatus = AccountSessionStatus.SIGNED_OUT,
+                )
         }
     }
 
@@ -294,7 +359,10 @@ class AccountViewModel(
                                         is ApiResult.Success -> {
                                             clearGoogleState()
                                             mutableState.value =
-                                                AccountUiState(message = "Account deleted.")
+                                                AccountUiState(
+                                                    message = "Account deleted.",
+                                                    sessionStatus = AccountSessionStatus.SIGNED_OUT,
+                                                )
                                         }
                                     }
                             }
@@ -325,8 +393,10 @@ class AccountViewModel(
                     mutableState.value.copy(
                         profile = userProfile,
                         accountCredentialPresent = true,
+                        sessionStatus = AccountSessionStatus.AUTHENTICATED,
                         dashboard = result.value,
                         loading = false,
+                        pendingPlayRequest = false,
                     )
             is ApiResult.Failure -> fail(result.error)
         }
@@ -365,14 +435,28 @@ class AccountViewModel(
 
     private fun fail(failure: ApiFailure) {
         if (failure is ApiFailure.Http && failure.status == 401) {
+            val expired = mutableState.value
             mutableState.value =
-                AccountUiState(message = "Your player session has ended. Sign in again.")
+                AccountUiState(
+                    destination =
+                        if (expired.pendingPlayRequest) AccountDestination.AUTH_CHOICE
+                        else AccountDestination.NONE,
+                    pendingGuestEntry = expired.pendingGuestEntry,
+                    message = "Your account session has ended. Sign in again.",
+                    sessionStatus = AccountSessionStatus.SIGNED_OUT,
+                )
             return
         }
         mutableState.value =
             mutableState.value.copy(
                 loading = false,
                 signingIn = false,
+                sessionStatus =
+                    if (mutableState.value.accountCredentialPresent) {
+                        AccountSessionStatus.UNAVAILABLE
+                    } else {
+                        AccountSessionStatus.SIGNED_OUT
+                    },
                 message =
                     when (failure) {
                         is ApiFailure.Http -> failure.safeMessage.ifBlank { "The request failed." }

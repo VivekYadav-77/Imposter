@@ -56,6 +56,7 @@ enum class WebsiteIconKind {
     Check,
     Chevron,
     Clock,
+    Close,
     Eye,
     Ghost,
     Lock,
@@ -204,6 +205,7 @@ fun WebsiteDialog(
     title: String,
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
+    showCloseButton: Boolean = false,
     content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
     actions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit,
 ) {
@@ -223,11 +225,26 @@ fun WebsiteDialog(
                 Modifier.fillMaxWidth().padding(18.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                Text(
-                    title,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Black,
-                )
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        title,
+                        Modifier.weight(1f),
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Black,
+                    )
+                    if (showCloseButton) {
+                        GameIconButton(
+                            onClick = onDismissRequest,
+                            contentDescription = "Close",
+                        ) {
+                            WebsiteIcon(WebsiteIconKind.Close, size = 20.dp)
+                        }
+                    }
+                }
                 content()
                 Row(
                     Modifier.fillMaxWidth(),
@@ -267,6 +284,7 @@ fun WebsiteIcon(
                     drawCircle(tint, 8f, Offset(12f, 13f), style = stroke)
                     path("M9 3h6M12 9v4l3 2")
                 }
+                WebsiteIconKind.Close -> path("m7 7 10 10M17 7 7 17")
                 WebsiteIconKind.Eye -> {
                     path("M2.8 12s3.3-5.2 9.2-5.2S21.2 12 21.2 12s-3.3 5.2-9.2 5.2S2.8 12 2.8 12Z")
                     drawCircle(tint, 2.35f, Offset(12f, 12f), style = stroke)

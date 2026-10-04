@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -28,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -44,9 +46,13 @@ import com.impostergame.designsystem.component.BrandHeader
 import com.impostergame.designsystem.component.GameButton
 import com.impostergame.designsystem.component.GameButtonStyle
 import com.impostergame.designsystem.component.GameOutlinedButton
+import com.impostergame.designsystem.component.GoogleSignInButton
 import com.impostergame.designsystem.component.SignalBackground
 import com.impostergame.designsystem.component.WebsiteDialog
+import com.impostergame.designsystem.component.WebsiteIcon
+import com.impostergame.designsystem.component.WebsiteIconKind
 import com.impostergame.designsystem.component.WebsiteLoadingPanel
+import com.impostergame.designsystem.theme.WebsiteLayout
 import com.impostergame.designsystem.theme.GameShapes
 
 @Composable
@@ -55,6 +61,8 @@ fun AccountSurface(
     viewModel: AccountViewModel,
     onGuestEntry: (PendingGuestEntry) -> Unit,
     onRoomReady: () -> Unit,
+    darkTheme: Boolean,
+    onToggleTheme: () -> Unit,
 ) {
     LaunchedEffect(state.rejoinedRoom) {
         if (state.rejoinedRoom != null) {
@@ -76,13 +84,15 @@ fun AccountSurface(
                 },
             )
         AccountDestination.DASHBOARD ->
-            DashboardScreen(state, viewModel) {
+            DashboardScreen(state, viewModel, darkTheme, onToggleTheme) {
                 viewModel.dismiss()
                 onGuestEntry(PendingGuestEntry.CREATE)
             }
-        AccountDestination.HISTORY -> HistoryScreen(state, viewModel)
-        AccountDestination.GAME_DETAIL -> GameDetailScreen(state, viewModel)
-        AccountDestination.SETTINGS -> AccountSettingsScreen(state, viewModel)
+        AccountDestination.HISTORY -> HistoryScreen(state, viewModel, darkTheme, onToggleTheme)
+        AccountDestination.GAME_DETAIL ->
+            GameDetailScreen(state, viewModel, darkTheme, onToggleTheme)
+        AccountDestination.SETTINGS ->
+            AccountSettingsScreen(state, viewModel, darkTheme, onToggleTheme)
     }
 }
 
@@ -96,16 +106,16 @@ private fun AuthChoice(
     WebsiteDialog(
         title = "Choose how to play",
         onDismissRequest = onDismiss,
+        showCloseButton = true,
         content = {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text(
                     "Jump in as a guest, or use Google to keep game results and rooms in your dashboard."
                 )
                 state.message?.let { AccountMessage(it) }
-                GameButton(
-                    "Continue with Google",
-                    onGoogle,
-                    Modifier.fillMaxWidth(),
+                GoogleSignInButton(
+                    onClick = onGoogle,
+                    modifier = Modifier.fillMaxWidth(),
                     loading = state.signingIn,
                 )
                 GameOutlinedButton(
@@ -129,15 +139,32 @@ private fun AuthChoice(
 private fun DashboardFrame(
     selected: AccountDestination,
     viewModel: AccountViewModel,
+    darkTheme: Boolean,
+    onToggleTheme: () -> Unit,
     content: @Composable () -> Unit,
 ) {
     SignalBackground {
-        Column(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().safeDrawingPadding()) {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 BrandHeader(Modifier.weight(1f))
+                androidx.compose.material3.IconButton(
+                    onClick = onToggleTheme,
+                    modifier =
+                        Modifier.size(WebsiteLayout.themeControl).semantics {
+                            contentDescription =
+                                if (darkTheme) "Switch to light theme"
+                                else "Switch to dark theme"
+                        },
+                ) {
+                    WebsiteIcon(
+                        if (darkTheme) WebsiteIconKind.Sun else WebsiteIconKind.Moon,
+                        size = 20.dp,
+                    )
+                }
                 GameOutlinedButton("Home", viewModel::dismiss)
             }
             Box(Modifier.weight(1f)) { content() }
@@ -200,9 +227,11 @@ private fun DashboardNavButton(
 private fun DashboardScreen(
     state: AccountUiState,
     viewModel: AccountViewModel,
+    darkTheme: Boolean,
+    onToggleTheme: () -> Unit,
     onStartOrJoin: () -> Unit,
 ) {
-    DashboardFrame(AccountDestination.DASHBOARD, viewModel) {
+    DashboardFrame(AccountDestination.DASHBOARD, viewModel, darkTheme, onToggleTheme) {
         if (state.loading && state.dashboard == null) {
             WebsiteLoadingPanel("Loading your case files")
         } else {
@@ -277,8 +306,13 @@ private fun DashboardScreen(
 }
 
 @Composable
-private fun HistoryScreen(state: AccountUiState, viewModel: AccountViewModel) {
-    DashboardFrame(AccountDestination.HISTORY, viewModel) {
+private fun HistoryScreen(
+    state: AccountUiState,
+    viewModel: AccountViewModel,
+    darkTheme: Boolean,
+    onToggleTheme: () -> Unit,
+) {
+    DashboardFrame(AccountDestination.HISTORY, viewModel, darkTheme, onToggleTheme) {
         LazyColumn(
             Modifier.fillMaxSize().padding(horizontal = 18.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -322,8 +356,13 @@ private fun HistoryScreen(state: AccountUiState, viewModel: AccountViewModel) {
 }
 
 @Composable
-private fun GameDetailScreen(state: AccountUiState, viewModel: AccountViewModel) {
-    DashboardFrame(AccountDestination.GAME_DETAIL, viewModel) {
+private fun GameDetailScreen(
+    state: AccountUiState,
+    viewModel: AccountViewModel,
+    darkTheme: Boolean,
+    onToggleTheme: () -> Unit,
+) {
+    DashboardFrame(AccountDestination.GAME_DETAIL, viewModel, darkTheme, onToggleTheme) {
         val game = state.game
         if (state.loading) {
             WebsiteLoadingPanel("Loading game result")
@@ -407,10 +446,15 @@ private enum class SettingsTab {
 }
 
 @Composable
-private fun AccountSettingsScreen(state: AccountUiState, viewModel: AccountViewModel) {
+private fun AccountSettingsScreen(
+    state: AccountUiState,
+    viewModel: AccountViewModel,
+    darkTheme: Boolean,
+    onToggleTheme: () -> Unit,
+) {
     var tab by remember { mutableStateOf(SettingsTab.PROFILE) }
     var deleteConfirm by remember { mutableStateOf(false) }
-    DashboardFrame(AccountDestination.SETTINGS, viewModel) {
+    DashboardFrame(AccountDestination.SETTINGS, viewModel, darkTheme, onToggleTheme) {
         LazyColumn(
             Modifier.fillMaxSize().padding(horizontal = 18.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),

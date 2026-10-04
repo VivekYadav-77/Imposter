@@ -84,11 +84,15 @@ class AccountViewModelTest {
         advanceUntilIdle()
 
         assertEquals(AccountDestination.NONE, viewModel.state.value.destination)
-        assertEquals("Your player session has ended. Sign in again.", viewModel.state.value.message)
+        assertEquals(
+            "Your account session has ended. Sign in again.",
+            viewModel.state.value.message,
+        )
+        assertEquals(AccountSessionStatus.SIGNED_OUT, viewModel.state.value.sessionStatus)
     }
 
     @Test
-    fun activeParticipantPathRestoresOnlyLocalAccountPresence() = runTest {
+    fun activeParticipantPathValidatesAccountWithoutOpeningDashboard() = runTest {
         val gateway = FakeAccountGateway()
         val viewModel =
             AccountViewModel(
@@ -104,8 +108,130 @@ class AccountViewModelTest {
 
         assertEquals(AccountDestination.NONE, viewModel.state.value.destination)
         assertEquals(true, viewModel.state.value.accountCredentialPresent)
-        assertEquals(0, gateway.meCalls)
+        assertEquals(AccountSessionStatus.AUTHENTICATED, viewModel.state.value.sessionStatus)
+        assertEquals(1, gateway.meCalls)
         assertEquals(0, gateway.dashboardCalls)
+    }
+
+    @Test
+    fun signedInResultExitOpensDashboard() = runTest {
+        val gateway = FakeAccountGateway()
+        val viewModel =
+            AccountViewModel(
+                gateway,
+                googleCredential = { GoogleCredentialResult.Cancelled },
+                clearGoogleState = {},
+                enabled = true,
+                autoBootstrap = false,
+            )
+        viewModel.restorePresence()
+        advanceUntilIdle()
+
+        viewModel.showDashboardAfterResults()
+        advanceUntilIdle()
+
+        assertEquals(AccountDestination.DASHBOARD, viewModel.state.value.destination)
+        assertEquals(1, gateway.dashboardCalls)
+    }
+
+    @Test
+    fun guestResultExitDoesNotOpenDashboard() = runTest {
+        val gateway = FakeAccountGateway(restore = StoredAccountSession.None)
+        val viewModel =
+            AccountViewModel(
+                gateway,
+                googleCredential = { GoogleCredentialResult.Cancelled },
+                clearGoogleState = {},
+                enabled = true,
+                autoBootstrap = false,
+            )
+
+        viewModel.showDashboardAfterResults()
+        advanceUntilIdle()
+
+        assertEquals(AccountDestination.NONE, viewModel.state.value.destination)
+        assertEquals(0, gateway.dashboardCalls)
+    }
+
+    @Test
+    fun participantPathPreservesCredentialAndSuppressesGuestPromptOnTransportFailure() = runTest {
+        val gateway =
+            FakeAccountGateway(
+                meResult = ApiResult.Failure(ApiFailure.Transport(IllegalStateException("offline")))
+            )
+        val viewModel =
+            AccountViewModel(
+                gateway,
+                googleCredential = { GoogleCredentialResult.Cancelled },
+                clearGoogleState = {},
+                enabled = true,
+                autoBootstrap = false,
+            )
+
+        viewModel.restorePresence()
+        advanceUntilIdle()
+
+        assertEquals(true, viewModel.state.value.accountCredentialPresent)
+        assertEquals(AccountSessionStatus.UNAVAILABLE, viewModel.state.value.sessionStatus)
+        assertEquals(1, gateway.meCalls)
+    }
+
+    @Test
+    fun resultValidationMarksAnExpiredAccountSignedOut() = runTest {
+        val gateway = FakeAccountGateway()
+        val viewModel =
+            AccountViewModel(
+                gateway,
+                googleCredential = { GoogleCredentialResult.Cancelled },
+                clearGoogleState = {},
+                enabled = true,
+                autoBootstrap = false,
+            )
+        viewModel.restorePresence()
+        advanceUntilIdle()
+        gateway.meResult =
+            ApiResult.Failure(
+                ApiFailure.Http(401, "USER_SESSION_INVALID", "Sign in.", null, null, null)
+            )
+
+        viewModel.validatePresence()
+        advanceUntilIdle()
+
+        assertEquals(AccountSessionStatus.SIGNED_OUT, viewModel.state.value.sessionStatus)
+        assertEquals(false, viewModel.state.value.accountCredentialPresent)
+    }
+
+    @Test
+    fun startRoomWithNewlyExpiredAccountOpensGoogleOrGuestChoice() = runTest {
+        val gateway =
+            FakeAccountGateway(
+                meResult =
+                    ApiResult.Failure(
+                        ApiFailure.Http(
+                            401,
+                            "USER_SESSION_INVALID",
+                            "Sign in.",
+                            null,
+                            null,
+                            null,
+                        )
+                    )
+            )
+        val viewModel =
+            AccountViewModel(
+                gateway,
+                googleCredential = { GoogleCredentialResult.Cancelled },
+                clearGoogleState = {},
+                enabled = true,
+                autoBootstrap = false,
+            )
+
+        viewModel.requestPlay(PendingGuestEntry.CREATE)
+        advanceUntilIdle()
+
+        assertEquals(AccountDestination.AUTH_CHOICE, viewModel.state.value.destination)
+        assertEquals(PendingGuestEntry.CREATE, viewModel.state.value.pendingGuestEntry)
+        assertEquals(AccountSessionStatus.SIGNED_OUT, viewModel.state.value.sessionStatus)
     }
 }
 
@@ -115,6 +241,7 @@ private class FakeAccountGateway(
             AccountCredential("account-token", "session-id", Instant.now().plusSeconds(3600))
         ),
     private val dashboardResult: ApiResult<DashboardData> = ApiResult.Success(dashboard, "request"),
+    var meResult: ApiResult<UserProfile> = ApiResult.Success(profile, "request"),
 ) : AccountGateway {
     var completeCalls = 0
     var meCalls = 0
@@ -122,7 +249,7 @@ private class FakeAccountGateway(
 
     override suspend fun restore() = restore
 
-    override suspend fun me() = ApiResult.Success(profile, "request").also { meCalls += 1 }
+    override suspend fun me() = meResult.also { meCalls += 1 }
 
     override suspend fun dashboard() = dashboardResult.also { dashboardCalls += 1 }
 

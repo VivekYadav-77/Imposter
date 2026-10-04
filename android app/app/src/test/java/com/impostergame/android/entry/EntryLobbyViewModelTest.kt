@@ -86,15 +86,17 @@ class EntryLobbyViewModelTest {
             val gateway = FakeGateway(ArrayDeque(listOf(ResumeTarget.Results)))
             val viewModel = EntryLobbyViewModel(gateway, SavedStateHandle())
             runCurrent()
+            var accountLandingOpened = false
 
             assertEquals(EntryDestination.RESULTS, viewModel.state.value.destination)
 
-            viewModel.exitResults()
+            viewModel.exitResults { accountLandingOpened = true }
             runCurrent()
 
             assertEquals(1, gateway.leaveCalls)
             assertEquals(0, gateway.endSessionCalls)
             assertEquals(EntryDestination.HOME, viewModel.state.value.destination)
+            assertTrue(accountLandingOpened)
         }
 
     @Test

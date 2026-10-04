@@ -18,7 +18,8 @@ object NoOpSafeLogger : SafeLogger {
 
 internal object SecretRedactor {
     private val authorization = Regex("(?i)(authorization\\s*[:=]\\s*bearer\\s+)[^\\s,}]+")
-    private val tokenJson = Regex("(?i)(\"(?:sessionToken|token)\"\\s*:\\s*\")[^\"]+")
+    private val tokenJson =
+        Regex("(?i)(\"(?:sessionToken|transactionToken|idToken|token|nonce)\"\\s*:\\s*\")[^\"]+")
     private val signedUrl =
         Regex("(?i)https://[^\\s\"]+[?&](?:x-amz-|x-goog-|signature|token|key)[^\\s\"]*")
     private val filePath = Regex("(?i)(?:[a-z]:\\\\|/)(?:[^\\s/\\\\]+[/\\\\])+[^\\s]+")

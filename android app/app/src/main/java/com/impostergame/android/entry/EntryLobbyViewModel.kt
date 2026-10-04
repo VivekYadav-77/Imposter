@@ -492,7 +492,7 @@ class EntryLobbyViewModel(
         }
     }
 
-    fun exitResults() {
+    fun exitResults(onExited: () -> Unit = {}) {
         launchRequest {
             when (val result = gateway.leave()) {
                 is GatewayResult.Success -> {
@@ -502,6 +502,7 @@ class EntryLobbyViewModel(
                     savedState.remove<String>(KEY_NICKNAME)
                     savedState.remove<String>(KEY_COLOR)
                     _state.value = EntryLobbyUiState(destination = EntryDestination.HOME)
+                    onExited()
                 }
                 is GatewayResult.Failure -> update { it.copy(message = messageFor(result.error)) }
             }
