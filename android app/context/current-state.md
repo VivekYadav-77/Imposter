@@ -252,17 +252,21 @@ In the next manual three-player game, perform one elimination and visually confi
 **Date/time:** 2026-10-04 Asia/Calcutta
 **Agent/session:** Codex
 **Active phase:** Phase 8 — end-to-end quality, release, and operations
-**Milestone:** remove the formatting blocker before the first hosted signed APK release
-**Status:** local quality gate complete; hosted signed release pending
+**Milestone:** remove local and GitHub workflow startup blockers before the first hosted signed APK release
+**Status:** local quality gate complete; corrected hosted workflow pending rerun
 
 ### Changed
 
 - `app/src/main/java/com/impostergame/android/ui/AccountScreens.kt`: applied the repository formatter to import ordering and a conditional line wrap; runtime behavior is unchanged.
+- `.github/workflows/android-release.yml`: moved the runner-temporary production keystore path into a runner step because the `runner` context is unavailable in job-level environment expressions.
+- `.github/workflows/ci.yml`: applied the same correction to the disposable CI signing key path.
 
 ### Verified
 
 - `gradlew.bat --no-daemon --stacktrace quality` — passed all 142 tasks after formatting.
 - GitHub `android-production` environment — owner-confirmed with a `main` deployment rule, four signing secrets, and read/write workflow permissions; secret values were not exposed.
+- First hosted `Android signed release candidate` dispatch — failed before runner allocation with `Unrecognized named-value: 'runner'` at the former job-level keystore path.
+- Prettier YAML parsing and `git diff --check` — passed after correcting both workflow files.
 
 ### Decisions added
 
@@ -270,9 +274,9 @@ In the next manual three-player game, perform one elimination and visually confi
 
 ### Remaining issues
 
-- The formatting correction and this handoff must be committed and pushed before dispatching the signed-release workflow.
-- The first hosted signed APK build and GitHub Release remain unverified until that workflow completes.
+- The workflow corrections and this updated handoff must be committed and pushed before rerunning the signed-release workflow.
+- The first hosted signed APK build and GitHub Release remain unverified until the corrected workflow completes.
 
 ### Next action
 
-Commit and push the release-preflight correction, then dispatch `Android signed release candidate` with version code `1`, version name `1.0.0`, and production origin `https://imposter.helixfjord.com`.
+Commit and push the workflow correction, then rerun `Android signed release candidate` with version code `1`, version name `1.0.0`, and production origin `https://imposter.helixfjord.com`.

@@ -32,7 +32,6 @@ jobs:
       ANDROID_VERSION_CODE: ${{ inputs.version_code }}
       ANDROID_VERSION_NAME: ${{ inputs.version_name }}
       PRODUCTION_API_BASE_URL: ${{ inputs.production_api_base_url }}
-      ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/android-production.jks
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
       ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
@@ -54,8 +53,10 @@ jobs:
         shell: bash
         run: |
           test -n "$ANDROID_KEYSTORE_BASE64"
-          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$ANDROID_KEYSTORE_PATH"
-          chmod 600 "$ANDROID_KEYSTORE_PATH"
+          keystore_path="$RUNNER_TEMP/android-production.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore_path"
+          chmod 600 "$keystore_path"
+          printf 'ANDROID_KEYSTORE_PATH=%s\n' "$keystore_path" >> "$GITHUB_ENV"
       - name: Run release checks twice from clean outputs
         run: |
           ./gradlew --no-daemon --stacktrace clean quality bundleRelease assembleRelease

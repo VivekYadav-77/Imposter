@@ -43,7 +43,6 @@ jobs:
       ANDROID_VERSION_CODE: "1"
       ANDROID_VERSION_NAME: "0.1.0"
       PRODUCTION_API_BASE_URL: https://release-ci.invalid
-      ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/android-ci-release.jks
       ANDROID_KEYSTORE_PASSWORD: ci-only-password
       ANDROID_KEY_ALIAS: ci-release
       ANDROID_KEY_PASSWORD: ci-only-password
@@ -61,11 +60,13 @@ jobs:
       - name: Install pinned Android SDK
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
       - name: Create disposable CI signing key
-        run: >-
-          keytool -genkeypair -v -keystore "$ANDROID_KEYSTORE_PATH"
-          -storepass "$ANDROID_KEYSTORE_PASSWORD" -keypass "$ANDROID_KEY_PASSWORD"
-          -alias "$ANDROID_KEY_ALIAS" -keyalg RSA -keysize 3072 -validity 2
-          -dname "CN=CI release verification, OU=Engineering, O=Imposter Game, C=US"
+        run: |
+          keystore_path="$RUNNER_TEMP/android-ci-release.jks"
+          keytool -genkeypair -v -keystore "$keystore_path" \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" -keypass "$ANDROID_KEY_PASSWORD" \
+            -alias "$ANDROID_KEY_ALIAS" -keyalg RSA -keysize 3072 -validity 2 \
+            -dname "CN=CI release verification, OU=Engineering, O=Imposter Game, C=US"
+          printf 'ANDROID_KEYSTORE_PATH=%s\n' "$keystore_path" >> "$GITHUB_ENV"
       - name: Verify Android quality gate
         run: ./gradlew --no-daemon --stacktrace quality
       - name: Verify shrunk signed release bundle
