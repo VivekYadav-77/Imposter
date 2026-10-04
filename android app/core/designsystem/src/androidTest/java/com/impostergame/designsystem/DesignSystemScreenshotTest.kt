@@ -1,5 +1,8 @@
 package com.impostergame.designsystem
 
+import android.content.pm.ActivityInfo
+import android.content.res.Configuration
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
@@ -29,9 +32,14 @@ class DesignSystemScreenshotTest {
 
     @Test
     fun compactLandscapeExposesBothCatalogPanes() {
+        composeRule.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            composeRule.activity.resources.configuration.orientation ==
+                Configuration.ORIENTATION_LANDSCAPE
+        }
         composeRule.setContent {
             ImposterGameTheme(darkTheme = true) {
-                ComponentCatalog(modifier = Modifier.requiredSize(width = 700.dp, height = 400.dp))
+                ComponentCatalog(modifier = Modifier.fillMaxSize())
             }
         }
 
