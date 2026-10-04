@@ -18,7 +18,7 @@ The backend gameplay loop and production-readiness baseline are complete. HTTP `
 2. Install PostgreSQL 16 or newer locally, start it, and create the database named in `DATABASE_URL`.
 3. Run `npm ci`.
 4. Run `npm run migrate:up`.
-5. Provision the initial owner using [the administrator runbook](docs/ADMIN_OPERATIONS.md).
+5. Run `npm run admin:bootstrap -- --email owner@example.com` to provision the initial owner.
 6. Run `npm run dev`.
 7. Check `GET http://127.0.0.1:3000/health/live` and `/health/ready`.
 
@@ -38,18 +38,6 @@ npm run build
 
 `TEST_DATABASE_URL` must point to an isolated disposable database for integration tests.
 `migrate:verify` intentionally reverses every current migration and must only target an isolated disposable database, never staging or production.
-
-## Technical documentation
-
-- [Architecture](docs/ARCHITECTURE.md)
-- [Database design](docs/DATABASE_DESIGN.md)
-- [API contract](docs/API_CONTRACT.md)
-- [Realtime contract](docs/REALTIME_CONTRACT.md)
-- [Client integration](docs/CLIENT_INTEGRATION.md)
-- [Security design](docs/SECURITY.md)
-- [Administrator operations](docs/ADMIN_OPERATIONS.md)
-- [Production operations](docs/PRODUCTION_OPERATIONS.md)
-- [AWS EC2 deployment](docs/AWS_EC2_DEPLOYMENT.md)
 
 ## Current boundary
 

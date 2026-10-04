@@ -198,11 +198,11 @@ See [`android app/README.md`](./android%20app/README.md) for physical-device, Go
 
 The website and Android client share versioned, machine-readable contracts:
 
-| Contract | Source | Human guide |
-| --- | --- | --- |
-| HTTP API | [`openapi/openapi.json`](./website/openapi/openapi.json) | [`API_CONTRACT.md`](./website/docs/API_CONTRACT.md) |
-| Realtime v1 | [`realtime-v1.schema.json`](./website/contracts/realtime-v1.schema.json) | [`REALTIME_CONTRACT.md`](./website/docs/REALTIME_CONTRACT.md) |
-| Realtime fixtures | [`contracts/fixtures/`](./website/contracts/fixtures/) | [`CLIENT_INTEGRATION.md`](./website/docs/CLIENT_INTEGRATION.md) |
+| Contract | Source |
+| --- | --- |
+| HTTP API | [`openapi/openapi.json`](./website/openapi/openapi.json) |
+| Realtime v1 | [`realtime-v1.schema.json`](./website/contracts/realtime-v1.schema.json) |
+| Realtime fixtures | [`contracts/fixtures/`](./website/contracts/fixtures/) |
 
 Contract drift is rejected by the standard verification gate.
 
@@ -215,17 +215,10 @@ Contract drift is rejected by the standard verification gate.
 - Rate limiting, request bounds, image validation, state-version checks, and idempotency protect mutations.
 - Production configuration fails closed when required origins, signing inputs, or secrets are absent.
 
-Read the full [`security design`](./website/docs/SECURITY.md) and [`production operations guide`](./website/docs/PRODUCTION_OPERATIONS.md) before deployment.
-
 ## Documentation
 
 | Guide | Description |
 | --- | --- |
-| [`Architecture`](./website/docs/ARCHITECTURE.md) | Runtime topology, modules, boundaries, and request flow |
-| [`Database design`](./website/docs/DATABASE_DESIGN.md) | PostgreSQL schema, locking, retention, and lifecycle |
-| [`Client integration`](./website/docs/CLIENT_INTEGRATION.md) | HTTP/realtime behavior expected by independent clients |
-| [`Administrator operations`](./website/docs/ADMIN_OPERATIONS.md) | Initial owner provisioning and administrative controls |
-| [`AWS EC2 deployment`](./website/docs/AWS_EC2_DEPLOYMENT.md) | Production host setup, service management, updates, rollback |
 | [`Android release context`](./android%20app/context/phase-08-release.md) | Mobile compatibility, rollout, monitoring, and acceptance |
 | [`Android operations runbook`](./android%20app/context/operations-runbook.md) | Release, backend, upload, realtime, and session incidents |
 
