@@ -17,7 +17,7 @@ on:
         type: string
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: android-release-${{ inputs.version_name }}
@@ -58,14 +58,30 @@ jobs:
           chmod 600 "$ANDROID_KEYSTORE_PATH"
       - name: Run release checks twice from clean outputs
         run: |
-          ./gradlew --no-daemon --stacktrace clean quality bundleRelease
-          ./gradlew --no-daemon --stacktrace clean quality bundleRelease
+          ./gradlew --no-daemon --stacktrace clean quality bundleRelease assembleRelease
+          ./gradlew --no-daemon --stacktrace clean quality bundleRelease assembleRelease
+      - name: Prepare stable APK download name
+        run: mv app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/imposter-game.apk
       - name: Upload signed candidate and R8 mapping
         uses: actions/upload-artifact@v4
         with:
           name: imposter-game-android-${{ inputs.version_name }}-${{ inputs.version_code }}
           path: |
+            android app/app/build/outputs/apk/release/imposter-game.apk
             android app/app/build/outputs/bundle/release/*.aab
             android app/app/build/outputs/mapping/release/mapping.txt
           retention-days: 30
           if-no-files-found: error
+      - name: Publish APK to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version_name }}
+          name: Imposter Game v${{ inputs.version_name }}
+          body: |
+            Signed Android release for Imposter Game v${{ inputs.version_name }}.
+
+            Download `imposter-game.apk` below to install the app on Android 8.0 or newer.
+          files: android app/app/build/outputs/apk/release/imposter-game.apk
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          make_latest: true
