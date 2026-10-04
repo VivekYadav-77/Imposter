@@ -260,6 +260,9 @@ In the next manual three-player game, perform one elimination and visually confi
 - `app/src/main/java/com/impostergame/android/ui/AccountScreens.kt`: applied the repository formatter to import ordering and a conditional line wrap; runtime behavior is unchanged.
 - `.github/workflows/android-release.yml`: moved the runner-temporary production keystore path into a runner step because the `runner` context is unavailable in job-level environment expressions.
 - `.github/workflows/ci.yml`: applied the same correction to the disposable CI signing key path.
+- `.github/workflows/android-release.yml` and `.github/workflows/ci.yml`: restricted Android SDK setup to the available `platform-tools` package instead of the removed legacy `tools` package.
+- `gradlew`: recorded the executable Git file mode required by Linux-hosted runners.
+- `../website/package-lock.json`: regenerated the npm 11.19.0 lock metadata with cross-platform optional packages required by Linux `npm ci`.
 
 ### Verified
 
@@ -267,6 +270,8 @@ In the next manual three-player game, perform one elimination and visually confi
 - GitHub `android-production` environment — owner-confirmed with a `main` deployment rule, four signing secrets, and read/write workflow permissions; secret values were not exposed.
 - First hosted `Android signed release candidate` dispatch — failed before runner allocation with `Unrecognized named-value: 'runner'` at the former job-level keystore path.
 - Prettier YAML parsing and `git diff --check` — passed after correcting both workflow files.
+- Push CI run `37195098327` — exposed the removed SDK `tools` package, Linux `gradlew` execute permission, and incomplete cross-platform npm lock metadata; each failure occurred before application tests.
+- `npx npm@11.19.0 ci --ignore-scripts` — passed after lockfile regeneration with 325 packages installed and no reported vulnerability.
 
 ### Decisions added
 
@@ -274,7 +279,7 @@ In the next manual three-player game, perform one elimination and visually confi
 
 ### Remaining issues
 
-- The workflow corrections and this updated handoff must be committed and pushed before rerunning the signed-release workflow.
+- The complete workflow/lockfile/file-mode corrections and this updated handoff must be committed and pushed before rerunning the signed-release workflow.
 - The first hosted signed APK build and GitHub Release remain unverified until the corrected workflow completes.
 
 ### Next action
