@@ -28,8 +28,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -52,8 +52,8 @@ import com.impostergame.designsystem.component.WebsiteDialog
 import com.impostergame.designsystem.component.WebsiteIcon
 import com.impostergame.designsystem.component.WebsiteIconKind
 import com.impostergame.designsystem.component.WebsiteLoadingPanel
-import com.impostergame.designsystem.theme.WebsiteLayout
 import com.impostergame.designsystem.theme.GameShapes
+import com.impostergame.designsystem.theme.WebsiteLayout
 
 @Composable
 fun AccountSurface(
@@ -156,8 +156,7 @@ private fun DashboardFrame(
                     modifier =
                         Modifier.size(WebsiteLayout.themeControl).semantics {
                             contentDescription =
-                                if (darkTheme) "Switch to light theme"
-                                else "Switch to dark theme"
+                                if (darkTheme) "Switch to light theme" else "Switch to dark theme"
                         },
                 ) {
                     WebsiteIcon(

@@ -246,3 +246,33 @@ Run the supplied three-player finish/leave/replay/rejoin scenario against the ma
 ### Next action
 
 In the next manual three-player game, perform one elimination and visually confirm the card counts down from the server-configured cooldown to Ready before another target can be opened.
+
+## Session handoff — 2026-10-04 signed-release preflight
+
+**Date/time:** 2026-10-04 Asia/Calcutta
+**Agent/session:** Codex
+**Active phase:** Phase 8 — end-to-end quality, release, and operations
+**Milestone:** remove the formatting blocker before the first hosted signed APK release
+**Status:** local quality gate complete; hosted signed release pending
+
+### Changed
+
+- `app/src/main/java/com/impostergame/android/ui/AccountScreens.kt`: applied the repository formatter to import ordering and a conditional line wrap; runtime behavior is unchanged.
+
+### Verified
+
+- `gradlew.bat --no-daemon --stacktrace quality` — passed all 142 tasks after formatting.
+- GitHub `android-production` environment — owner-confirmed with a `main` deployment rule, four signing secrets, and read/write workflow permissions; secret values were not exposed.
+
+### Decisions added
+
+- None.
+
+### Remaining issues
+
+- The formatting correction and this handoff must be committed and pushed before dispatching the signed-release workflow.
+- The first hosted signed APK build and GitHub Release remain unverified until that workflow completes.
+
+### Next action
+
+Commit and push the release-preflight correction, then dispatch `Android signed release candidate` with version code `1`, version name `1.0.0`, and production origin `https://imposter.helixfjord.com`.
