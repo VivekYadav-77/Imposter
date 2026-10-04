@@ -261,7 +261,7 @@ describeWithDatabase("private evidence lifecycle", () => {
   });
 
   it("authorizes, normalizes, views, and flags one submission per player", async () => {
-    const { principals, snapshot } = await startedRoom();
+    const { principals, snapshot } = await startedRoom({ evidenceVisibility: "public" });
     const owner = principals.find((p) => p.participantId === snapshot.self.participantId)!;
     const assignmentId = snapshot.assignments[0].id;
     const jpeg = await sharp({ create: { width: 8, height: 8, channels: 3, background: "red" } })

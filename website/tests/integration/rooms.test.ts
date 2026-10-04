@@ -81,8 +81,8 @@ describeWithDatabase("room and participant lifecycle persistence", () => {
       ),
     );
     const snapshot = await rooms.snapshot((await rooms.authenticate(created.sessionToken))!);
-    expect(snapshot.participants).toHaveLength(12);
-    expect(joins.filter((result) => result.status === "fulfilled")).toHaveLength(10);
+    expect(snapshot.participants).toHaveLength(15);
+    expect(joins.filter((result) => result.status === "fulfilled")).toHaveLength(13);
     const rejectedCodes = joins.flatMap((result) => {
       if (result.status !== "rejected") return [];
       const reason = result.reason as { code?: unknown };
