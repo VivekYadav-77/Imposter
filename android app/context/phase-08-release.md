@@ -32,7 +32,7 @@
 | Compose UI | Critical entry/lobby/game paths and authorization variants | Partial instrumentation coverage; full matrix pending SDK/device execution |
 | Screenshot/golden | Compact portrait/landscape/expanded, themes, large font | Design-system instrumentation exists; feature goldens pending |
 | Multi-device E2E | Phase 8 scenarios and lifecycle/failure variants | Not run; requires production-like infrastructure and devices |
-| Release build | Lint/unit checks plus signed AAB with R8/resource shrinking | CI and protected release workflows added; first hosted run pending |
+| Release build | Lint/unit checks plus signed AAB/APK with R8/resource shrinking | CI run `37198305812` passed; protected release run `37198730241` passed the clean gate twice and published signed v1.0.0 |
 
 No row is “passed” until its run/artifact is recorded. A clean candidate must pass the full gate twice with separate clean outputs and no retry-masked failure.
 
@@ -95,5 +95,5 @@ reauthentication. Promote it through internal, closed, then the staged productio
 - [ ] Accessibility, privacy/security, and usability sign-offs are attached.
 - [ ] Dashboards route each alert to an owner; synthetic events reach on-call without private payloads.
 - [ ] Rollback/halt exercise succeeds using the operations runbook.
-- [ ] Exact candidate passes `clean quality bundleRelease` twice without flaky retry.
+- [x] Exact v1.0.0 candidate passed `clean quality bundleRelease assembleRelease` twice without flaky retry in hosted run `37198730241`.
 - [ ] Release notes list limitations, commit, versions, backend, AAB digest, mapping, and acceptance evidence.

@@ -285,3 +285,36 @@ In the next manual three-player game, perform one elimination and visually confi
 ### Next action
 
 Commit and push the workflow correction, then rerun `Android signed release candidate` with version code `1`, version name `1.0.0`, and production origin `https://imposter.helixfjord.com`.
+
+## Session handoff — 2026-10-04 first hosted signed APK
+
+**Date/time:** 2026-10-04 Asia/Calcutta
+**Agent/session:** Codex
+**Active phase:** Phase 8 — end-to-end quality, release, and operations
+**Milestone:** publish the first signed APK and restore the README download target
+**Status:** complete; v1.0.0 is the latest GitHub Release
+
+### Changed
+
+- `core/designsystem/src/androidTest/java/com/impostergame/designsystem/DesignSystemScreenshotTest.kt`: the compact-landscape catalog test now rotates the actual test activity, waits for the landscape configuration, and renders inside the real viewport instead of centering a forced 700 dp surface inside the API 35 emulator's portrait viewport.
+
+### Verified
+
+- `spotlessApply :core:designsystem:compileDebugAndroidTestKotlin --no-parallel --max-workers=1` — passed locally.
+- GitHub CI run `37198305812` — passed website/backend, Android quality and signed/shrunk bundle, and API 35 connected-device jobs.
+- Protected release run `37198730241` — passed `clean quality bundleRelease assembleRelease` twice and published GitHub Release `v1.0.0` from commit `1e62434`.
+- The latest release contains exactly `imposter-game.apk` (2,739,832 bytes; SHA-256 `5a372b116ad9d664242b242038f9d564143848136324c12a09bd756cd1663ee7`). `apksigner` verified its v2 signature with one 3072-bit RSA signer.
+- The production root, `/health/live`, and `/health/ready` endpoints at `https://imposter.helixfjord.com` returned HTTP 200 before release dispatch.
+
+### Decisions added
+
+- None.
+
+### Remaining issues
+
+- The repository is private, so GitHub Release downloads remain limited to signed-in users who have repository access.
+- The broader Phase 8 store, acceptance-matrix, monitoring, accessibility, privacy, and rollout gates remain open.
+
+### Next action
+
+Install the v1.0.0 APK on an Android 8.0+ device and complete the recorded internal smoke path against `https://imposter.helixfjord.com` before wider distribution.
