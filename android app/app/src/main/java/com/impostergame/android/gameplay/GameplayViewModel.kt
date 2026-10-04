@@ -13,7 +13,6 @@ import com.impostergame.data.model.RoomSnapshot
 import com.impostergame.data.network.ApiFailure
 import com.impostergame.designsystem.component.ConnectionState
 import java.time.Clock
-import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -64,7 +63,7 @@ class GameplayViewModel(
                 if (!_state.value.loading && uploadJob?.isActive != true) {
                     refresh()
                     if (_state.value.uploadStage == UploadStage.PROCESSING) {
-                        refreshSubmissions()
+                        refreshSubmissions(loadOwnTaskThumbnails = true)
                     }
                 }
             }
@@ -94,7 +93,7 @@ class GameplayViewModel(
                 it
             }
         }
-        if (enteringTasks) refreshSubmissions()
+        if (enteringTasks) refreshSubmissions(loadOwnTaskThumbnails = true)
     }
 
     fun showTasks() = update { it.copy(destination = GameplayDestination.TASKS, message = null) }
@@ -265,7 +264,7 @@ class GameplayViewModel(
                     }
                     emitFeedback(GameFeedbackKind.Upload, result.value.submission.id)
                     refresh()
-                    refreshSubmissions()
+                    refreshSubmissions(loadOwnTaskThumbnails = true)
                 }
                 is GatewayResult.Failure -> {
                     val retryable =
@@ -632,6 +631,8 @@ class GameplayViewModel(
         val previous = _state.value.snapshot
         val meetingId = snapshot.meeting?.id
         val announceMeeting = meetingId != null && announcedMeetings.add(meetingId)
+        val snapshotKillRemaining =
+            remainingSecondsUntil(snapshot.cooldowns.killAvailableAt, clock.instant())
         update { current ->
             if ((current.snapshot?.stateVersion ?: Long.MIN_VALUE) > snapshot.stateVersion) {
                 return@update current
@@ -693,6 +694,7 @@ class GameplayViewModel(
                 ejectionVoteSubmittedMeetingId =
                     current.ejectionVoteSubmittedMeetingId?.takeIf { it == meetingId },
                 reviewImageBytes = if (sameReviewItem) current.reviewImageBytes else null,
+                killCooldownRemainingSeconds = snapshotKillRemaining,
                 message =
                     messageAfterPhaseTransition(previous?.phase, snapshot.phase, current.message),
             )
@@ -702,16 +704,6 @@ class GameplayViewModel(
         }
         if (snapshot.meeting?.phase == "voting" && previous?.meeting?.phase != "voting") {
             emitFeedback(GameFeedbackKind.Vote, requireNotNull(meetingId))
-        }
-        if (
-            previous != null &&
-                "kill" !in previous.self.capabilities &&
-                "kill" in snapshot.self.capabilities
-        ) {
-            emitFeedback(
-                GameFeedbackKind.CooldownReady,
-                "${snapshot.id}:${snapshot.cooldowns.killAvailableAt ?: snapshot.stateVersion}",
-            )
         }
         if (previous?.self?.lifeStatus == "alive" && snapshot.self.lifeStatus != "alive") {
             emitFeedback(GameFeedbackKind.Eliminated, "${snapshot.id}:${snapshot.stateVersion}")
@@ -744,6 +736,7 @@ class GameplayViewModel(
     private fun refreshSubmissions(
         loadMeetingEvidence: Boolean = false,
         loadThumbnails: Boolean = false,
+        loadOwnTaskThumbnails: Boolean = false,
     ) {
         viewModelScope.launch {
             when (val result = gateway.submissions()) {
@@ -777,6 +770,16 @@ class GameplayViewModel(
                         loadReviewImage(result.value)
                     }
                     if (loadThumbnails) loadEvidenceThumbnails(result.value)
+                    if (loadOwnTaskThumbnails) {
+                        val participantId = _state.value.snapshot?.self?.participantId
+                        loadEvidenceThumbnails(
+                            result.value.filter { submission ->
+                                participantId != null &&
+                                    submission.uploader.id == participantId &&
+                                    submission.processingStatus == "accepted"
+                            }
+                        )
+                    }
                 }
                 is GatewayResult.Failure -> update { it.copy(message = messageFor(result.error)) }
             }
@@ -803,16 +806,21 @@ class GameplayViewModel(
     }
 
     private fun updateCountdown() {
-        val deadline =
-            _state.value.snapshot?.phaseDeadlineAt?.let { value ->
-                runCatching { Instant.parse(value) }.getOrNull()
-            }
+        val snapshot = _state.value.snapshot
+        val now = clock.instant()
+        val phaseRemaining = remainingSecondsUntil(snapshot?.phaseDeadlineAt, now)
+        val killRemaining = remainingSecondsUntil(snapshot?.cooldowns?.killAvailableAt, now)
+        val previousKillRemaining = _state.value.killCooldownRemainingSeconds
         update {
             it.copy(
-                remainingSeconds =
-                    deadline?.let { value ->
-                        (value.epochSecond - clock.instant().epochSecond).coerceAtLeast(0)
-                    }
+                remainingSeconds = phaseRemaining,
+                killCooldownRemainingSeconds = killRemaining,
+            )
+        }
+        if (previousKillRemaining != null && previousKillRemaining > 0 && killRemaining == 0L) {
+            emitFeedback(
+                GameFeedbackKind.CooldownReady,
+                "${snapshot?.id}:${snapshot?.cooldowns?.killAvailableAt}",
             )
         }
         val deadlineText = _state.value.snapshot?.phaseDeadlineAt

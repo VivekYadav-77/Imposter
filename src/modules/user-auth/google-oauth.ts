@@ -12,6 +12,7 @@ export interface GoogleIdentity {
 export interface GoogleIdentityProvider {
   authorizationUrl(input: { state: string; nonce: string }): string;
   exchange(code: string, nonce: string): Promise<GoogleIdentity>;
+  verifyIdToken(idToken: string, nonce: string): Promise<GoogleIdentity>;
 }
 
 export class GoogleOAuthProvider implements GoogleIdentityProvider {
@@ -43,11 +44,22 @@ export class GoogleOAuthProvider implements GoogleIdentityProvider {
         "GOOGLE_IDENTITY_MISSING",
         "Google did not return an identity token.",
       );
-    const ticket = await this.client.verifyIdToken({
-      idToken: tokens.id_token,
-      audience: this.clientId,
-    });
-    const payload = ticket.getPayload();
+    return this.verifyIdToken(tokens.id_token, nonce);
+  }
+
+  async verifyIdToken(idToken: string, nonce: string): Promise<GoogleIdentity> {
+    const payload = await (async () => {
+      try {
+        const ticket = await this.client.verifyIdToken({ idToken, audience: this.clientId });
+        return ticket.getPayload();
+      } catch {
+        throw new ApplicationError(
+          401,
+          "GOOGLE_IDENTITY_INVALID",
+          "Google could not verify this account. Please try again.",
+        );
+      }
+    })();
     if (
       !payload?.sub ||
       !payload.email ||

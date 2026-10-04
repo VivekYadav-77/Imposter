@@ -19,6 +19,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.CreationExtras
+import com.impostergame.android.account.AccountGateway
+import com.impostergame.android.account.AccountViewModel
+import com.impostergame.android.account.GoogleCredentialCoordinator
+import com.impostergame.android.account.NetworkAccountGateway
+import com.impostergame.android.account.UnavailableAccountGateway
 import com.impostergame.android.entry.EntryLobbyGateway
 import com.impostergame.android.entry.EntryLobbyViewModel
 import com.impostergame.android.entry.NetworkEntryLobbyGateway
@@ -32,6 +37,8 @@ import com.impostergame.android.gameplay.NetworkGameplayGateway
 import com.impostergame.android.gameplay.UnavailableGameplayGateway
 import com.impostergame.android.preferences.AppPreferencesStore
 import com.impostergame.android.ui.ImposterGameApp
+import com.impostergame.data.account.AccountApi
+import com.impostergame.data.account.StoredAccountSession
 import com.impostergame.data.network.ApiClient
 import com.impostergame.data.network.ParticipantApi
 import com.impostergame.data.network.SignedUploadClient
@@ -45,6 +52,7 @@ import com.impostergame.data.repository.GameRepository
 import com.impostergame.data.repository.PresenceRepository
 import com.impostergame.data.repository.RoomRepository
 import com.impostergame.data.session.StoredSession
+import com.impostergame.session.AndroidKeystoreAccountSessionStore
 import com.impostergame.session.AndroidKeystoreSessionStore
 import java.net.URI
 import kotlinx.coroutines.delay
@@ -53,6 +61,9 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 
 class MainActivity : ComponentActivity() {
     private val sessionStore by lazy { AndroidKeystoreSessionStore(applicationContext) }
+    private val accountSessionStore by lazy {
+        AndroidKeystoreAccountSessionStore(applicationContext)
+    }
     private val appPreferences by lazy { AppPreferencesStore(applicationContext) }
     private val feedbackController by lazy { GameFeedbackController(applicationContext) }
     private val supportDiagnostics = SupportDiagnosticsBuffer()
@@ -71,6 +82,36 @@ class MainActivity : ComponentActivity() {
                 )
             )
         }
+    }
+    private val accountApi: AccountApi? by lazy {
+        if (BuildConfig.API_BASE_URL.isBlank() || !BuildConfig.ACCOUNT_FEATURE_ENABLED) {
+            null
+        } else {
+            AccountApi(
+                client =
+                    ApiClient(
+                        baseUrl = BuildConfig.API_BASE_URL.toHttpUrl(),
+                        credentialProvider = { null },
+                        logger = supportDiagnostics,
+                        allowInsecureLocalDebug = BuildConfig.DEBUG,
+                    ),
+                accountCredential = {
+                    (accountSessionStore.session.value as? StoredAccountSession.Available)
+                        ?.credential
+                        ?.token
+                },
+                participantCredential = {
+                    (sessionStore.session.value as? StoredSession.Available)?.credential?.token
+                },
+            )
+        }
+    }
+    private val googleCredentials by lazy {
+        GoogleCredentialCoordinator(this, BuildConfig.GOOGLE_WEB_CLIENT_ID)
+    }
+    private val accountGateway: AccountGateway by lazy {
+        accountApi?.let { NetworkAccountGateway(it, accountSessionStore, sessionStore) }
+            ?: UnavailableAccountGateway("Android account support is not configured")
     }
     private val roomRepository by lazy { participantApi?.let(::RoomRepository) }
     private val gameRepository by lazy { participantApi?.let(::GameRepository) }
@@ -106,6 +147,11 @@ class MainActivity : ComponentActivity() {
                 realtime = realtimeSession,
                 roomRepository = roomRepository,
                 connectivityRepository = connectivityRepository,
+                accountCredential = {
+                    (accountSessionStore.session.value as? StoredAccountSession.Available)
+                        ?.credential
+                        ?.token
+                },
             )
         }
     }
@@ -139,6 +185,20 @@ class MainActivity : ComponentActivity() {
                 GameplayViewModel(gameplayGateway, EvidenceProcessor(applicationContext)) as T
         }
     }
+    private val accountViewModel: AccountViewModel by viewModels {
+        object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T =
+                AccountViewModel(
+                    gateway = accountGateway,
+                    googleCredential = googleCredentials::signIn,
+                    clearGoogleState = googleCredentials::clearState,
+                    enabled = BuildConfig.ACCOUNT_FEATURE_ENABLED,
+                    autoBootstrap = false,
+                )
+                    as T
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -148,6 +208,8 @@ class MainActivity : ComponentActivity() {
             ImposterGameApp(
                 viewModel = entryLobbyViewModel,
                 gameplayViewModel = gameplayViewModel,
+                accountViewModel = accountViewModel,
+                accountFeatureEnabled = BuildConfig.ACCOUNT_FEATURE_ENABLED,
                 onCopyCode = ::copyRoomCode,
                 onShareCode = ::shareRoomCode,
                 onShareDiagnostics = ::shareSupportDiagnostics,

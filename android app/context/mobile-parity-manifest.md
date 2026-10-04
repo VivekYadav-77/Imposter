@@ -35,6 +35,10 @@
 
 | Group | Required states | Back/dismiss behavior |
 |---|---|---|
+| Account choice | Continue with Google, Play as guest, cancellation, no account, network error | Dismiss returns Home; guest continues the original create/join intent |
+| Dashboard | loading, empty/populated statistics, linked/rejoinable rooms, recent results, retry/offline | Home dismisses dashboard; rejoin stores participant authority before lobby/game routing |
+| History | empty, pagination, detail, private/public vote disclosure, error | Detail returns History; server-returned visibility is authoritative |
+| Account settings | profile validation, 18 operatives, devices, revoke, sign out, delete reauthentication | Destructive actions require confirmation; account actions never leave an active participant seat |
 | Create/join | mode choice, room lookup, nickname, operative picker, consent, loading, validation, conflict, error | Picker closes first; screen returns Home |
 | Lobby | host/participant, invite, readiness, roster, settings, saving/saved/invalid, reconnect, start blocked, leave confirmation | Confirmation closes first; leaving requires explicit confirmation |
 | Role | sealed, revealed, acknowledged, lifecycle reseal | Back reseals and offers safe minimization |
@@ -43,6 +47,7 @@
 | Elimination | unavailable/cooldown, target selection, confirmation, submitting, result/error | Confirmation then picker close before active-game handling |
 | Meeting/voting | alert, discussion, review, ballot selection, locked/private/public/observer, outcome | Alert/confirmation closes before active-game handling |
 | Results | winner/abandoned, collapsed/expanded details, evidence, replay, error | Back returns Home; replay accepts only the authoritative room response |
+| Guest upgrade | non-blocking Save this case, Google cancellation/error/success | Results, replay, and leave remain available throughout; success claims the current participant |
 
 ## Capture and comparison references
 

@@ -56,6 +56,22 @@ cleartext configuration for staging or production acceptance.
 
 The app defines `debug`, `staging`, and `release` build types. Configure them with `DEBUG_API_BASE_URL`, `STAGING_API_BASE_URL`, and `PRODUCTION_API_BASE_URL` Gradle properties or environment variables. Staging and production validation requires an HTTPS origin without a trailing slash. Cleartext traffic is disabled outside explicitly enabled local debug use.
 
+Native accounts are rollout-gated. Set `ANDROID_ACCOUNT_FEATURE_ENABLED=true` and
+`GOOGLE_WEB_CLIENT_ID` to the server-side Google OAuth **web client ID** for an enabled build.
+Do not place a Google client secret in Gradle properties, the repository, or the APK. In Google
+Cloud, register each Android application ID/signing-certificate SHA fingerprint (debug, closed
+testing, and production as applicable) and retain the web client ID as the ID-token audience.
+The backend must be configured with that same web client ID before enabling the flag.
+
+```powershell
+$env:ANDROID_ACCOUNT_FEATURE_ENABLED = "true"
+$env:GOOGLE_WEB_CLIENT_ID = "000000000000-example.apps.googleusercontent.com"
+.\gradlew.bat assembleDebug
+```
+
+Account credentials and participant credentials use different Keystore aliases and lifecycles.
+Clearing or revoking an account session does not leave an active participant room.
+
 Release versioning uses `ANDROID_VERSION_CODE` and `ANDROID_VERSION_NAME`. A release build additionally requires `ANDROID_KEYSTORE_PATH`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD`; the key and secrets must remain outside the repository. `release` always enables code/resource shrinking, and `bundleRelease` depends on the release configuration gate.
 
 See [`context/phase-08-release.md`](context/phase-08-release.md) for CI, rollout, compatibility, monitoring, and acceptance policy and [`context/operations-runbook.md`](context/operations-runbook.md) for incident handling.

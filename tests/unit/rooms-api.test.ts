@@ -152,6 +152,44 @@ describe("room HTTP transport", () => {
     expect(body.data.sessionToken).toBe("raw-secret-token");
   });
 
+  it("claims a newly created participant when a valid account bearer is supplied", async () => {
+    let claimedParticipant: string | null = null;
+    const userAuth = {
+      authenticate: (token: string | null) =>
+        Promise.resolve(
+          token === "account-token" ? { userId: "user-id", sessionId: "account-session" } : null,
+        ),
+      claimParticipant: (_principal: unknown, participantId: string) => {
+        claimedParticipant = participantId;
+        return Promise.resolve("linked");
+      },
+    } as unknown as UserAuthService;
+
+    await roomApi({ userAuth })
+      .post("/api/v1/rooms")
+      .set("Authorization", "Bearer account-token")
+      .set("Idempotency-Key", "create-room-account")
+      .send({ nickname: "Asha" })
+      .expect(201);
+
+    expect(claimedParticipant).toBe(snapshot.self.participantId);
+  });
+
+  it("rejects an invalid optional account bearer instead of silently creating a guest", async () => {
+    const userAuth = {
+      authenticate: () => Promise.resolve(null),
+    } as unknown as UserAuthService;
+
+    const response = await roomApi({ userAuth })
+      .post("/api/v1/rooms")
+      .set("Authorization", "Bearer expired-account-token")
+      .set("Idempotency-Key", "create-room-expired-account")
+      .send({ nickname: "Asha" });
+
+    expect(response.status).toBe(401);
+    expect((response.body as { error: { code: string } }).error.code).toBe("USER_SESSION_INVALID");
+  });
+
   it("keeps web credentials out of JSON and uses a hardened cookie", async () => {
     const response = await roomApi()
       .post("/api/v1/rooms")

@@ -33,6 +33,7 @@ describeWithDatabase("optional player accounts", () => {
     authorizationUrl: ({ state, nonce }) =>
       `https://accounts.example/auth?state=${state}&nonce=${nonce}`,
     exchange: () => Promise.resolve(googleIdentity),
+    verifyIdToken: () => Promise.resolve(googleIdentity),
   };
 
   beforeAll(() => {
@@ -128,6 +129,31 @@ describeWithDatabase("optional player accounts", () => {
       participantId: guest.participant.participantId,
       isHost: true,
     });
+    const mobileStart = await users.beginMobileGoogleAuth("login", null, null);
+    await expect(
+      users.completeGoogleAuth({
+        state: mobileStart.transactionToken,
+        cookieState: mobileStart.transactionToken,
+        code: "wrong-channel-code",
+        meta: { ip: "127.0.0.3", userAgent: "Android" },
+      }),
+    ).rejects.toMatchObject({ code: "OAUTH_TRANSACTION_EXPIRED" });
+    const mobile = await users.completeMobileGoogleAuth({
+      transactionToken: mobileStart.transactionToken,
+      idToken: "verified-google-id-token",
+      meta: { ip: "127.0.0.3", userAgent: "Android 16" },
+    });
+    expect(mobile.user.id).toBe(legacyAccountId);
+    expect(await users.authenticate(mobile.session!.token)).toMatchObject({
+      userId: legacyAccountId,
+    });
+    await expect(
+      users.completeMobileGoogleAuth({
+        transactionToken: mobileStart.transactionToken,
+        idToken: "replayed-google-id-token",
+        meta: { ip: "127.0.0.3", userAgent: "Android 16" },
+      }),
+    ).rejects.toMatchObject({ code: "OAUTH_TRANSACTION_EXPIRED" });
     const secondStart = await users.beginGoogleAuth("login", null, null);
     const second = await users.completeGoogleAuth({
       state: secondStart.state,
@@ -135,7 +161,7 @@ describeWithDatabase("optional player accounts", () => {
       code: "second-code",
       meta: { ip: "127.0.0.2", userAgent: "Second device" },
     });
-    expect(await users.sessions(principal!)).toHaveLength(2);
+    expect(await users.sessions(principal!)).toHaveLength(3);
     await users.revokeOthers(principal!);
     expect(await users.authenticate(second.session!.token)).toBeNull();
 

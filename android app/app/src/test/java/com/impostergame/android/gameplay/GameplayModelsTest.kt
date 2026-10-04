@@ -13,6 +13,7 @@ import com.impostergame.data.model.MeetingParticipant
 import com.impostergame.data.model.MeetingRules
 import com.impostergame.data.model.MeetingUploader
 import com.impostergame.data.model.ReviewItem
+import java.time.Instant
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -33,13 +34,41 @@ class GameplayModelsTest {
     }
 
     @Test
-    fun killIsDrivenByCapabilityAndServerTargetList() {
+    fun killRequiresCapabilityServerTargetAndElapsedAuthoritativeCooldown() {
         val roleWithoutCapability = state(capabilities = emptyList(), killable = listOf("target"))
         assertFalse(roleWithoutCapability.mayKill("target"))
 
         val authorized = state(capabilities = listOf("kill"), killable = listOf("target"))
         assertTrue(authorized.mayKill("target"))
         assertFalse(authorized.mayKill("someone-else"))
+
+        val coolingSnapshot =
+            requireNotNull(authorized.snapshot)
+                .copy(cooldowns = Cooldowns("2026-10-03T12:00:30Z", null, 60, 60))
+        val cooling = GameplayUiState(snapshot = coolingSnapshot, killCooldownRemainingSeconds = 30)
+        assertFalse(cooling.canKill)
+        assertFalse(cooling.mayKill("target"))
+        assertTrue(cooling.copy(killCooldownRemainingSeconds = 0).mayKill("target"))
+    }
+
+    @Test
+    fun cooldownCountdownUsesTheServerDeadlineAndClampsAtZero() {
+        assertEquals(
+            30L,
+            remainingSecondsUntil(
+                "2026-10-03T12:00:30Z",
+                Instant.parse("2026-10-03T12:00:00Z"),
+            ),
+        )
+        assertEquals(
+            0L,
+            remainingSecondsUntil(
+                "2026-10-03T12:00:00Z",
+                Instant.parse("2026-10-03T12:00:01Z"),
+            ),
+        )
+        assertNull(remainingSecondsUntil(null, Instant.parse("2026-10-03T12:00:00Z")))
+        assertNull(remainingSecondsUntil("invalid", Instant.parse("2026-10-03T12:00:00Z")))
     }
 
     @Test

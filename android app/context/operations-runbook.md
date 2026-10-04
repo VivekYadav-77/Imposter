@@ -41,6 +41,13 @@ Use this with an approved release, named incident lead, and access-controlled da
 - Treat unexpected revocation clusters or suspected token exposure as security incidents. Halt rollout, revoke affected server sessions, and preserve access-controlled audit evidence.
 - The client clears credentials and sensitive state on revocation. Never request a token or encrypted preference file from a user.
 - Assess Keystore, backup, logs, crash reports, analytics, clipboard, screenshots, and signed-upload scopes before resuming.
+- Identify account and participant sessions separately. Account revocation may clear dashboard state,
+  but must not terminate an independently valid live-game participant session.
+- For Google failures, compare only fixed challenge/completion outcomes and configuration state.
+  Never collect ID tokens, nonces, transaction tokens, email addresses, Google subjects, or account IDs.
+- If native account auth loops or claims the wrong identity, turn off the Android account feature for
+  subsequent builds/rollout, preserve guest play and API v1 cookie compatibility, and investigate
+  Google client ID/package/certificate configuration before reenabling.
 
 ## Rollout halt/rollback exercise
 

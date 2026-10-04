@@ -57,6 +57,7 @@ class ParticipantApi(
     suspend fun createRoom(
         input: RoomCreationInput,
         idempotencyKey: String = UuidIdGenerator.create(),
+        accountToken: String? = null,
     ): ApiResult<SessionIssue> =
         executeSessionCommand(
             CommandRequest(
@@ -64,13 +65,15 @@ class ParticipantApi(
                 encodedPath = "/api/v1/rooms",
                 body = json.encodeToString(input).encodeToByteArray(),
                 idempotencyKey = idempotencyKey,
-            )
+            ),
+            accountToken,
         )
 
     suspend fun joinRoom(
         code: String,
         input: RoomMembershipInput,
         idempotencyKey: String = UuidIdGenerator.create(),
+        accountToken: String? = null,
     ): ApiResult<SessionIssue> {
         require(ROOM_CODE.matches(code)) { "Room code must contain six ASCII letters or digits" }
         return executeSessionCommand(
@@ -79,7 +82,8 @@ class ParticipantApi(
                 encodedPath = "/api/v1/rooms/${code.uppercase()}/participants",
                 body = json.encodeToString(input).encodeToByteArray(),
                 idempotencyKey = idempotencyKey,
-            )
+            ),
+            accountToken,
         )
     }
 
@@ -298,8 +302,17 @@ class ParticipantApi(
             )
             .discardValue()
 
-    private suspend fun executeSessionCommand(command: CommandRequest): ApiResult<SessionIssue> =
-        client.command(command, ApiEnvelope.serializer(SessionIssue.serializer())).map { it.data }
+    private suspend fun executeSessionCommand(
+        command: CommandRequest,
+        accountToken: String? = null,
+    ): ApiResult<SessionIssue> =
+        client
+            .command(
+                command,
+                ApiEnvelope.serializer(SessionIssue.serializer()),
+                bearerToken = accountToken,
+            )
+            .map { it.data }
 
     private companion object {
         val ROOM_CODE = Regex("^[A-Za-z0-9]{6}$")

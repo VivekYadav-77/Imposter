@@ -2,13 +2,19 @@
 
 The stable client surface is `openapi/openapi.json` plus `contracts/realtime-v1.schema.json`. HTTP business commands are authoritative; realtime messages are authenticated hints or participant-specific snapshots. Clients must never infer hidden roles, winners, task totals, or vote results.
 
-Native clients send `Authorization: Bearer <participant token>`. Same-origin web clients request cookie transport with `X-Session-Transport: cookie`, then rely on the Secure/HttpOnly/SameSite cookie and send an approved `Origin` for mutations. Never place a credential in a URL, query parameter, analytics event, or log.
+Native clients keep two independent credentials. Room/game routes use `Authorization: Bearer <participant token>`; `/api/v1/me/**` and account-session routes use `Authorization: Bearer <account token>`. Route ownership determines token type—clients and servers must never infer it from token contents. Same-origin web clients request cookie transport with `X-Session-Transport: cookie`, then rely on the Secure/HttpOnly/SameSite cookie and send an approved `Origin` for cookie-authenticated mutations. Never place either credential in a URL, query parameter, analytics event, or log.
+
+Android Google sign-in starts with `POST /api/v1/auth/google/mobile/challenges` and completes with `POST /api/v1/auth/google/mobile/complete`. Pass the returned nonce to Credential Manager and return its Google ID token with the one-time transaction token. Challenges are short-lived, single-use, and Android-only. The backend verifies signature, web-client audience, issuer, expiry, nonce, verified email, and identity ownership before issuing a 30-day account session. No Google client secret belongs in the app.
+
+Signed-in room create/join requests may carry the account bearer and are automatically linked to the new participant. Account rejoin requests should set `X-Session-Transport: bearer`; the response then includes the new participant `sessionToken`, which must be secured before navigation. Cookie website behavior remains unchanged.
 
 For retryable mutations, generate one `Idempotency-Key` and reuse that same key and identical body until a definitive response arrives. A changed body requires a new key. On `409` state-version conflict, fetch a fresh snapshot and ask the user to repeat an action when necessary. On `429`, respect `Retry-After`. Retry network/`503` failures with exponential backoff and jitter; do not blindly retry validation or authorization failures.
 
 Connect Socket.IO with WebSocket transport at `/realtime` using `auth.token` on native or the participant cookie on web. Replace local state on `room.snapshot` or `game.snapshot`. If state versions skip, emit `game.resync` or fetch `GET /api/v1/games/current/snapshot`. Stop reconnecting on `session.revoked`.
 
 Treat navigation, a backgrounded tab, and transport loss as a soft disconnect, never as an implicit leave. Keep the participant credential, offer **Resume** when `/api/v1/rooms/current` succeeds, and restore the latest server snapshot. This also restores the terminal result if the game ended while the player was away. Only the explicit leave command removes the participant; active games reject permanent leave so an accidental Back press cannot destroy a seat or leak a replacement identity into the game.
+
+At native launch, restore the participant credential first. An authoritative lobby, game, or result always wins over account auto-login. Only when no participant room exists should the client validate the account token and open the dashboard. Transport failure preserves both credentials; only an authoritative `401`, explicit sign-out/deletion, revocation, expiry, or corrupt secure storage clears the credential for that session type.
 
 Compatibility policy:
 

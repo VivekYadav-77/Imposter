@@ -494,10 +494,13 @@ class EntryLobbyViewModel(
 
     fun exitResults() {
         launchRequest {
-            when (val result = gateway.endSession()) {
+            when (val result = gateway.leave()) {
                 is GatewayResult.Success -> {
                     lobbyRefresh?.cancel()
                     settingsDebounce?.cancel()
+                    savedState.remove<String>(KEY_CODE)
+                    savedState.remove<String>(KEY_NICKNAME)
+                    savedState.remove<String>(KEY_COLOR)
                     _state.value = EntryLobbyUiState(destination = EntryDestination.HOME)
                 }
                 is GatewayResult.Failure -> update { it.copy(message = messageFor(result.error)) }
@@ -508,6 +511,11 @@ class EntryLobbyViewModel(
     /** Accepts the authoritative lobby returned by the replay command. */
     fun enterReplayedRoom(room: RoomSnapshot) {
         enterLobby(room, "Room reset. Waiting in the lobby.")
+    }
+
+    /** Accepts an authoritative room and participant credential returned by account rejoin. */
+    fun enterAccountRoom(room: RoomSnapshot) {
+        enterLobby(room, "Room ready.")
     }
 
     fun clearAnnouncement() = update { it.copy(announce = null) }

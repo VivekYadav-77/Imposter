@@ -84,6 +84,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.impostergame.android.account.AccountDestination
+import com.impostergame.android.account.AccountViewModel
+import com.impostergame.android.account.PendingGuestEntry
 import com.impostergame.android.entry.ConsentKind
 import com.impostergame.android.entry.EntryDestination
 import com.impostergame.android.entry.EntryLobbyUiState
@@ -133,6 +136,8 @@ import kotlinx.coroutines.launch
 fun ImposterGameApp(
     viewModel: EntryLobbyViewModel,
     gameplayViewModel: GameplayViewModel,
+    accountViewModel: AccountViewModel,
+    accountFeatureEnabled: Boolean,
     onCopyCode: (String) -> Unit,
     onShareCode: (String) -> Unit,
     onShareDiagnostics: () -> Unit,
@@ -147,28 +152,57 @@ fun ImposterGameApp(
     onMinimizeApp: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val accountState by accountViewModel.state.collectAsStateWithLifecycle()
     BackHandler(
         enabled =
-            state.destination in
-                setOf(
-                    EntryDestination.SETTINGS,
-                    EntryDestination.JOIN,
-                    EntryDestination.CREATE,
-                    EntryDestination.LOBBY,
-                )
+            accountState.destination != AccountDestination.NONE ||
+                state.destination in
+                    setOf(
+                        EntryDestination.SETTINGS,
+                        EntryDestination.JOIN,
+                        EntryDestination.CREATE,
+                        EntryDestination.LOBBY,
+                    )
     ) {
-        when (state.destination) {
-            EntryDestination.LOBBY -> {
-                if (state.confirmLeave) viewModel.dismissLeave() else viewModel.requestLeave()
+        if (
+            state.destination == EntryDestination.HOME &&
+                accountState.destination != AccountDestination.NONE
+        ) {
+            when (accountState.destination) {
+                AccountDestination.GAME_DETAIL -> accountViewModel.showHistory()
+                AccountDestination.HISTORY,
+                AccountDestination.SETTINGS -> accountViewModel.showDashboard()
+                AccountDestination.AUTH_CHOICE,
+                AccountDestination.DASHBOARD -> accountViewModel.dismiss()
+                AccountDestination.NONE -> Unit
             }
-            EntryDestination.SETTINGS,
-            EntryDestination.JOIN,
-            EntryDestination.CREATE -> viewModel.showHome()
-            else -> Unit
-        }
+        } else
+            when (state.destination) {
+                EntryDestination.LOBBY -> {
+                    if (state.confirmLeave) viewModel.dismissLeave() else viewModel.requestLeave()
+                }
+                EntryDestination.SETTINGS,
+                EntryDestination.JOIN,
+                EntryDestination.CREATE -> viewModel.showHome()
+                else -> Unit
+            }
     }
     LaunchedEffect(viewModel) { viewModel.feedback.collect(onFeedback) }
     LaunchedEffect(gameplayViewModel) { gameplayViewModel.feedback.collect(onFeedback) }
+    LaunchedEffect(state.destination) {
+        if (state.destination == EntryDestination.HOME) gameplayViewModel.clearForHome()
+    }
+    LaunchedEffect(state.destination, state.resumeFailed, accountFeatureEnabled) {
+        if (
+            accountFeatureEnabled &&
+                state.destination == EntryDestination.HOME &&
+                !state.resumeFailed
+        ) {
+            accountViewModel.bootstrap()
+        } else if (accountFeatureEnabled && state.destination != EntryDestination.BOOTSTRAP) {
+            accountViewModel.restorePresence()
+        }
+    }
     val systemDark = isSystemInDarkTheme()
     val darkTheme =
         when (preferences.themeMode) {
@@ -188,86 +222,132 @@ fun ImposterGameApp(
             ),
     ) {
         Surface(modifier = Modifier.fillMaxSize()) {
-            when (state.destination) {
-                EntryDestination.BOOTSTRAP -> LoadingScreen("Checking for an existing room…")
-                EntryDestination.HOME ->
-                    HomeScreen(
-                        state.message,
-                        state.resumeFailed,
-                        state.loading,
-                        viewModel::showJoin,
-                        viewModel::showCreate,
-                        viewModel::showSettings,
-                        viewModel::bootstrap,
-                        onShareDiagnostics,
-                        darkTheme,
-                        onThemeModeChanged,
-                    )
-                EntryDestination.SETTINGS ->
-                    SettingsScreen(
-                        preferences = preferences,
-                        onBack = viewModel::showHome,
-                        onThemeModeChanged = onThemeModeChanged,
-                        onSoundChanged = onSoundChanged,
-                        onHapticsChanged = onHapticsChanged,
-                        onReduceMotionChanged = onReduceMotionChanged,
-                        onHighContrastChanged = onHighContrastChanged,
-                    )
-                EntryDestination.JOIN,
-                EntryDestination.CREATE ->
-                    EntryScreen(
-                        state = state,
-                        viewModel = viewModel,
-                        onToggleTheme = {
-                            onThemeModeChanged(if (darkTheme) ThemeMode.Light else ThemeMode.Dark)
-                        },
-                    )
-                EntryDestination.LOBBY ->
-                    LobbyScreen(
-                        state,
-                        viewModel,
-                        onCopyCode,
-                        onShareCode,
-                        onToggleSound = { onSoundChanged(!preferences.soundEnabled) },
-                        onToggleTheme = {
-                            onThemeModeChanged(if (darkTheme) ThemeMode.Light else ThemeMode.Dark)
-                        },
-                    )
-                EntryDestination.GAME ->
-                    GameplayScreen(
-                        viewModel = gameplayViewModel,
-                        onMinimizeApp = onMinimizeApp,
-                        onReplayRoom = { room ->
-                            gameplayViewModel.clearForHome()
-                            viewModel.enterReplayedRoom(room)
-                        },
-                        onReturnHome = {
-                            gameplayViewModel.clearForHome()
-                            viewModel.exitResults()
-                        },
-                        onToggleSound = { onSoundChanged(!preferences.soundEnabled) },
-                        onToggleTheme = {
-                            onThemeModeChanged(if (darkTheme) ThemeMode.Light else ThemeMode.Dark)
-                        },
-                    )
-                EntryDestination.RESULTS ->
-                    GameplayScreen(
-                        viewModel = gameplayViewModel,
-                        onMinimizeApp = onMinimizeApp,
-                        onReplayRoom = { room ->
-                            gameplayViewModel.clearForHome()
-                            viewModel.enterReplayedRoom(room)
-                        },
-                        onReturnHome = {
-                            gameplayViewModel.clearForHome()
-                            viewModel.exitResults()
-                        },
-                        onToggleSound = { onSoundChanged(!preferences.soundEnabled) },
-                        onToggleTheme = {
-                            onThemeModeChanged(if (darkTheme) ThemeMode.Light else ThemeMode.Dark)
-                        },
-                    )
-            }
+            if (
+                state.destination == EntryDestination.HOME &&
+                    accountState.destination != AccountDestination.NONE
+            ) {
+                AccountSurface(
+                    state = accountState,
+                    viewModel = accountViewModel,
+                    onGuestEntry = { entry ->
+                        when (entry) {
+                            PendingGuestEntry.CREATE -> viewModel.showCreate()
+                            PendingGuestEntry.JOIN -> viewModel.showJoin()
+                        }
+                    },
+                    onRoomReady = {
+                        accountState.rejoinedRoom?.let(viewModel::enterAccountRoom)
+                    },
+                )
+            } else
+                when (state.destination) {
+                    EntryDestination.BOOTSTRAP -> LoadingScreen("Checking for an existing room…")
+                    EntryDestination.HOME ->
+                        HomeScreen(
+                            state.message,
+                            state.resumeFailed,
+                            state.loading,
+                            if (accountFeatureEnabled) {
+                                { accountViewModel.showAuthChoice(PendingGuestEntry.JOIN) }
+                            } else {
+                                viewModel::showJoin
+                            },
+                            if (accountFeatureEnabled) {
+                                { accountViewModel.showAuthChoice(PendingGuestEntry.CREATE) }
+                            } else {
+                                viewModel::showCreate
+                            },
+                            viewModel::showSettings,
+                            if (accountFeatureEnabled) {
+                                {
+                                    if (!accountState.accountCredentialPresent) {
+                                        accountViewModel.showAuthChoice(PendingGuestEntry.CREATE)
+                                    } else {
+                                        accountViewModel.showDashboard()
+                                    }
+                                }
+                            } else {
+                                null
+                            },
+                            if (!accountState.accountCredentialPresent) "Sign in" else "Dashboard",
+                            viewModel::bootstrap,
+                            onShareDiagnostics,
+                            darkTheme,
+                            onThemeModeChanged,
+                        )
+                    EntryDestination.SETTINGS ->
+                        SettingsScreen(
+                            preferences = preferences,
+                            onBack = viewModel::showHome,
+                            onThemeModeChanged = onThemeModeChanged,
+                            onSoundChanged = onSoundChanged,
+                            onHapticsChanged = onHapticsChanged,
+                            onReduceMotionChanged = onReduceMotionChanged,
+                            onHighContrastChanged = onHighContrastChanged,
+                        )
+                    EntryDestination.JOIN,
+                    EntryDestination.CREATE ->
+                        EntryScreen(
+                            state = state,
+                            viewModel = viewModel,
+                            onToggleTheme = {
+                                onThemeModeChanged(
+                                    if (darkTheme) ThemeMode.Light else ThemeMode.Dark
+                                )
+                            },
+                        )
+                    EntryDestination.LOBBY ->
+                        LobbyScreen(
+                            state,
+                            viewModel,
+                            onCopyCode,
+                            onShareCode,
+                            onToggleSound = { onSoundChanged(!preferences.soundEnabled) },
+                            onToggleTheme = {
+                                onThemeModeChanged(
+                                    if (darkTheme) ThemeMode.Light else ThemeMode.Dark
+                                )
+                            },
+                        )
+                    EntryDestination.GAME ->
+                        GameplayScreen(
+                            viewModel = gameplayViewModel,
+                            onMinimizeApp = onMinimizeApp,
+                            onReplayRoom = { room ->
+                                gameplayViewModel.clearForHome()
+                                viewModel.enterReplayedRoom(room)
+                            },
+                            onReturnHome = viewModel::exitResults,
+                            accountFeatureEnabled = accountFeatureEnabled,
+                            accountSignedIn = accountState.accountCredentialPresent,
+                            onSaveCase = { accountViewModel.continueWithGoogle("post_game") },
+                            onToggleSound = { onSoundChanged(!preferences.soundEnabled) },
+                            onToggleTheme = {
+                                onThemeModeChanged(
+                                    if (darkTheme) ThemeMode.Light else ThemeMode.Dark
+                                )
+                            },
+                        )
+                    EntryDestination.RESULTS ->
+                        GameplayScreen(
+                            viewModel = gameplayViewModel,
+                            onMinimizeApp = onMinimizeApp,
+                            onReplayRoom = { room ->
+                                gameplayViewModel.clearForHome()
+                                viewModel.enterReplayedRoom(room)
+                            },
+                            onReturnHome = viewModel::exitResults,
+                            accountFeatureEnabled = accountFeatureEnabled,
+                            accountSignedIn = accountState.accountCredentialPresent,
+                            onSaveCase = { accountViewModel.continueWithGoogle("post_game") },
+                            onToggleSound = { onSoundChanged(!preferences.soundEnabled) },
+                            onToggleTheme = {
+                                onThemeModeChanged(
+                                    if (darkTheme) ThemeMode.Light else ThemeMode.Dark
+                                )
+                            },
+                        )
+                }
         }
     }
 }
@@ -280,6 +360,8 @@ private fun HomeScreen(
     onJoin: () -> Unit,
     onCreate: () -> Unit,
     onSettings: () -> Unit,
+    onAccount: (() -> Unit)?,
+    accountLabel: String,
     onRetry: () -> Unit,
     onShareDiagnostics: () -> Unit,
     darkTheme: Boolean,
@@ -390,6 +472,13 @@ private fun HomeScreen(
                                 Modifier.fillMaxWidth(),
                             )
                             GameOutlinedButton("Join a room", onJoin, Modifier.fillMaxWidth())
+                            onAccount?.let { accountAction ->
+                                GameOutlinedButton(
+                                    accountLabel,
+                                    accountAction,
+                                    Modifier.fillMaxWidth(),
+                                )
+                            }
                             GameOutlinedButton("App settings", onSettings, Modifier.fillMaxWidth())
                             GameButton("Start a room  →", onCreate, Modifier.fillMaxWidth())
                         }

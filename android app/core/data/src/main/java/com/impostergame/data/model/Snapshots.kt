@@ -289,7 +289,12 @@ data class VoteAcknowledgement(
 
 @Serializable data class GameTaskPack(val name: String)
 
-@Serializable data class ApiMeta(val requestId: String, val serverTime: String)
+@Serializable
+data class ApiMeta(
+    val requestId: String,
+    val serverTime: String,
+    val nextCursor: String? = null,
+)
 
 @Serializable data class ApiEnvelope<T>(val data: T, val meta: ApiMeta)
 

@@ -239,6 +239,9 @@ Notes:
 - `PUBLIC_APP_URL`, `CORS_ALLOWED_ORIGINS`, and `CSP_IMAGE_SOURCES` must use the final HTTPS domain.
 - Register the exact `GOOGLE_OAUTH_REDIRECT_URI` as an authorized redirect URI on a Google OAuth Web application client. Scheme, host, path, and trailing slash must match exactly.
 - Store the Google client secret only in the protected server environment file; never expose it through a `NEXT_PUBLIC_` variable.
+- Native Android Credential Manager uses the same Google web client ID as the backend ID-token
+  audience. Register Android package/signing-certificate clients separately in Google Cloud, inject
+  only the web client ID into Android builds, and never copy the web client secret into the APK.
 - Never copy the development peppers or placeholder values into production.
 - Do not add `ADMIN_BOOTSTRAP_PASSWORD` permanently. It is a one-time shell variable used later.
 

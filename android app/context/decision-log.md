@@ -57,7 +57,7 @@ Use IDs `ADR-A-###`. Status is `proposed`, `approved`, `superseded`, or `rejecte
 
 ### ADR-A-009 — Account scope
 
-- **Status:** proposed
+- **Status:** superseded by ADR-A-035
 - **Recommendation:** Ship guest gameplay first; add Google/account history only if native OAuth/token exchange and result ownership are fully contracted.
 
 ### ADR-A-010 — Player color palette and wire mapping
@@ -265,9 +265,9 @@ Use IDs `ADR-A-###`. Status is `proposed`, `approved`, `superseded`, or `rejecte
 - **Status:** approved by explicit product-owner parity direction and verified locally
 - **Date:** 2026-10-03
 - **Approver:** product owner
-- **Decision:** On compact task screens, render the Imposter elimination ability after the assignment list and keep the card visible in both ready and cooldown states. Use the frozen website target-list hierarchy, privacy/cooldown copy, and one deliberate `Eliminate player` submission after target selection; do not add a second Android-only confirmation. Continue to revalidate the selected target against the newest snapshot and let the existing idempotent server command decide the outcome.
+- **Decision:** On compact task screens, render the Imposter elimination ability after the assignment list and keep the card visible in both ready and cooldown states. Treat the server `kill` capability as phase authorization and the separate authoritative `killAvailableAt` deadline as readiness; display and update the remaining deadline every second. Use the frozen website target-list hierarchy, privacy/cooldown copy, and one deliberate `Eliminate player` submission after target selection; do not add a second Android-only confirmation. Continue to revalidate the selected target against the newest snapshot and let the existing idempotent server command decide the outcome.
 - **Reason:** The earlier Android presentation hid the ability while recharging, placed it before assignments, used generic ballot rows, and introduced a user-flow step absent from the approved mobile website.
-- **Consequences:** Visual and interaction parity improves without granting client authority. Back closes the target popup, a changed target fails closed through existing ViewModel validation, and command failures refresh the authoritative snapshot.
+- **Consequences:** Visual and interaction parity improves without granting client authority. A present future cooldown deadline disables the target picker and renders `Kill · m:ss`; readiness and cooldown feedback occur only at zero. Back closes the target popup, a changed target fails closed through existing ViewModel validation, and command failures refresh the authoritative snapshot.
 
 ### ADR-A-033 — Evidence gallery parity without participant flag actions
 
@@ -277,6 +277,25 @@ Use IDs `ADR-A-###`. Status is `proposed`, `approved`, `superseded`, or `rejecte
 - **Decision:** Remove participant-facing evidence flag controls from both website and Android evidence surfaces. Render Android room and final evidence as the website-equivalent two-column thumbnail grid with an overlaid full-screen action, accepted-status badge, and zoomable preview. Resolve backend-issued relative read capabilities against the configured API origin while retaining the existing HTTPS-only production policy, localhost-only debug exception, response-size/type/dimension validation, and bounded in-memory cache. Clear meeting vote acknowledgements when an authoritative task-phase snapshot resumes.
 - **Reason:** The Android client rejected valid relative evidence URLs, exposed a list/detail flow that differed from the approved mobile website, retained a stale vote acknowledgement after the meeting, and both clients still exposed an evidence flag action the product owner removed from the experience.
 - **Consequences:** Own and authorized public evidence use the same server-issued read capability and preview path. Thumbnail bytes are loaded only for evidence/result views, cleared on backgrounding, and never persisted or logged. The backend flag endpoint and capability remain contract-compatible but neither client exposes them. Meeting vote acknowledgement remains available during the meeting and cannot leak into the resumed task dashboard.
+
+### ADR-A-034 — Explicit results exit releases room membership
+
+- **Status:** approved by explicit product-owner defect report and verified locally
+- **Date:** 2026-10-03
+- **Approver:** product owner
+- **Decision:** Android's terminal-result `Go home` action must call the authoritative room-leave command before navigating home, matching the website. Session revocation remains a separate sign-out operation and cannot substitute for releasing a room seat. Replay continues to include only participants whose authoritative membership is `joined`.
+- **Reason:** Revoking only the Android session left its participant membership joined. When the remaining players replayed and that person joined under a new nickname, both clients correctly rendered the stale seat plus the new participant, producing a phantom fourth player.
+- **Consequences:** A successful results exit clears the local room identity and the departed participant is excluded from a later same-room replay. A failed leave keeps the result screen and state available for retry. Website and server semantics remain unchanged; regression coverage now asserts both Android command selection and replay-roster exclusion.
+
+### ADR-A-035 — Native Google accounts and independent dual sessions
+
+- **Status:** approved by explicit account-parity implementation request
+- **Date:** 2026-10-04
+- **Approver:** product owner
+- **Decision:** Implement Android Google sign-in with Credential Manager and a backend-issued, one-time, nonce-bound mobile challenge. Keep a 30-day account bearer in a dedicated Keystore alias and preferences file, independent from the short-lived participant bearer. Route ownership selects the bearer type. Restore an authoritative participant room before validating account auto-login; preserve credentials on transport failure and clear only the affected session on authoritative invalidation, explicit revocation/sign-out/deletion, expiry, or corrupt secure storage. Reproduce dashboard, history, profile, devices, account deletion reauthentication, and guest post-game claim in Compose behind an Android account feature flag.
+- **Reason:** The website already exposes account history and cross-device room ownership, but browser OAuth/cookies cannot safely provide native parity. A nonce-bound ID-token exchange plus separate session lifecycles preserves Google verification, guest-first play, and uninterrupted live games.
+- **Consequences:** The website cookie flow remains compatible. Android contains only the Google web client ID, never a client secret. Account sign-out/revocation cannot leave or revoke an independently valid participant seat; participant resume wins over dashboard on process restart. Dashboard/history data remains memory-only. Production enablement requires registered package/signing fingerprints, internal and closed testing, and privacy-safe fixed-outcome monitoring.
+- **Supersedes:** ADR-A-009 and the account/dashboard exclusions in ADR-A-018, ADR-A-024, ADR-A-025, ADR-A-026, and ADR-A-027.
 
 ## Adding a decision
 

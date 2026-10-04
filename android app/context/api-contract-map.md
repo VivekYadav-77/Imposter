@@ -13,6 +13,22 @@ This is a navigation aid, not a replacement for `../../openapi/openapi.json` or 
 | Rotate session | `/api/v1/participant-sessions/current/rotate` | Replace token safely; never expose old/new values. |
 | End session | `DELETE /api/v1/participant-sessions/current` | Distinguish credential logout from eligible room leave. |
 
+## Native account/session
+
+| Capability | Contract area | Client rule |
+|---|---|---|
+| Google challenge | `POST /api/v1/auth/google/mobile/challenges` | Pass `login`, `play`, `post_game`, or `delete`; keep the transaction token and nonce in memory only. |
+| Google completion | `POST /api/v1/auth/google/mobile/complete` | Return the nonce-bound Google ID token; store an issued account credential in the account Keystore only. |
+| Profile/dashboard | `GET/PATCH /api/v1/me`, `GET /api/v1/me/dashboard` | Account bearer only; clear account state on authoritative `401`, never the participant session. |
+| History/detail | `GET /api/v1/me/games`, `GET /api/v1/me/games/{id}` | Keep pages/details in memory; respect the response cursor and server visibility. |
+| Devices | `GET/DELETE /api/v1/me/sessions...`, `DELETE /api/v1/account-sessions/current` | Account bearer; sign-out never implicitly leaves a participant seat. |
+| Account rejoin | `POST /api/v1/me/participations/{id}/rejoin` | Send `X-Session-Transport: bearer`; secure the returned participant token before routing. |
+| Delete account | `DELETE /api/v1/me` | Complete same-identity Google reauthentication first; server enforces the five-minute window. |
+
+Account and participant bearers are independent. The route selects which credential type is valid;
+never inspect a token to guess its type. Cookie Origin/CSRF enforcement remains for web mutations,
+while native bearer requests use HTTPS, bounded bodies, rate limits, token validation, and no-store.
+
 ## Lobby
 
 | Capability | Contract area | Client rule |

@@ -258,6 +258,10 @@ describeWithDatabase("meetings and terminal outcomes", () => {
     expect(terminalHost).not.toBeNull();
     const replayed = await rooms.replayRoom(terminalHost!, randomUUID());
     expect(replayed).toMatchObject({ status: "lobby", gameId: null });
+    expect(replayed.participants.map((participant) => participant.id)).not.toContain(
+      leavingPrincipal!.participantId,
+    );
+    expect(replayed.participants).toHaveLength(issued.length - 1);
   });
 
   it("resumes after a skipped meeting and resolves imposter parity on the next kill", async () => {

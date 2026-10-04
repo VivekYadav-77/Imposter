@@ -6,6 +6,7 @@ import com.impostergame.data.model.GameSnapshot
 import com.impostergame.data.model.Meeting
 import com.impostergame.data.model.Submission
 import com.impostergame.designsystem.component.ConnectionState
+import java.time.Instant
 
 enum class GameplayDestination {
     LOADING,
@@ -22,7 +23,12 @@ internal fun List<Assignment>.incompleteFirst(): List<Assignment> = sortedBy {
 
 internal fun GameplayUiState.mayKill(targetId: String): Boolean {
     val self = snapshot?.self ?: return false
-    return self.capabilities.contains("kill") && targetId in self.killableParticipantIds
+    return canKill && targetId in self.killableParticipantIds
+}
+
+internal fun remainingSecondsUntil(deadlineAt: String?, now: Instant): Long? {
+    val deadline = deadlineAt?.let { runCatching { Instant.parse(it) }.getOrNull() } ?: return null
+    return (deadline.epochSecond - now.epochSecond).coerceAtLeast(0)
 }
 
 internal fun GameplayUiState.mayCallMeeting(): Boolean {
@@ -159,11 +165,17 @@ data class GameplayUiState(
     val resultDetailsExpanded: Boolean = false,
     val loading: Boolean = false,
     val remainingSeconds: Long? = null,
+    val killCooldownRemainingSeconds: Long? = null,
     val message: String? = null,
     val connectionState: ConnectionState = ConnectionState.Connected,
 ) {
     val canKill: Boolean
-        get() = snapshot?.self?.capabilities?.contains("kill") == true
+        get() {
+            val current = snapshot ?: return false
+            val cooldownReady =
+                current.cooldowns.killAvailableAt == null || killCooldownRemainingSeconds == 0L
+            return current.self.capabilities.contains("kill") && cooldownReady
+        }
 
     val canSubmitEvidence: Boolean
         get() = snapshot?.self?.capabilities?.contains("submit_evidence") == true

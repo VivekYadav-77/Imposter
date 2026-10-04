@@ -15,6 +15,7 @@ enum class CommandMethod {
     POST,
     PATCH,
     PUT,
+    DELETE,
 }
 
 fun interface IdGenerator {

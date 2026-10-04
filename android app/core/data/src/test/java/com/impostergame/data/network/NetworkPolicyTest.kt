@@ -1,5 +1,8 @@
 package com.impostergame.data.network
 
+import com.impostergame.data.account.AccountCredential
+import com.impostergame.data.account.AccountSessionIssue
+import com.impostergame.data.account.MobileGoogleChallenge
 import com.impostergame.data.gameSnapshot
 import com.impostergame.data.model.ApiEnvelope
 import com.impostergame.data.model.ApiMeta
@@ -17,6 +20,7 @@ import com.impostergame.data.model.MeetingRules
 import com.impostergame.data.model.ParticipantSelf
 import com.impostergame.data.model.UploadIntent
 import com.impostergame.data.roomSnapshot
+import java.time.Instant
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.encodeToString
 import mockwebserver3.MockResponse
@@ -74,6 +78,12 @@ class NetworkPolicyTest {
             assertFalse(logs.joinToString().contains("super-secret"))
             assertFalse(
                 SecretRedactor.redact("Authorization: Bearer super-secret").contains("super-secret")
+            )
+            assertFalse(
+                SecretRedactor.redact(
+                        """{"idToken":"identity-secret","transactionToken":"transaction-secret","nonce":"nonce-secret"}"""
+                    )
+                    .contains("secret")
             )
             assertEquals(
                 "██REDACTED_URL██",
@@ -161,6 +171,21 @@ class NetworkPolicyTest {
         assertFalse(snapshot.toString().contains("imposter"))
         assertFalse(snapshot.toString().contains("secret-game-id"))
         assertFalse(EjectionVoteInput(1, "target-id").toString().contains("target-id"))
+        assertFalse(
+            AccountCredential("account-secret", "account-session", Instant.MAX)
+                .toString()
+                .contains("account-secret")
+        )
+        assertFalse(
+            AccountSessionIssue("account-secret", "2099-01-01T00:00:00Z", "session-secret")
+                .toString()
+                .contains("secret")
+        )
+        assertFalse(
+            MobileGoogleChallenge("transaction-secret", "nonce-secret", "2099-01-01T00:00:00Z")
+                .toString()
+                .contains("secret")
+        )
     }
 
     @Test

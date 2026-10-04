@@ -57,6 +57,7 @@ enum class WebsiteIconKind {
     Chevron,
     Clock,
     Eye,
+    Ghost,
     Lock,
     Minus,
     Lobby,
@@ -269,6 +270,11 @@ fun WebsiteIcon(
                 WebsiteIconKind.Eye -> {
                     path("M2.8 12s3.3-5.2 9.2-5.2S21.2 12 21.2 12s-3.3 5.2-9.2 5.2S2.8 12 2.8 12Z")
                     drawCircle(tint, 2.35f, Offset(12f, 12f), style = stroke)
+                }
+                WebsiteIconKind.Ghost -> {
+                    path("M6 20V10a6 6 0 0 1 12 0v10l-3-2-3 2-3-2Z")
+                    drawCircle(tint, .45f, Offset(9.5f, 11f))
+                    drawCircle(tint, .45f, Offset(14.5f, 11f))
                 }
                 WebsiteIconKind.Lobby -> {
                     drawCircle(tint, 3f, Offset(9f, 9f), style = stroke)

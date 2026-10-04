@@ -92,6 +92,7 @@ export class UserAuthService {
         state_hash: this.tokenHash(state),
         nonce,
         intent,
+        channel: "web",
         participant_id: intent === "delete" ? null : participantId,
         current_user_id: principal?.userId ?? null,
         current_session_id: principal?.sessionId ?? null,
@@ -105,6 +106,44 @@ export class UserAuthService {
       expiresAt: expiresAt.toISOString(),
       authorizationUrl: this.google.authorizationUrl({ state, nonce }),
     };
+  }
+
+  async beginMobileGoogleAuth(
+    intent: OAuthIntent,
+    participantId: string | null,
+    principal: UserPrincipal | null,
+  ) {
+    if (!this.google)
+      throw new ApplicationError(
+        503,
+        "GOOGLE_AUTH_UNAVAILABLE",
+        "Google sign-in is not configured yet.",
+      );
+    if (intent === "delete" && !principal)
+      throw new ApplicationError(401, "USER_SESSION_INVALID", "Sign in to continue.");
+    const transactionToken = createOpaqueToken();
+    const nonce = createOpaqueToken();
+    const expiresAt = new Date(Date.now() + OAUTH_TRANSACTION_TTL_MS);
+    await this.db
+      .deleteFrom("app.oauth_transactions")
+      .where("expires_at", "<", new Date())
+      .execute();
+    await this.db
+      .insertInto("app.oauth_transactions")
+      .values({
+        state_hash: this.tokenHash(transactionToken),
+        nonce,
+        intent,
+        channel: "android",
+        participant_id: intent === "delete" ? null : participantId,
+        current_user_id: principal?.userId ?? null,
+        current_session_id: principal?.sessionId ?? null,
+        return_to: OAUTH_RETURN_TO[intent],
+        expires_at: expiresAt,
+        consumed_at: null,
+      })
+      .execute();
+    return { transactionToken, nonce, expiresAt: expiresAt.toISOString() };
   }
 
   async completeGoogleAuth(input: {
@@ -125,6 +164,7 @@ export class UserAuthService {
       .updateTable("app.oauth_transactions")
       .set({ consumed_at: new Date() })
       .where("state_hash", "=", this.tokenHash(input.state))
+      .where("channel", "=", "web")
       .where("consumed_at", "is", null)
       .where("expires_at", ">", new Date())
       .returningAll()
@@ -136,6 +176,46 @@ export class UserAuthService {
         "This sign-in attempt expired or was already used. Please try again.",
       );
     const identity = await this.google.exchange(input.code, transaction.nonce);
+    return this.finishGoogleAuth(transaction, identity, input.meta);
+  }
+
+  async completeMobileGoogleAuth(input: {
+    transactionToken: string;
+    idToken: string;
+    meta: RequestMeta;
+  }) {
+    if (!this.google)
+      throw new ApplicationError(503, "GOOGLE_AUTH_UNAVAILABLE", "Google sign-in is unavailable.");
+    const transaction = await this.db
+      .updateTable("app.oauth_transactions")
+      .set({ consumed_at: new Date() })
+      .where("state_hash", "=", this.tokenHash(input.transactionToken))
+      .where("channel", "=", "android")
+      .where("consumed_at", "is", null)
+      .where("expires_at", ">", new Date())
+      .returningAll()
+      .executeTakeFirst();
+    if (!transaction)
+      throw new ApplicationError(
+        400,
+        "OAUTH_TRANSACTION_EXPIRED",
+        "This sign-in attempt expired or was already used. Please try again.",
+      );
+    const identity = await this.google.verifyIdToken(input.idToken, transaction.nonce);
+    return this.finishGoogleAuth(transaction, identity, input.meta);
+  }
+
+  private async finishGoogleAuth(
+    transaction: {
+      intent: OAuthIntent;
+      return_to: string;
+      participant_id: string | null;
+      current_user_id: string | null;
+      current_session_id: string | null;
+    },
+    identity: GoogleIdentity,
+    meta: RequestMeta,
+  ) {
     if (!identity.emailVerified)
       throw new ApplicationError(
         401,
@@ -182,7 +262,7 @@ export class UserAuthService {
       returnTo: transaction.return_to,
       participantId: transaction.participant_id,
       user: await this.profileById(userId),
-      session: await this.issue(userId, input.meta),
+      session: await this.issue(userId, meta),
     };
   }
 

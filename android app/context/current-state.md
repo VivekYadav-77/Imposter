@@ -1,7 +1,7 @@
 # Current Android implementation state
 
-**Last updated:** 2026-10-03
-**Overall status:** Phase 8 remains active. The product owner has replaced the earlier native-adaptation direction with approval-gated exact mobile-website parity under ADR-A-028. The shared design-system foundation and first screen group (bootstrap/resume, Home, Settings) are implemented and locally verified; later screen groups are intentionally waiting for approval.
+**Last updated:** 2026-10-04
+**Overall status:** Phase 8 remains active. Website-exact gameplay parity is joined by native Google account, dashboard, history, profile, device, rejoin, deletion-reauthentication, and guest-upgrade support under ADR-A-035. Account production rollout remains disabled until configuration and staging/device acceptance are complete.
 **Active phase:** Phase 8 — end-to-end quality, release, and operations
 **Active plan:** [`../plan/phase-08-quality-release.md`](../plan/phase-08-quality-release.md)
 **Last verified commit:** not recorded; current worktree contains the Phase 8 implementation
@@ -59,7 +59,7 @@
 - [x] Removed `FLAG_SECURE`, overlay hiding, the unused secure-surface API, and the stale all-gameplay-sensitive model contract from debug, staging, and release. Private roles still reseal on pause/focus loss.
 - [x] Added server-authoritative same-room replay from results through `POST /api/v1/rooms/current/replay`; the returned room snapshot resets gameplay state and restores lobby polling/settings under ADR-A-027.
 - [x] Corrected the compact Imposter task dashboard against the frozen mobile website: the elimination ability now follows the assignment list, remains visible while recharging, uses the website danger card and cooldown treatment, opens the website-equivalent two-line target list with privacy/cooldown guidance, and submits from the target dialog without an extra Android-only confirmation screen. Entering Tasks now refreshes evidence so the bottom-rail count is current.
-- [ ] Native account/dashboard/history remains intentionally absent pending ADR-A-009 because the current account API is cookie-only and has no approved native OAuth/token exchange.
+- [x] Added Credential Manager Google sign-in, nonce-bound native backend challenges, independent account Keystore storage, account-first API/repository models, participant-first bootstrap presentation, dashboard/history/detail/settings/device management, bearer rejoin, and non-blocking guest result upgrade behind `ANDROID_ACCOUNT_FEATURE_ENABLED` under ADR-A-035.
 
 ## Verification
 
@@ -100,11 +100,34 @@
 - The 6 GB development host can run one 2 GB emulator reliably, but the API 36 system image can briefly show a System UI ANR during first boot; run phone and tablet AVDs one at a time. This is an emulator/host-capacity condition, not an app crash.
 - Crash/ANR vendor, retention/residency, dashboards, alert owners, and synthetic routing need explicit approval. The code provides privacy-safe seams, not a configured monitoring service.
 - Privacy-policy URL, data-safety form, permission declaration, content rating, store listing/screenshots, countries/locales, support contact, and owner acceptance are external sign-offs.
-- ADR-A-005, ADR-A-007, and ADR-A-009 remain unresolved. Same-room replay is resolved by ADR-A-027 and emergency meetings by ADR-A-026; native account history still requires a secure native account contract.
+- ADR-A-005 and ADR-A-007 remain unresolved. Native account architecture is approved by ADR-A-035, but Google Cloud registration, staging credentials, device/accessibility coverage, and staged rollout evidence remain release gates.
 
 ## Next action
 
 Capture the corrected host lobby and Imposter task dashboard in both themes at 320dp, 390dp, and 430dp, then run the remaining independently controlled multi-client meeting, evidence, elimination, result, and replay acceptance path on approved staging.
+
+## Session handoff — 2026-10-04 native account parity
+
+**Milestone:** Android Google, guest, auto-login, dashboard, history, and account settings parity
+**Status:** implemented and host-verified behind the disabled-by-default Android account feature flag; Google Cloud/staging/device acceptance remains open
+
+### Changed
+
+- Added one-time nonce-bound Android Google challenges and ID-token completion while retaining the website OAuth/cookie contract.
+- Added account bearer support to `/api/v1/me/**`, signed-in room auto-claim, and bearer participant-token delivery for account rejoin.
+- Added Credential Manager, independent Keystore-backed account storage, participant-first bootstrap, dashboard/history/detail/profile/device/account screens, and guest result upgrade.
+- Added ADR-A-035, OpenAPI/client maps, deployment inputs, rollout gates, and privacy-safe account incident guidance.
+
+### Verified
+
+- `npm run format:check`, `npm run lint`, `npm run typecheck`, unit tests (22 files / 134 tests), OpenAPI drift/validation, and realtime fixture checks passed.
+- `gradlew quality --no-parallel --max-workers=1` passed 142 tasks after the account implementation.
+- Feature-enabled `assembleDebug` completed, and `validateStagingConfiguration` passed with a synthetic HTTPS origin and syntactically valid web client ID while storing a clean configuration cache entry.
+- The targeted database integration suite was discovered but skipped because `DATABASE_URL` is not configured in this shell; live Google, migration, device, and cross-client E2E remain unverified.
+
+### Next action
+
+Configure the staging database migration and Google Cloud Android package/signing fingerprints plus server web client ID. Then enable `ANDROID_ACCOUNT_FEATURE_ENABLED` for internal testing and run the ADR-A-035 E2E/accessibility matrix before closed testing.
 
 ## Session handoff — 2026-10-03
 
@@ -139,6 +162,35 @@ Capture the corrected host lobby and Imposter task dashboard in both themes at 3
 
 Run the corrected Imposter dashboard at the remaining compact widths and dark theme, then execute APP-004 on approved staging.
 
+## Session handoff — 2026-10-03 gameplay parity and replay membership
+
+**Milestone:** dead-player, meeting-cooldown, task-proof, and terminal-exit correction
+**Status:** implemented and verified locally; manual backend multi-client acceptance remains with the product owner
+
+### Changed
+
+- Replaced the Android-only killed-player warning with the website-equivalent ghost-status card while preserving authoritative ghost assignments and restrictions.
+- Added an independent authoritative meeting-cooldown timer to the website mobile status sheet and Android status panel, including when task completion is also required.
+- Loads accepted own evidence after upload, renders it in the completed task card, and opens the existing bounded full-screen preview from that card.
+- Changed Android terminal `Go home` from session revocation to explicit room leave, clears local room identity only after success, and keeps result state available when leave fails.
+- Strengthened replay coverage so a participant who explicitly left cannot appear in the next lobby roster.
+
+### Verified
+
+- `npm run check` — passed formatting, lint, typecheck, 21 files/120 unit tests, OpenAPI, and realtime fixtures.
+- `gradlew spotlessApply :app:testDebugUnitTest :app:compileDebugKotlin :core:designsystem:compileDebugKotlin --no-parallel --max-workers=1` — passed.
+- `gradlew quality --no-parallel --max-workers=1` — passed 142 tasks.
+- `gradlew connectedQuality :app:installDebug -PDEBUG_API_BASE_URL=http://127.0.0.1:3000 --no-parallel --max-workers=1` — passed 144 tasks on Acer One 8 T4-82L/API 33 and installed the updated APK.
+- The targeted database integration file was discovered but skipped because `DATABASE_URL` is not configured in this shell; manual/database-backed replay acceptance remains pending.
+
+### Decision added
+
+- ADR-A-034 — Explicit results exit releases room membership.
+
+### Next action
+
+Run the supplied three-player finish/leave/replay/rejoin scenario against the manually started backend and confirm the replay roster contains only joined memberships.
+
 ## Session handoff — 2026-10-03 evidence gallery parity
 
 **Milestone:** website-equivalent evidence gallery and reliable Android previews
@@ -163,3 +215,29 @@ Run the corrected Imposter dashboard at the remaining compact widths and dark th
 ### Decision added
 
 - ADR-A-033 — Evidence gallery parity without participant flag actions.
+
+## Session handoff — 2026-10-03 Imposter kill cooldown
+
+**Milestone:** authoritative live kill-cooldown presentation
+**Status:** implemented, device-tested, and installed; manual multi-client gameplay acceptance remains open
+
+### Changed
+
+- Separated the server's `kill` phase capability from readiness governed by `killAvailableAt`.
+- Added dedicated once-per-second kill-cooldown state driven by the authoritative absolute deadline.
+- The Imposter ability card now renders `Kill · m:ss` and disables target selection while recharging, then changes to `Kill · Ready` and emits ready feedback at zero.
+- Added deterministic tests for future, elapsed, absent, and malformed cooldown deadlines plus target authorization during cooldown.
+
+### Verified
+
+- Focused GameplayModels unit tests and debug Kotlin compilation passed.
+- `gradlew quality connectedQuality :app:installDebug -PDEBUG_API_BASE_URL=http://127.0.0.1:3000 --no-parallel --max-workers=1` — passed all 232 tasks on Acer One 8 T4-82L/API 33 and installed the updated APK.
+- The backend remained stopped; no live server was required for the deterministic deadline and connected-device gates.
+
+### Decision clarified
+
+- ADR-A-032 — `kill` authorizes the phase action; `killAvailableAt` controls live readiness.
+
+### Next action
+
+In the next manual three-player game, perform one elimination and visually confirm the card counts down from the server-configured cooldown to Ready before another target can be opened.

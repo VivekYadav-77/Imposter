@@ -169,6 +169,7 @@ export interface OAuthTransactionsTable {
   state_hash: string;
   nonce: string;
   intent: "login" | "play" | "post_game" | "delete";
+  channel: Generated<"web" | "android">;
   participant_id: string | null;
   current_user_id: string | null;
   current_session_id: string | null;

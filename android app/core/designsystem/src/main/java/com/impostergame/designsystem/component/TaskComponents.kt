@@ -2,11 +2,13 @@ package com.impostergame.designsystem.component
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -54,6 +56,9 @@ fun TaskCard(
     statusLabel: String? = null,
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null,
+    proofContentDescription: String? = null,
+    onProofClick: (() -> Unit)? = null,
+    proofContent: (@Composable () -> Unit)? = null,
 ) {
     val working =
         uploadState in
@@ -141,7 +146,11 @@ fun TaskCard(
                     )
                 }
             }
-            if (uploadState == UploadState.Complete || (actionLabel != null && onAction != null)) {
+            if (
+                uploadState == UploadState.Complete ||
+                    proofContent != null ||
+                    (actionLabel != null && onAction != null)
+            ) {
                 Surface(
                     color = MaterialTheme.colorScheme.surfaceVariant,
                     border =
@@ -154,7 +163,28 @@ fun TaskCard(
                         Modifier.width(WebsiteLayout.taskProofWidth).fillMaxHeight().padding(6.dp),
                         contentAlignment = Alignment.Center,
                     ) {
-                        if (working) {
+                        if (proofContent != null) {
+                            Box(
+                                Modifier.fillMaxSize()
+                                    .clickable(
+                                        enabled = onProofClick != null,
+                                        onClick = { onProofClick?.invoke() },
+                                    )
+                                    .semantics {
+                                        proofContentDescription?.let { contentDescription = it }
+                                    },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                proofContent()
+                                if (working) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(24.dp),
+                                        color = MaterialTheme.gameColors.tasks,
+                                        strokeWidth = 2.dp,
+                                    )
+                                }
+                            }
+                        } else if (working) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(24.dp),
                                 color = MaterialTheme.gameColors.tasks,

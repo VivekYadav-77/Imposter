@@ -50,7 +50,10 @@ const participantSecurity: NonNullable<OpenAPIObject["security"]> = [
   { participantBearer: [] },
   { participantCookie: [] },
 ];
-const userSecurity: NonNullable<OpenAPIObject["security"]> = [{ userCookie: [] }];
+const userSecurity: NonNullable<OpenAPIObject["security"]> = [
+  { userBearer: [] },
+  { userCookie: [] },
+];
 
 export const openApiDocument: OpenAPIObject = {
   openapi: "3.1.0",
@@ -818,6 +821,73 @@ export const openApiDocument: OpenAPIObject = {
         responses: { "302": { description: "Redirect to the safe application destination" } },
       },
     },
+    "/api/v1/auth/google/mobile/challenges": {
+      post: {
+        operationId: "createMobileGoogleChallenge",
+        security: [{}, { participantBearer: [] }, { userBearer: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                additionalProperties: false,
+                required: ["intent"],
+                properties: {
+                  intent: {
+                    type: "string",
+                    enum: ["login", "play", "post_game", "delete"],
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "201": envelope({
+            type: "object",
+            required: ["transactionToken", "nonce", "expiresAt"],
+            properties: {
+              transactionToken: { type: "string", writeOnly: true },
+              nonce: { type: "string", writeOnly: true },
+              expiresAt: { type: "string", format: "date-time" },
+            },
+          }),
+          "401": error,
+          "422": error,
+          "503": error,
+        },
+      },
+    },
+    "/api/v1/auth/google/mobile/complete": {
+      post: {
+        operationId: "completeMobileGoogleSignIn",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                additionalProperties: false,
+                required: ["transactionToken", "idToken"],
+                properties: {
+                  transactionToken: { type: "string", writeOnly: true },
+                  idToken: { type: "string", writeOnly: true },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": envelope({ $ref: "#/components/schemas/MobileGoogleCompletion" }),
+          "400": error,
+          "401": error,
+          "403": error,
+          "409": error,
+          "503": error,
+        },
+      },
+    },
     "/api/v1/account-sessions/current": {
       delete: {
         operationId: "logoutUser",
@@ -829,12 +899,19 @@ export const openApiDocument: OpenAPIObject = {
       get: {
         operationId: "getUserProfile",
         security: userSecurity,
-        responses: { "200": envelope({ type: "object" }), "401": error },
+        responses: {
+          "200": envelope({ $ref: "#/components/schemas/UserProfile" }),
+          "401": error,
+        },
       },
       patch: {
         operationId: "updateUserProfile",
         security: userSecurity,
-        responses: { "200": envelope({ type: "object" }), "401": error, "422": error },
+        responses: {
+          "200": envelope({ $ref: "#/components/schemas/UserProfile" }),
+          "401": error,
+          "422": error,
+        },
       },
       delete: {
         operationId: "deleteUserAccount",
@@ -917,7 +994,10 @@ export const openApiDocument: OpenAPIObject = {
           },
           idempotency,
         ],
-        responses: { "200": envelope({ type: "object" }), "409": error },
+        responses: {
+          "200": envelope({ $ref: "#/components/schemas/AccountRejoinIssue" }),
+          "409": error,
+        },
       },
     },
   },
@@ -932,6 +1012,11 @@ export const openApiDocument: OpenAPIObject = {
       participantBearer: { type: "http", scheme: "bearer", bearerFormat: "opaque" },
       participantCookie: { type: "apiKey", in: "cookie", name: "participant_session" },
       userCookie: { type: "apiKey", in: "cookie", name: "__Host-user_session" },
+      userBearer: {
+        type: "http",
+        scheme: "bearer",
+        bearerFormat: "opaque-account-session",
+      },
     },
     schemas: {
       AvatarId: {
@@ -1479,6 +1564,55 @@ export const openApiDocument: OpenAPIObject = {
         type: "object",
         required: ["sessionExpiresAt"],
         properties: {
+          sessionToken: { type: "string", writeOnly: true },
+          sessionExpiresAt: { type: "string", format: "date-time" },
+        },
+      },
+      UserProfile: {
+        type: "object",
+        additionalProperties: false,
+        required: ["id", "email", "displayName", "avatarId", "createdAt"],
+        properties: {
+          id: { type: "string", format: "uuid" },
+          email: { type: "string", format: "email" },
+          displayName: { type: "string", minLength: 1, maxLength: 24 },
+          avatarId: { $ref: "#/components/schemas/AvatarId" },
+          createdAt: { type: "string", format: "date-time" },
+        },
+      },
+      AccountSessionIssue: {
+        type: "object",
+        additionalProperties: false,
+        required: ["token", "sessionId", "expiresAt"],
+        properties: {
+          token: { type: "string", writeOnly: true },
+          sessionId: { type: "string", format: "uuid" },
+          expiresAt: { type: "string", format: "date-time" },
+        },
+      },
+      MobileGoogleCompletion: {
+        type: "object",
+        additionalProperties: false,
+        required: ["intent", "returnTo", "participantId", "user", "session"],
+        properties: {
+          intent: {
+            type: "string",
+            enum: ["login", "play", "post_game", "delete"],
+          },
+          returnTo: { type: "string" },
+          participantId: { type: ["string", "null"], format: "uuid" },
+          user: { $ref: "#/components/schemas/UserProfile" },
+          session: {
+            oneOf: [{ type: "null" }, { $ref: "#/components/schemas/AccountSessionIssue" }],
+          },
+        },
+      },
+      AccountRejoinIssue: {
+        type: "object",
+        additionalProperties: false,
+        required: ["room", "sessionExpiresAt"],
+        properties: {
+          room: { $ref: "#/components/schemas/RoomSnapshot" },
           sessionToken: { type: "string", writeOnly: true },
           sessionExpiresAt: { type: "string", format: "date-time" },
         },

@@ -1648,9 +1648,11 @@ function TaskView({
               >
                 <Icon name="meeting" size={18} /> Call meeting
               </Button>
-              {!meetingReady && game.cooldowns.meetingAvailableAt && (
-                <Timer deadline={game.cooldowns.meetingAvailableAt} label="Available in" />
-              )}
+              {!meetingReady &&
+                game.cooldowns.meetingAvailableAt &&
+                new Date(game.cooldowns.meetingAvailableAt).getTime() > now && (
+                  <Timer deadline={game.cooldowns.meetingAvailableAt} label="Available in" />
+                )}
             </section>
           </aside>
         </div>
@@ -1766,6 +1768,11 @@ function TaskView({
                     ? "You have no meeting calls remaining."
                     : "The meeting cooldown is still active."}
             </p>
+            {!meetingReady &&
+              game.cooldowns.meetingAvailableAt &&
+              new Date(game.cooldowns.meetingAvailableAt).getTime() > now && (
+                <Timer deadline={game.cooldowns.meetingAvailableAt} label="Available in" />
+              )}
             <Button
               disabled={!meetingReady}
               onClick={() => {

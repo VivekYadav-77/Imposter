@@ -81,6 +81,23 @@ class EntryLobbyViewModelTest {
         }
 
     @Test
+    fun resultsGoHomeReleasesRoomMembership() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val gateway = FakeGateway(ArrayDeque(listOf(ResumeTarget.Results)))
+            val viewModel = EntryLobbyViewModel(gateway, SavedStateHandle())
+            runCurrent()
+
+            assertEquals(EntryDestination.RESULTS, viewModel.state.value.destination)
+
+            viewModel.exitResults()
+            runCurrent()
+
+            assertEquals(1, gateway.leaveCalls)
+            assertEquals(0, gateway.endSessionCalls)
+            assertEquals(EntryDestination.HOME, viewModel.state.value.destination)
+        }
+
+    @Test
     fun remoteHostStartRoutesLobbyParticipantIntoGame() =
         runTest(mainDispatcherRule.dispatcher) {
             val lobby = room(RoomStatus.LOBBY)
@@ -304,6 +321,8 @@ private class FakeGateway(
     var resumeCalls = 0
     var refreshCalls = 0
     var updateSettingsCalls = 0
+    var leaveCalls = 0
+    var endSessionCalls = 0
     var lastSettingsInput: RoomSettingsInput? = null
 
     override suspend fun resume(): ResumeTarget {
@@ -376,7 +395,13 @@ private class FakeGateway(
 
     override suspend fun start(): GatewayResult<GameSnapshot> = error("Not used")
 
-    override suspend fun leave(): GatewayResult<Unit> = error("Not used")
+    override suspend fun leave(): GatewayResult<Unit> {
+        leaveCalls += 1
+        return GatewayResult.Success(Unit)
+    }
 
-    override suspend fun endSession(): GatewayResult<Unit> = error("Not used")
+    override suspend fun endSession(): GatewayResult<Unit> {
+        endSessionCalls += 1
+        return GatewayResult.Success(Unit)
+    }
 }

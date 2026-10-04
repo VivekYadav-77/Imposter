@@ -9,7 +9,11 @@ import type { Metrics } from "../infrastructure/observability/metrics.js";
 import { MemoryRateLimiter } from "../infrastructure/security/rate-limiter.js";
 import type { AdminAuthService } from "../modules/admin-auth/service.js";
 import type { OAuthIntent, UserAuthService, UserPrincipal } from "../modules/user-auth/service.js";
-import { updateProfileSchema } from "../modules/user-auth/schemas.js";
+import {
+  mobileGoogleChallengeSchema,
+  mobileGoogleCompleteSchema,
+  updateProfileSchema,
+} from "../modules/user-auth/schemas.js";
 import {
   createPackSchema,
   loginSchema,
@@ -366,6 +370,22 @@ function participantCredential(request: IncomingMessage): string | null {
   return bearerCredential(request) ?? readCookie(request, PARTICIPANT_COOKIE_NAME);
 }
 
+function userCredential(request: IncomingMessage): string | null {
+  return bearerCredential(request) ?? readCookie(request, USER_COOKIE_NAME);
+}
+
+async function optionalRoomAccount(
+  request: IncomingMessage,
+  users?: UserAuthService,
+): Promise<UserPrincipal | null> {
+  if (!users) return null;
+  const bearer = bearerCredential(request);
+  const account = await users.authenticate(bearer ?? readCookie(request, USER_COOKIE_NAME));
+  if (bearer && !account)
+    throw new ApplicationError(401, "USER_SESSION_INVALID", "Sign in again to link this room.");
+  return account;
+}
+
 async function participantPrincipal(
   request: IncomingMessage,
   rooms: RoomService,
@@ -429,10 +449,8 @@ async function handleRoomRoute(
   if (method === "POST" && path === "/api/v1/rooms") {
     const key = requireIdempotencyKey(request);
     const body = await validatedBody(request, config.maxJsonBodyBytes, roomCreationSchema);
+    const account = await optionalRoomAccount(request, userAuth);
     const issued = await rooms.createRoom(body, key, publicScope);
-    const account = userAuth
-      ? await userAuth.authenticate(readCookie(request, USER_COOKIE_NAME))
-      : null;
     if (account) await userAuth!.claimParticipant(account, issued.participant.participantId);
     sendIssuedSession(request, response, 201, issued, requestId, config);
     return;
@@ -458,15 +476,13 @@ async function handleRoomRoute(
   if (method === "POST" && joinMatch) {
     const key = requireIdempotencyKey(request);
     const body = await validatedBody(request, config.maxJsonBodyBytes, roomMembershipSchema);
+    const account = await optionalRoomAccount(request, userAuth);
     const issued = await rooms.joinRoom(
       joinMatch[1],
       body,
       key,
       `${publicScope}:${joinMatch[1].toUpperCase()}`,
     );
-    const account = userAuth
-      ? await userAuth.authenticate(readCookie(request, USER_COOKIE_NAME))
-      : null;
     if (account) await userAuth!.claimParticipant(account, issued.participant.participantId);
     sendIssuedSession(request, response, 201, issued, requestId, config);
     return;
@@ -566,7 +582,7 @@ async function requireUser(
   request: IncomingMessage,
   users: UserAuthService,
 ): Promise<UserPrincipal> {
-  const principal = await users.authenticate(readCookie(request, USER_COOKIE_NAME));
+  const principal = await users.authenticate(userCredential(request));
   if (!principal) throw new ApplicationError(401, "USER_SESSION_INVALID", "Sign in to continue.");
   return principal;
 }
@@ -581,8 +597,46 @@ async function handleUserRoute(
   config: AppConfig,
 ): Promise<void> {
   const method = request.method ?? "GET";
-  if (["POST", "PATCH", "PUT", "DELETE"].includes(method) && readCookie(request, USER_COOKIE_NAME))
+  if (
+    ["POST", "PATCH", "PUT", "DELETE"].includes(method) &&
+    !bearerCredential(request) &&
+    readCookie(request, USER_COOKIE_NAME)
+  )
     validateOriginForCookieMutation(request, config);
+  if (method === "POST" && path === "/api/v1/auth/google/mobile/challenges") {
+    const body = await validatedBody(request, config.maxJsonBodyBytes, mobileGoogleChallengeSchema);
+    const participant =
+      body.intent === "post_game" ? await participantPrincipal(request, rooms) : null;
+    const currentUser = body.intent === "delete" ? await requireUser(request, users) : null;
+    sendJson(
+      response,
+      201,
+      successEnvelope(
+        await users.beginMobileGoogleAuth(
+          body.intent,
+          participant?.participantId ?? null,
+          currentUser,
+        ),
+        requestId,
+      ),
+      requestId,
+    );
+    return;
+  }
+  if (method === "POST" && path === "/api/v1/auth/google/mobile/complete") {
+    const body = await validatedBody(request, config.maxJsonBodyBytes, mobileGoogleCompleteSchema);
+    const completed = await users.completeMobileGoogleAuth({
+      ...body,
+      meta: userRequestMeta(request, config),
+    });
+    if (completed.session && completed.participantId)
+      await users.claimParticipant(
+        { userId: completed.user.id, sessionId: completed.session.sessionId },
+        completed.participantId,
+      );
+    sendJson(response, 200, successEnvelope(completed, requestId), requestId);
+    return;
+  }
   if (method === "GET" && path === "/api/v1/auth/google/start") {
     const url = new URL(request.url ?? path, "http://localhost");
     const intentValue = url.searchParams.get("intent") ?? "login";
@@ -591,7 +645,7 @@ async function handleUserRoute(
       throw new ApplicationError(422, "VALIDATION_FAILED", "Choose a valid sign-in intent.");
     const intent = intentValue as OAuthIntent;
     const participant = await participantPrincipalOptional(request, rooms);
-    const currentUser = await users.authenticate(readCookie(request, USER_COOKIE_NAME));
+    const currentUser = await users.authenticate(userCredential(request));
     const transaction = await users.beginGoogleAuth(
       intent,
       participant?.participantId ?? null,
@@ -742,11 +796,21 @@ async function handleUserRoute(
       0,
       Math.floor((Date.parse(issued.sessionExpiresAt) - Date.now()) / 1000),
     );
-    response.setHeader("Set-Cookie", participantSessionCookie(issued.sessionToken, maxAge));
+    if (!bearerCredential(request))
+      response.setHeader("Set-Cookie", participantSessionCookie(issued.sessionToken, maxAge));
     sendJson(
       response,
       200,
-      successEnvelope({ room: issued.room, sessionExpiresAt: issued.sessionExpiresAt }, requestId),
+      successEnvelope(
+        bearerCredential(request)
+          ? {
+              room: issued.room,
+              sessionToken: issued.sessionToken,
+              sessionExpiresAt: issued.sessionExpiresAt,
+            }
+          : { room: issued.room, sessionExpiresAt: issued.sessionExpiresAt },
+        requestId,
+      ),
       requestId,
     );
     return;

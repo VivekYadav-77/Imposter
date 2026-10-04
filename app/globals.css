@@ -3577,6 +3577,19 @@ html[data-theme="light"] .dashboard-page {
   text-align: center;
 }
 
+.mobile-status-sheet .timer {
+  justify-content: space-between;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--elevated);
+}
+
+.mobile-status-sheet .timer small {
+  order: -1;
+  color: var(--muted);
+}
+
 .selected-file-preview {
   display: grid;
   gap: 0.75rem;

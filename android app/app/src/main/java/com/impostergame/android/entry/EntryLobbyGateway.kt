@@ -128,6 +128,7 @@ class NetworkEntryLobbyGateway(
     private val realtime: RealtimeSession? = null,
     roomRepository: RoomRepository? = null,
     connectivityRepository: ConnectivityRepository? = null,
+    private val accountCredential: () -> String? = { null },
 ) : EntryLobbyGateway {
     override val supportsRealtime: Boolean = realtime != null
     override val roomUpdates: Flow<RoomSnapshot> =
@@ -194,6 +195,7 @@ class NetworkEntryLobbyGateway(
         api.createRoom(
             RoomCreationInput(nickname, colorId, minPlayers, maxPlayers),
             idempotencyKey,
+            accountCredential(),
         )
     }
 
@@ -203,7 +205,12 @@ class NetworkEntryLobbyGateway(
         colorId: String,
         idempotencyKey: String,
     ) = issueSession {
-        api.joinRoom(code, RoomMembershipInput(nickname, colorId), idempotencyKey)
+        api.joinRoom(
+            code,
+            RoomMembershipInput(nickname, colorId),
+            idempotencyKey,
+            accountCredential(),
+        )
     }
 
     override suspend fun refreshRoom() =

@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -135,6 +136,9 @@ fun GameplayScreen(
     onMinimizeApp: () -> Unit,
     onReplayRoom: (RoomSnapshot) -> Unit,
     onReturnHome: () -> Unit,
+    accountFeatureEnabled: Boolean = false,
+    accountSignedIn: Boolean = false,
+    onSaveCase: (() -> Unit)? = null,
     onToggleSound: (() -> Unit)? = null,
     onToggleTheme: (() -> Unit)? = null,
 ) {
@@ -211,6 +215,9 @@ fun GameplayScreen(
                     viewModel,
                     onReplayRoom,
                     onReturnHome,
+                    accountFeatureEnabled,
+                    accountSignedIn,
+                    onSaveCase,
                     onToggleSound,
                     onToggleTheme,
                 )
@@ -774,6 +781,9 @@ private fun FinalResultScreen(
     viewModel: GameplayViewModel,
     onReplayRoom: (RoomSnapshot) -> Unit,
     onReturnHome: () -> Unit,
+    accountFeatureEnabled: Boolean,
+    accountSignedIn: Boolean,
+    onSaveCase: (() -> Unit)?,
     onToggleSound: (() -> Unit)?,
     onToggleTheme: (() -> Unit)?,
 ) {
@@ -1073,6 +1083,35 @@ private fun FinalResultScreen(
                             .height(1.dp)
                             .background(MaterialTheme.colorScheme.outlineVariant)
                     )
+                    if (accountFeatureEnabled && !accountSignedIn && onSaveCase != null) {
+                        SignalCard(Modifier.fillMaxWidth()) {
+                            Column(
+                                Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(9.dp),
+                            ) {
+                                Text(
+                                    "SAVE THIS CASE",
+                                    color = MaterialTheme.colorScheme.primary,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Black,
+                                )
+                                Text(
+                                    "Keep this result in your dashboard",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Black,
+                                )
+                                Text(
+                                    "Continue with Google to attach this finished game and room to your private history.",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                GameButton(
+                                    "Continue with Google",
+                                    onSaveCase,
+                                    Modifier.fillMaxWidth(),
+                                )
+                            }
+                        }
+                    }
                     Text(
                         "Play again with this room?",
                         style = MaterialTheme.typography.titleLarge,
@@ -1451,6 +1490,7 @@ private fun TaskPhaseScreen(
                 TaskEvidenceDialog(it, state, viewModel)
             }
     }
+    state.selectedSubmissionId?.let { EvidencePreviewDialog(state, viewModel) }
     if (state.statusPanelVisible) StatusPanel(snapshot, state, viewModel)
     if (state.killPickerVisible) KillTargetPicker(snapshot, state, viewModel)
     if (state.confirmMeetingCall) MeetingCallConfirmation(snapshot, viewModel)
@@ -1477,14 +1517,6 @@ private fun TaskPhaseScreen(
             } else {
                 TaskList(snapshot, state, viewModel, Modifier.fillMaxSize(), showKill = true)
             }
-        }
-        if (snapshot.self.lifeStatus != "alive") {
-            Text(
-                "You are ${snapshot.self.lifeStatus}. Only currently authorized actions remain available.",
-                Modifier.fillMaxWidth().padding(GameSpacing.sm),
-                textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.error,
-            )
         }
         GameActionBar(snapshot, state, viewModel)
     }
@@ -1542,9 +1574,19 @@ private fun TaskList(
                 )
             }
         }
+        if (snapshot.self.lifeStatus != "alive") {
+            EliminatedBanner(snapshot.self.lifeStatus)
+        }
         Message(state.message)
         if (sorted.isEmpty()) Text("You have no assigned tasks.")
         sorted.forEachIndexed { index, assignment ->
+            val ownProof =
+                state.submissions.lastOrNull { submission ->
+                    submission.assignmentId == assignment.id &&
+                        submission.uploader.id == snapshot.self.participantId &&
+                        submission.processingStatus == "accepted"
+                }
+            val proofBytes = ownProof?.let { state.evidenceImageBytes[it.id] }
             var entered by remember(assignment.id) { mutableStateOf(false) }
             val reduceMotion = LocalGameAccessibilityPreferences.current.reduceMotion
             LaunchedEffect(assignment.id, reduceMotion) {
@@ -1584,11 +1626,89 @@ private fun TaskList(
                     onAction =
                         if (assignment.status == "completed" || !state.canSubmitEvidence) null
                         else ({ viewModel.selectAssignment(assignment.id) }),
+                    proofContentDescription =
+                        ownProof?.let { "Preview your photo for ${assignment.description}" },
+                    onProofClick =
+                        ownProof?.image?.let {
+                            { viewModel.selectEvidence(ownProof.id) }
+                        },
+                    proofContent = proofBytes?.let { bytes -> { EvidenceThumbnail(bytes) } },
                 )
             }
         }
         if (showKill && snapshot.self.role == "imposter" && snapshot.self.lifeStatus == "alive") {
             KillControl(snapshot, state, viewModel)
+        }
+    }
+}
+
+@Composable
+private fun EliminatedBanner(lifeStatus: String) {
+    val danger = LocalGameSemanticColors.current.danger
+    Surface(
+        modifier =
+            Modifier.fillMaxWidth().semantics {
+                liveRegion = LiveRegionMode.Polite
+                contentDescription =
+                    if (lifeStatus == "killed") "You were eliminated. Ghost mode."
+                    else "You were ejected. Ghost mode."
+            },
+        shape = RoundedCornerShape(10.dp),
+        color = Color(0xFF181715),
+        border = BorderStroke(1.dp, Color(0xFF8E3327)),
+        shadowElevation = 8.dp,
+        tonalElevation = 0.dp,
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(start = 5.dp, end = 14.dp, top = 14.dp, bottom = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(Modifier.width(4.dp).height(72.dp).background(danger))
+            Surface(
+                modifier = Modifier.size(52.dp),
+                shape = CircleShape,
+                color = Color.Transparent,
+                border = BorderStroke(2.dp, Color(0xFFC95A45)),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    WebsiteIcon(
+                        WebsiteIconKind.Ghost,
+                        tint = Color(0xFFEF8D77),
+                        size = 24.dp,
+                    )
+                }
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(
+                    "STATUS UPDATE",
+                    color = Color(0xFFEF8D77),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Black,
+                )
+                Text(
+                    if (lifeStatus == "killed") "You were eliminated" else "You were ejected",
+                    color = Color(0xFFF1B1A1),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Black,
+                )
+                Text(
+                    "Stay silent about what you saw. You can still finish ghost assignments, " +
+                        "but you can no longer vote or call meetings.",
+                    color = Color(0xFFB9B1A8),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Text(
+                    "GHOST MODE",
+                    modifier =
+                        Modifier.background(danger.copy(alpha = .18f), RoundedCornerShape(999.dp))
+                            .border(1.dp, danger, RoundedCornerShape(999.dp))
+                            .padding(horizontal = 9.dp, vertical = 3.dp),
+                    color = Color(0xFFF1B1A1),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Black,
+                )
+            }
         }
     }
 }
@@ -1914,6 +2034,25 @@ private fun StatusPanel(
                                     meetingAvailabilityLabel(snapshot, state),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
+                                meetingCooldownText(snapshot)?.let { remaining ->
+                                    Row(
+                                        Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Text(
+                                            "Available in",
+                                            Modifier.weight(1f),
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            style = MaterialTheme.typography.labelMedium,
+                                        )
+                                        Text(
+                                            remaining,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            style = MaterialTheme.typography.titleLarge,
+                                            fontWeight = FontWeight.Black,
+                                        )
+                                    }
+                                }
                                 GameButton(
                                     "Call meeting",
                                     viewModel::requestMeetingConfirmation,
@@ -2039,12 +2178,8 @@ private fun meetingCooldownText(snapshot: GameSnapshot): String? {
     return "%d:%02d".format(seconds / 60, seconds % 60)
 }
 
-private fun killCooldownText(snapshot: GameSnapshot): String? {
-    val deadline =
-        snapshot.cooldowns.killAvailableAt?.let { runCatching { Instant.parse(it) }.getOrNull() }
-            ?: return null
-    val seconds = (deadline.epochSecond - Instant.now().epochSecond).coerceAtLeast(0)
-    if (seconds == 0L) return null
+private fun killCooldownText(seconds: Long?): String? {
+    if (seconds == null || seconds == 0L) return null
     return "%d:%02d".format(seconds / 60, seconds % 60)
 }
 
@@ -2104,7 +2239,8 @@ private fun KillControl(
             }
             GameButton(
                 if (ready) "☠  Kill · Ready"
-                else "Kill · ${killCooldownText(snapshot) ?: "Recharging"}",
+                else
+                    "Kill · ${killCooldownText(state.killCooldownRemainingSeconds) ?: "Recharging"}",
                 viewModel::showKillPicker,
                 Modifier.widthIn(min = WebsiteLayout.killButtonMinWidth),
                 style = GameButtonStyle.Destructive,

@@ -8,7 +8,9 @@ import { loadConfig } from "../../src/infrastructure/configuration/config.js";
 import { InMemoryMetrics } from "../../src/infrastructure/observability/metrics.js";
 import type { Database } from "../../src/infrastructure/database/database.js";
 import type { AdminAuthService } from "../../src/modules/admin-auth/service.js";
+import type { RoomService } from "../../src/modules/rooms/service.js";
 import type { TaskPackRepository } from "../../src/modules/task-packs/repository.js";
+import type { UserAuthService } from "../../src/modules/user-auth/service.js";
 import { ApplicationError } from "../../src/shared/errors/application-error.js";
 
 const servers: ReturnType<typeof createServer>[] = [];
@@ -57,6 +59,25 @@ function phaseTwoServer(adminAuth: Partial<AdminAuthService>) {
     metrics: new InMemoryMetrics(),
     adminAuth: adminAuth as AdminAuthService,
     taskPacks,
+  });
+  const server = createServer((req, res) => void handler(req, res));
+  servers.push(server);
+  return request(server);
+}
+
+function accountServer(userAuth: Partial<UserAuthService>, rooms: Partial<RoomService> = {}) {
+  const config = loadConfig({
+    APP_ENV: "test",
+    DATABASE_URL: "postgresql://test:test@localhost:5432/test",
+    CORS_ALLOWED_ORIGINS: "https://game.example",
+  });
+  const handler = createApiHandler({
+    config,
+    database: {} as Database,
+    logger: pino({ enabled: false }),
+    metrics: new InMemoryMetrics(),
+    userAuth: userAuth as UserAuthService,
+    rooms: rooms as RoomService,
   });
   const server = createServer((req, res) => void handler(req, res));
   servers.push(server);
@@ -154,5 +175,145 @@ describe("Phase 2 HTTP security boundaries", () => {
     expect(response.headers["set-cookie"]?.[0]).toContain(
       "__Host-admin_session=opaque; Path=/; Max-Age=3600; HttpOnly; Secure; SameSite=Strict",
     );
+  });
+});
+
+describe("native account HTTP contract", () => {
+  const principal = { userId: "user-id", sessionId: "session-id" };
+  const profile = {
+    id: "user-id",
+    email: "player@example.com",
+    displayName: "Player",
+    avatarId: "fox" as const,
+    createdAt: "2026-01-01T00:00:00.000Z",
+  };
+
+  it("accepts an account bearer token on protected profile routes", async () => {
+    let credential: string | null = null;
+    const response = await accountServer({
+      authenticate: (value) => {
+        credential = value;
+        return Promise.resolve(principal);
+      },
+      profile: () => Promise.resolve(profile),
+    })
+      .get("/api/v1/me")
+      .set("Authorization", "Bearer account-token")
+      .expect(200);
+
+    expect(credential).toBe("account-token");
+    const body = response.body as { data: typeof profile };
+    expect(body.data).toMatchObject(profile);
+  });
+
+  it("does not require browser Origin validation for bearer mutations", async () => {
+    let revokedSession: string | null = null;
+    await accountServer({
+      authenticate: () => Promise.resolve(principal),
+      revokeSession: (_principal, sessionId) => {
+        revokedSession = sessionId;
+        return Promise.resolve();
+      },
+    })
+      .delete("/api/v1/account-sessions/current")
+      .set("Authorization", "Bearer account-token")
+      .expect(204);
+
+    expect(revokedSession).toBe("session-id");
+  });
+
+  it("exposes one-time mobile Google challenge and completion envelopes", async () => {
+    const agent = accountServer({
+      beginMobileGoogleAuth: (intent) =>
+        Promise.resolve({
+          transactionToken: `transaction-${intent}`,
+          nonce: "nonce",
+          expiresAt: "2026-01-01T00:10:00.000Z",
+        }),
+      completeMobileGoogleAuth: () =>
+        Promise.resolve({
+          intent: "login" as const,
+          returnTo: "/dashboard",
+          participantId: null,
+          user: profile,
+          session: {
+            token: "account-token",
+            sessionId: "22222222-2222-4222-8222-222222222222",
+            expiresAt: "2026-02-01T00:00:00.000Z",
+          },
+        }),
+    });
+
+    const challenge = await agent
+      .post("/api/v1/auth/google/mobile/challenges")
+      .send({ intent: "login" })
+      .expect(201);
+    const challengeBody = challenge.body as {
+      data: { transactionToken: string; nonce: string };
+    };
+    expect(challengeBody.data).toMatchObject({
+      transactionToken: "transaction-login",
+      nonce: "nonce",
+    });
+
+    const completion = await agent
+      .post("/api/v1/auth/google/mobile/complete")
+      .send({ transactionToken: "t".repeat(32), idToken: "i".repeat(100) })
+      .expect(200);
+    const completionBody = completion.body as {
+      data: { session: { token: string; sessionId: string } };
+    };
+    expect(completionBody.data.session).toMatchObject({
+      token: "account-token",
+      sessionId: "22222222-2222-4222-8222-222222222222",
+    });
+  });
+
+  it("returns a participant bearer when an account rejoin requests bearer transport", async () => {
+    const participantId = "11111111-1111-4111-8111-111111111111";
+    const response = await accountServer(
+      { authenticate: () => Promise.resolve(principal) },
+      {
+        rejoinForUser: () =>
+          Promise.resolve({
+            room: {
+              id: "00000000-0000-4000-8000-000000000001",
+              code: "ABC123",
+              status: "lobby" as const,
+              maxPlayers: 15,
+              settings: { selectedTaskPack: null, taskPhaseSeconds: 900 },
+              participants: [],
+              self: {
+                participantId,
+                nickname: "Player",
+                avatarId: "fox" as const,
+                isHost: false,
+                capabilities: [],
+              },
+              expiresAt: "2026-01-01T01:00:00.000Z",
+              gameId: null,
+            },
+            participant: {
+              participantId,
+              nickname: "Player",
+              avatarId: "fox" as const,
+              isHost: false,
+              capabilities: [],
+            },
+            sessionToken: "participant-token",
+            sessionExpiresAt: "2026-01-01T01:00:00.000Z",
+          }),
+      },
+    )
+      .post(`/api/v1/me/participations/${participantId}/rejoin`)
+      .set("Authorization", "Bearer account-token")
+      .set("X-Session-Transport", "bearer")
+      .set("Idempotency-Key", "rejoin-command-1")
+      .send({})
+      .expect(200);
+
+    expect(response.headers["set-cookie"]).toBeUndefined();
+    const body = response.body as { data: { sessionToken: string } };
+    expect(body.data.sessionToken).toBe("participant-token");
   });
 });

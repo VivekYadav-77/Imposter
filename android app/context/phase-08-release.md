@@ -1,7 +1,7 @@
 # Phase 8 release and acceptance record
 
 **Status:** in progress; deterministic repository controls are implemented, external validation and approvals remain gated
-**Last updated:** 2026-09-28
+**Last updated:** 2026-10-04
 
 ## Release identity and configuration
 
@@ -11,6 +11,9 @@
 - Release signing requires an external keystore and four environment/Gradle inputs. Keystores and build outputs are ignored. The production workflow materializes the keystore under the runner temporary directory, uses protected environment secrets, and uploads the signed AAB plus R8 mapping as a restricted artifact.
 - Release builds always enable R8 and resource shrinking. Broad keep rules are forbidden; a keep rule must correspond to a reproduced release-only defect.
 - CI generates a disposable short-lived signing key to prove the signed, shrunk bundle path without using production credentials.
+- Native accounts require `ANDROID_ACCOUNT_FEATURE_ENABLED=true` plus `GOOGLE_WEB_CLIENT_ID`.
+  Google Cloud must contain the exact application ID and signing-certificate fingerprints. Only the
+  web client ID enters the APK; the client secret remains server-side.
 
 ## Compatibility and forced-update policy
 
@@ -51,6 +54,9 @@ Initial alert proposals, to be approved against staging baselines:
 | Upload completion, 30 min, at least 25 attempts | below 95% | below 90% |
 | Command conflicts | 2x seven-day baseline | 4x baseline |
 | Session revocations | 2x seven-day baseline | 4x baseline or unexplained cluster |
+| Native auth challenge/completion failures | 2x seven-day baseline | 4x baseline or sustained login loop |
+| Account bootstrap/dashboard failures | 2x seven-day baseline | 4x baseline or inability to reach guest Home |
+| Room claim/rejoin credential failures | 2x seven-day baseline | Any credential loss or cross-user claim |
 
 Low-volume windows do not page; they create a review signal. Never segment by role, ballot, evidence content, room, nickname, participant ID, or room code.
 
@@ -67,12 +73,17 @@ Low-volume windows do not page; they create a review signal. Never segment by ro
 
 The ten scenarios in the Phase 8 plan must record backend build, Android commit/version, devices/API levels, visibility mode, result, run link, and defects. Mandatory variants include API 26/31/36, compact portrait/landscape, expanded width, light/dark, 200% font, and rotation/background/network loss/process death at every authoritative phase.
 
-The product owner runs the production-like acceptance game. Accessibility and privacy reviewers sign separately. ADR-A-005 through ADR-A-009 and the final application ID/store scope must be resolved before general availability.
+The product owner runs the production-like acceptance game. Accessibility and privacy reviewers sign separately. ADR-A-005 and ADR-A-007 plus the final application ID/store scope must be resolved before general availability. ADR-A-035 supersedes the former ADR-A-009 account gate.
 
 1. Internal: two clean release-gate passes, signed AAB/mapping retained, API 26/31/36 smoke tests, and no critical/high security/privacy or blocker accessibility issue.
 2. Closed: the E2E ledger passes; monitor at least 48 hours. Stop for any incident threshold, session loss, unauthorized disclosure, upload data loss, or incompatibility.
 3. Production: 5% for 24 hours, 20% for 24 hours, 50% for 48 hours, then 100% only with approved dashboards and no stop criterion.
 4. Halt immediately for privacy/security disclosure, crash/ANR stop threshold, authentication/session loop, inability to join/resume, corrupt uploads, or incompatibility. Follow the operations runbook.
+
+The Android account flag remains off until internal testing passes first-time Google sign-in,
+returning auto-login, cancellation/no-device-account, guest post-game upgrade, web↔Android room
+visibility, remote revocation, process death with both credentials, and wrong/correct-account deletion
+reauthentication. Promote it through internal, closed, then the staged production percentages above.
 
 ## Release evidence checklist
 

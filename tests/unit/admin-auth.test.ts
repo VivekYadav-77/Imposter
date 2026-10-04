@@ -133,6 +133,13 @@ describe("administrator authentication", () => {
           emailVerified: true,
           name: "Owner",
         }),
+      verifyIdToken: () =>
+        Promise.resolve({
+          subject: "google-owner",
+          email: "owner@example.com",
+          emailVerified: true,
+          name: "Owner",
+        }),
     };
     const service = new AdminAuthService(
       repository,
