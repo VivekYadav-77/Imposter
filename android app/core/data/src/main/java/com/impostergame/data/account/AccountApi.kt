@@ -88,10 +88,10 @@ class AccountApi(
                         put("limit", "20")
                         cursor?.let { put("cursor", it) }
                     },
-                deserializer = ApiEnvelope.serializer(ListSerializer(UserGameSummary.serializer())),
+                deserializer = ApiEnvelope.serializer(HistoryPage.serializer()),
                 bearerToken = accountCredential(),
             )
-            .map { HistoryPage(it.data, it.meta.nextCursor) }
+            .map { it.data }
 
     suspend fun game(id: String): ApiResult<UserGameDetail> =
         client

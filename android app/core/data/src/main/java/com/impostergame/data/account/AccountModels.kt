@@ -151,6 +151,7 @@ data class AccountRejoinIssue(
         "AccountRejoinIssue(room=██REDACTED██, sessionToken=██REDACTED██, sessionExpiresAt=$sessionExpiresAt)"
 }
 
+@Serializable
 data class HistoryPage(
     val items: List<UserGameSummary>,
     val nextCursor: String?,

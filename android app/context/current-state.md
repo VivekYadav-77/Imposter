@@ -1,11 +1,11 @@
 # Current Android implementation state
 
-**Last updated:** 2026-10-04
+**Last updated:** 2026-10-05
 **Overall status:** Phase 8 remains active. Website-exact gameplay parity is joined by native Google account, dashboard, history, profile, device, rejoin, deletion-reauthentication, and guest-upgrade support under ADR-A-035. Account production rollout remains disabled until configuration and staging/device acceptance are complete.
 **Active phase:** Phase 8 — end-to-end quality, release, and operations
 **Active release context:** [`phase-08-release.md`](phase-08-release.md)
 **Last verified commit:** not recorded; current worktree contains the Phase 8 implementation
-**Android build status:** Full `quality` and `connectedQuality` gates pass with JDK 17; the latest physical run passed on Acer One 8 T4-82L/API 33 and the current debug APK was installed and visually checked in persistent light and dark modes
+**Android build status:** Full `quality` and connected design-system gates pass with JDK 17; the latest focused physical run passed on Realme RMX2002/API 30 against production account APIs
 
 ## Implemented through Phase 7
 
@@ -64,6 +64,8 @@
 
 ## Verification
 
+- 2026-10-05 task-card/history correction — fixed proof-image intrinsic sizing so evidence remains within the 104dp proof pane, and aligned Android history decoding with the production `{ data: { items, nextCursor } }` envelope. `gradlew quality --no-parallel --max-workers=1` passed 142 tasks; the design-system connected suite passed on Realme RMX2002/API 30; a feature-enabled debug build signed in through Google against production and rendered real history entries without the former account-service error.
+
 - 2026-10-04 monorepo layout verification — moved the complete Next.js/backend project under `website/`, updated CI/deployment/contract references, and kept Android under `android app/`. From the new locations, `npm run check` passed 22 files/134 tests plus contract validation, `npm run build` passed, and `gradlew spotlessMiscCheck :app:testDebugUnitTest :app:assembleDebug --no-parallel --max-workers=1` passed.
 - Android Studio, SDK Platform 36, Build Tools 36.0.0, platform tools, emulator, and API 36 Google APIs x86_64 images are installed; licenses are accepted.
 - `gradlew quality --no-parallel --max-workers=1` with pinned JDK 17 — passed after the live-test fix; 142 tasks, no lint or unit-test failures.
@@ -103,6 +105,38 @@
 - Crash/ANR vendor, retention/residency, dashboards, alert owners, and synthetic routing need explicit approval. The code provides privacy-safe seams, not a configured monitoring service.
 - Privacy-policy URL, data-safety form, permission declaration, content rating, store listing/screenshots, countries/locales, support contact, and owner acceptance are external sign-offs.
 - ADR-A-005 and ADR-A-007 remain unresolved. Native account architecture is approved by ADR-A-035, but Google Cloud registration, staging credentials, device/accessibility coverage, and staged rollout evidence remain release gates.
+
+## Session handoff — 2026-10-05 task proof and account history
+
+**Date/time:** 2026-10-05 Asia/Calcutta
+**Agent/session:** Codex
+**Active phase:** Phase 8 — end-to-end quality, release, and operations
+**Milestone:** bound accepted task evidence to the compact card and restore production account history decoding
+**Status:** implementation and focused physical-device verification complete; signed release publication pending
+
+### Changed
+
+- `core/designsystem/TaskComponents`: constrained the proof pane to the compact task-card height so portrait evidence cannot enlarge the row.
+- `core/data/account`: decoded history pagination from the API's nested data object and added a production-shape contract regression.
+
+### Verified
+
+- `gradlew quality --no-parallel --max-workers=1` — passed 142 tasks.
+- `gradlew :core:designsystem:connectedDebugAndroidTest :app:installDebug -PDEBUG_API_BASE_URL=https://imposter.helixfjord.com --no-parallel --max-workers=1` with account configuration — passed and installed on Realme RMX2002/API 30.
+- Physical device — Google completion succeeded and History rendered real production entries without an account-service error.
+
+### Decisions added
+
+- None.
+
+### Remaining issues
+
+- The signed `1.0.2` candidate and hosted CI/release runs are not yet published or verified.
+- Finished-game account claim/rejoin and the wider Phase 8 matrix remain open.
+
+### Next action
+
+Commit and push the correction, then publish and verify signed Android release `1.0.2` with version code `3`.
 
 ## Next action
 

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -179,6 +180,9 @@ fun TaskCard(
                     (actionLabel != null && onAction != null)
             ) {
                 Surface(
+                    modifier =
+                        Modifier.width(WebsiteLayout.taskProofWidth)
+                            .height(WebsiteLayout.taskCardMinHeight),
                     color = MaterialTheme.colorScheme.surfaceVariant,
                     border =
                         androidx.compose.foundation.BorderStroke(
@@ -187,7 +191,7 @@ fun TaskCard(
                         ),
                 ) {
                     Box(
-                        Modifier.width(WebsiteLayout.taskProofWidth).fillMaxHeight().padding(6.dp),
+                        Modifier.fillMaxSize().padding(6.dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         if (proofContent != null) {
