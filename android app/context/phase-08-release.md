@@ -1,7 +1,7 @@
 # Phase 8 release and acceptance record
 
 **Status:** in progress; deterministic repository controls are implemented, external validation and approvals remain gated
-**Last updated:** 2026-10-04
+**Last updated:** 2026-10-05
 
 ## Release identity and configuration
 
@@ -32,7 +32,7 @@
 | Compose UI | Critical entry/lobby/game paths and authorization variants | Partial instrumentation coverage; full matrix pending SDK/device execution |
 | Screenshot/golden | Compact portrait/landscape/expanded, themes, large font | Design-system instrumentation exists; feature goldens pending |
 | Multi-device E2E | Phase 8 scenarios and lifecycle/failure variants | Not run; requires production-like infrastructure and devices |
-| Release build | Lint/unit checks plus signed AAB/APK with R8/resource shrinking | CI run `37198305812` passed; protected release run `37198730241` passed the clean gate twice and published signed v1.0.0 |
+| Release build | Lint/unit checks plus signed AAB/APK with R8/resource shrinking | CI run `37265376246` passed; protected release run `37265817002` passed the clean gate twice and published signed v1.0.2 |
 
 No row is “passed” until its run/artifact is recorded. A clean candidate must pass the full gate twice with separate clean outputs and no retry-masked failure.
 
@@ -96,4 +96,6 @@ reauthentication. Promote it through internal, closed, then the staged productio
 - [ ] Dashboards route each alert to an owner; synthetic events reach on-call without private payloads.
 - [ ] Rollback/halt exercise succeeds using the operations runbook.
 - [x] Exact v1.0.0 candidate passed `clean quality bundleRelease assembleRelease` twice without flaky retry in hosted run `37198730241`.
+- [x] Exact v1.0.2 candidate passed `clean quality bundleRelease assembleRelease` twice without flaky retry in hosted run `37265817002`; the published APK reports version code 3 and verifies with the production signing certificate.
+- [x] Published v1.0.2 was installed on Realme RMX2002/API 30, retained the signed-in Google account across force-stop/cold launch, and loaded real production history records after a fresh History navigation without an account-service or connection error.
 - [ ] Release notes list limitations, commit, versions, backend, AAB digest, mapping, and acceptance evidence.

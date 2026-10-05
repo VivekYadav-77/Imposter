@@ -4,7 +4,7 @@
 **Overall status:** Phase 8 remains active. Website-exact gameplay parity is joined by native Google account, dashboard, history, profile, device, rejoin, deletion-reauthentication, and guest-upgrade support under ADR-A-035. Account production rollout remains disabled until configuration and staging/device acceptance are complete.
 **Active phase:** Phase 8 — end-to-end quality, release, and operations
 **Active release context:** [`phase-08-release.md`](phase-08-release.md)
-**Last verified commit:** not recorded; current worktree contains the Phase 8 implementation
+**Last verified commit:** `bfbc63c` (`v1.0.2`)
 **Android build status:** Full `quality` and connected design-system gates pass with JDK 17; the latest focused physical run passed on Realme RMX2002/API 30 against production account APIs
 
 ## Implemented through Phase 7
@@ -64,7 +64,7 @@
 
 ## Verification
 
-- 2026-10-05 task-card/history correction — fixed proof-image intrinsic sizing so evidence remains within the 104dp proof pane, and aligned Android history decoding with the production `{ data: { items, nextCursor } }` envelope. `gradlew quality --no-parallel --max-workers=1` passed 142 tasks; the design-system connected suite passed on Realme RMX2002/API 30; a feature-enabled debug build signed in through Google against production and rendered real history entries without the former account-service error.
+- 2026-10-05 task-card/history correction — fixed proof-image intrinsic sizing so evidence remains within the 104dp proof pane, and aligned Android history decoding with the production `{ data: { items, nextCursor } }` envelope. `gradlew quality --no-parallel --max-workers=1` passed 142 tasks; the design-system connected suite passed on Realme RMX2002/API 30. The published, production-signed v1.0.2 APK retained its Google account across a force-stop/cold launch and rendered the account's real Won/Lost history after a fresh History navigation without the former account-service or connection error.
 
 - 2026-10-04 monorepo layout verification — moved the complete Next.js/backend project under `website/`, updated CI/deployment/contract references, and kept Android under `android app/`. From the new locations, `npm run check` passed 22 files/134 tests plus contract validation, `npm run build` passed, and `gradlew spotlessMiscCheck :app:testDebugUnitTest :app:assembleDebug --no-parallel --max-workers=1` passed.
 - Android Studio, SDK Platform 36, Build Tools 36.0.0, platform tools, emulator, and API 36 Google APIs x86_64 images are installed; licenses are accepted.
@@ -112,7 +112,7 @@
 **Agent/session:** Codex
 **Active phase:** Phase 8 — end-to-end quality, release, and operations
 **Milestone:** bound accepted task evidence to the compact card and restore production account history decoding
-**Status:** implementation and focused physical-device verification complete; signed release publication pending
+**Status:** complete for implementation, focused physical-device verification, and signed `v1.0.2` publication
 
 ### Changed
 
@@ -131,12 +131,11 @@
 
 ### Remaining issues
 
-- The signed `1.0.2` candidate and hosted CI/release runs are not yet published or verified.
 - Finished-game account claim/rejoin and the wider Phase 8 matrix remain open.
 
 ### Next action
 
-Commit and push the correction, then publish and verify signed Android release `1.0.2` with version code `3`.
+Complete the finished-game account claim/rejoin path on the signed release and continue the wider Phase 8 matrix.
 
 ## Next action
 
